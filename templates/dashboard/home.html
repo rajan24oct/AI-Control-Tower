@@ -1,0 +1,353 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Dashboard - AI Control Tower{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card">
+    <div class="ct-card-body ct-empty">
+      <i class="bi bi-building"></i>
+      <p class="mb-0">You are not a member of any organization yet.</p>
+      <p class="small">An administrator must add you to one before the Control Tower has anything to show.</p>
+    </div>
+  </div>
+{% else %}
+
+  <div id="results" data-ajax-region>
+  <div class="ct-card mb-3">
+    <div class="ct-card-body py-2">
+      <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+        <div class="col-12 col-md-auto">
+          <label class="form-label small fw-semibold mb-1">Period</label>
+          <div class="btn-group btn-group-sm d-flex" role="group">
+            {% for preset in range_presets %}
+              <a href="?range={{ preset.key }}"
+                 class="btn btn-outline-secondary {% if date_range.key == preset.key %}active{% endif %}">
+                {{ preset.label }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="col-6 col-md-2">
+          <label class="form-label small fw-semibold mb-1" for="range-from">From</label>
+          <input type="date" id="range-from" name="from" class="form-control form-control-sm"
+                 value="{{ date_range.start|date:'Y-m-d' }}" max="{{ date_range.end|date:'Y-m-d' }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small fw-semibold mb-1" for="range-to">To</label>
+          <input type="date" id="range-to" name="to" class="form-control form-control-sm"
+                 value="{{ date_range.end|date:'Y-m-d' }}">
+        </div>
+        <div class="col-12 col-md-auto d-flex gap-2">
+          <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+          <a href="{% url 'dashboard:home' %}" class="btn btn-sm btn-outline-secondary">Reset</a>
+        </div>
+
+        <div class="col-12 col-md text-md-end">
+          <span class="small text-muted">
+            <i class="bi bi-calendar-range"></i>
+            Showing {{ date_range.label|lower }}
+            {% if date_range.is_custom %}<span class="badge badge-soft text-bg-light text-dark ms-1">custom</span>{% endif %}
+          </span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for metric in data.metrics %}
+      <div class="col-6 col-md-4 col-xl-3">
+        {% if metric.url and metric.available %}<a href="{{ metric.url }}" class="text-decoration-none text-reset">{% endif %}
+        <div class="ct-metric">
+          <div class="d-flex justify-content-between align-items-start">
+            <span class="ct-metric-label">{{ metric.label }}</span>
+            <i class="bi {{ metric.icon }} ct-metric-icon text-{{ metric.tone }}"></i>
+          </div>
+          <div class="ct-metric-value {% if not metric.available %}unavailable{% endif %}">
+            {{ metric.value }}
+          </div>
+          {% if metric.hint %}<div class="ct-metric-hint">{{ metric.hint }}</div>{% endif %}
+        </div>
+        {% if metric.url and metric.available %}</a>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-5">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span><i class="bi bi-bell me-1"></i> Needs Attention</span>
+          <span class="badge text-bg-secondary">{{ data.attention|length }}</span>
+        </div>
+        <div class="ct-card-body py-0" style="max-height:420px;overflow-y:auto">
+          {% for item in data.attention %}
+            <a href="{{ item.url }}" class="ct-attention-item">
+              <i class="bi {{ item.severity|severity_icon }} text-{{ item.severity|severity_style }}"></i>
+              <div class="flex-grow-1">
+                <p class="ct-attention-title">{{ item.title }}</p>
+                {% if item.detail %}<p class="ct-attention-detail">{{ item.detail }}</p>{% endif %}
+              </div>
+              <i class="bi bi-chevron-right text-muted small align-self-center"></i>
+            </a>
+          {% empty %}
+            <div class="ct-empty">
+              <i class="bi bi-check-circle"></i>
+              <p class="mb-0">Nothing needs attention.</p>
+              <p class="small mb-0">No failing agents, provider incidents or autonomy exceptions.</p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span>Execution Volume</span>
+          <span class="small text-muted fw-normal">{{ date_range.describe }}</span>
+        </div>
+        <div class="ct-card-body"><div style="height:300px"><canvas id="chart-volume"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-6">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">AI Spend Over Time</div>
+        <div class="ct-card-body"><div style="height:230px"><canvas id="chart-spend"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Latency &amp; Error Trend</div>
+        <div class="ct-card-body"><div style="height:230px"><canvas id="chart-latency"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-md-6 col-xl-3">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Execution Status</div>
+        <div class="ct-card-body"><div style="height:210px"><canvas id="chart-status"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Cost by Provider</div>
+        <div class="ct-card-body"><div style="height:210px"><canvas id="chart-cost-provider"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Cost by Application</div>
+        <div class="ct-card-body"><div style="height:210px"><canvas id="chart-cost-application"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Agent Risk Distribution</div>
+        <div class="ct-card-body"><div style="height:210px"><canvas id="chart-agent-risk"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Tokens by Model</div>
+        <div class="ct-card-body"><div style="height:230px"><canvas id="chart-usage-model"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Tokens by Agent</div>
+        <div class="ct-card-body"><div style="height:230px"><canvas id="chart-usage-agent"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  {% if data.modules %}
+    <div class="ct-card mt-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-boxes me-1"></i> Platform Modules</span>
+        <span class="small text-muted">Everything above is computed from live inventory and telemetry</span>
+      </div>
+      <div class="ct-card-body">
+        <div class="row g-2">
+          {% for module in data.modules %}
+            <div class="col-12 col-md-4">
+              {% if module.url %}<a href="{{ module.url }}" class="text-decoration-none text-reset">{% endif %}
+              <div class="ct-module is-{{ module.state }}">
+                <div class="d-flex align-items-center gap-2">
+                  {% if module.state == "live" %}
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                  {% else %}
+                    <i class="bi bi-clock text-muted"></i>
+                  {% endif %}
+                  <span class="ct-module-name">{{ module.name }}</span>
+                  <span class="badge badge-soft ms-auto {% if module.state == 'live' %}text-bg-success{% else %}text-bg-light text-dark{% endif %}">
+                    {{ module.state|title }}
+                  </span>
+                </div>
+                <p class="ct-module-detail">{{ module.description }}</p>
+              </div>
+              {% if module.url %}</a>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {# Inside the AJAX region so a filter change swaps the data with the markup. #}
+  <script id="charts-data" type="application/json">{{ charts_json|safe }}</script>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Re-runnable so the charts can be rebuilt after an AJAX filter swap.
+window.renderDashboardCharts = function () {
+  const el = document.getElementById('charts-data');
+  if (!el) return;
+  const charts = JSON.parse(el.textContent);
+  const palette = window.ctPalette.series;
+
+  function empty(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.replaceWith(Object.assign(document.createElement('p'), {
+      className: 'text-muted small text-center mb-0 py-5',
+      textContent: 'No data yet.'
+    }));
+  }
+
+  function build(canvasId, config, hasData) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    if (!hasData) return empty(canvasId);
+    // Chart.js refuses to reuse a canvas that still owns an instance.
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+    new Chart(canvas, config);
+  }
+
+  const baseOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+  };
+
+  function legendOptions(position) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: position || 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+    };
+  }
+
+  // Execution volume: successful vs failed, stacked.
+  const volume = charts.execution_volume || {labels: []};
+  build('chart-volume', {
+    type: 'bar',
+    data: {
+      labels: volume.labels,
+      datasets: [
+        {
+          label: 'Successful',
+          data: volume.total.map((t, i) => t - volume.failed[i]),
+          backgroundColor: window.ctPalette.green
+        },
+        { label: 'Failed', data: volume.failed, backgroundColor: window.ctPalette.danger }
+      ]
+    },
+    options: {
+      ...baseOptions,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  }, volume.labels.length && volume.total.some(v => v > 0));
+
+  const spend = charts.spend_over_time || {labels: []};
+  build('chart-spend', {
+    type: 'line',
+    data: {
+      labels: spend.labels,
+      datasets: [{
+        label: 'Cost (USD)', data: spend.cost,
+        borderColor: window.ctPalette.green, backgroundColor: window.ctPalette.greenFill,
+        fill: true, tension: .3, pointRadius: 2
+      }]
+    },
+    options: { ...baseOptions, scales: { y: { beginAtZero: true } } }
+  }, spend.labels.length && spend.cost.some(v => v > 0));
+
+  const latency = charts.latency_and_errors || {labels: []};
+  build('chart-latency', {
+    type: 'line',
+    data: {
+      labels: latency.labels,
+      datasets: [
+        {
+          label: 'Avg latency (ms)', data: latency.latency, borderColor: window.ctPalette.teal,
+          backgroundColor: window.ctPalette.tealFill, fill: true, tension: .3, yAxisID: 'y'
+        },
+        {
+          label: 'Errors', data: latency.errors, borderColor: window.ctPalette.danger,
+          tension: .3, pointRadius: 2, yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        y: { beginAtZero: true, position: 'left', title: { display: true, text: 'ms', font: { size: 10 } } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 } }
+      }
+    }
+  }, latency.labels.length && latency.latency.some(v => v > 0));
+
+  function doughnut(canvasId, dataset) {
+    build(canvasId, {
+      type: 'doughnut',
+      data: {
+        labels: dataset.labels,
+        datasets: [{ data: dataset.values, backgroundColor: palette, borderWidth: 0 }]
+      },
+      options: legendOptions('bottom')
+    }, dataset.labels && dataset.labels.length);
+  }
+
+  function horizontalBar(canvasId, dataset, color) {
+    build(canvasId, {
+      type: 'bar',
+      data: {
+        labels: dataset.labels,
+        datasets: [{ data: dataset.values, backgroundColor: color, borderRadius: 3 }]
+      },
+      options: {
+        ...baseOptions,
+        indexAxis: 'y',
+        scales: { x: { beginAtZero: true } }
+      }
+    }, dataset.labels && dataset.labels.length);
+  }
+
+  doughnut('chart-status', charts.status_distribution || {labels: []});
+  doughnut('chart-cost-provider', charts.cost_by_provider || {labels: []});
+  doughnut('chart-agent-risk', charts.agent_risk_distribution || {labels: []});
+  horizontalBar('chart-cost-application', charts.cost_by_application || {labels: []}, palette[4]);
+  horizontalBar('chart-usage-model', charts.usage_by_model || {labels: []}, palette[0]);
+  horizontalBar('chart-usage-agent', charts.usage_by_agent || {labels: []}, palette[2]);
+};
+
+$(function () { window.renderDashboardCharts(); });
+$(document).on('controltower:swapped', function () { window.renderDashboardCharts(); });
+</script>
+{% endblock %}

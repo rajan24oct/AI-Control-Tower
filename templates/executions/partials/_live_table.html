@@ -1,0 +1,109 @@
+{% load control_tower humanize %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">In Flight</span>
+      <div class="ct-metric-value {% if stats.live %}text-primary{% endif %}">{{ stats.live }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Awaiting Approval</span>
+      <div class="ct-metric-value {% if stats.awaiting_approval %}text-warning{% endif %}">{{ stats.awaiting_approval }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Runs (24h)</span>
+      <div class="ct-metric-value">{{ stats.last_24h|intcomma }}</div></div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Failed (24h)</span>
+      <div class="ct-metric-value {% if stats.failed_24h %}text-danger{% endif %}">{{ stats.failed_24h|intcomma }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Tokens (24h)</span>
+      <div class="ct-metric-value">{{ stats.tokens_24h|intcomma }}</div></div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Cost (24h)</span>
+      <div class="ct-metric-value">${{ stats.cost_24h|floatformat:2 }}</div></div>
+  </div>
+</div>
+
+{% comment %}
+  The live table is driven by the WebSocket in live_monitor.html; this
+  server-rendered copy is what a browser without a working socket falls back
+  to, so both paths use the same row partial.
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><span class="ct-pulse"></span> Currently Running</span>
+    <span class="small text-muted">Updated {{ refreshed_at|date:"H:i:s" }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th class="ct-live-toggle-cell"><span class="visually-hidden">Transcript</span></th>
+          <th>Execution</th><th>Agent</th><th>Application</th><th>Model</th>
+          <th>Started</th><th class="text-end">Tokens</th><th class="text-end">Cost</th>
+          <th>Status</th><th>Approval</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for execution in live_executions %}
+          {% include "executions/partials/_live_row.html" %}
+        {% empty %}
+          <tr><td colspan="10">
+            <div class="ct-empty py-4">
+              <i class="bi bi-check-circle"></i>
+              <p class="mb-0">Nothing running right now.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ct-card">
+  <div class="ct-card-header">Recently Finished</div>
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Execution</th><th>Agent</th><th>Model</th>
+          <th class="text-end">Duration</th><th class="text-end">Tokens</th>
+          <th class="text-end">Cost</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for execution in recent_executions %}
+          <tr>
+            <td>
+              <a href="{% url 'executions:detail' execution.pk %}" class="text-decoration-none font-monospace small">
+                {{ execution.external_id }}
+              </a>
+            </td>
+            <td class="small">{{ execution.agent.name|default:"—" }}</td>
+            <td class="small">{{ execution.model.model_name|default:"—" }}</td>
+            <td class="small text-end text-nowrap">{{ execution.duration_display }}</td>
+            <td class="small text-end">{{ execution.total_tokens|intcomma }}</td>
+            <td class="small text-end">${{ execution.cost|floatformat:4 }}</td>
+            <td><span class="badge badge-soft text-bg-{{ execution.status|execution_status_style }}">{{ execution.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7">
+            <div class="ct-empty py-4">
+              <i class="bi bi-clock-history"></i>
+              <p class="mb-0">No executions in the last 24 hours.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

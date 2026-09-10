@@ -1,0 +1,111 @@
+{% load control_tower humanize %}
+{% comment %}
+  Two rows, one execution. Both carry data-execution-id so a WebSocket push
+  replaces the pair together; the client re-applies the expanded state after the
+  swap, so reading a transcript survives the next update.
+{% endcomment %}
+<tr data-execution-id="{{ execution.pk }}" class="ct-live-row">
+  <td class="ct-live-toggle-cell">
+    {% if execution.exchange.has_content or execution.exchange.redacted %}
+      <button type="button" class="ct-live-toggle" aria-expanded="false"
+              data-toggle-execution="{{ execution.pk }}"
+              aria-label="Show prompt and response">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+    {% endif %}
+  </td>
+  <td>
+    <a href="{% url 'executions:detail' execution.pk %}"
+       class="fw-semibold text-decoration-none font-monospace small">
+      {{ execution.external_id }}
+    </a>
+    {% if execution.exchange.has_pii %}
+      {% comment %}
+        On the summary row, so an operator sees which runs are carrying personal
+        data without opening every transcript on the board.
+      {% endcomment %}
+      <span class="ct-pii-badge" title="Possible personal data: {{ execution.exchange.pii_summary }}">
+        <i class="bi bi-person-vcard"></i>{{ execution.exchange.pii_count }}
+      </span>
+    {% endif %}
+  </td>
+  <td class="small">{{ execution.agent.name|default:"—" }}</td>
+  <td class="small">{{ execution.application.name|default:"—" }}</td>
+  <td class="small">{{ execution.model.model_name|default:"—" }}</td>
+  <td class="small text-nowrap">{{ execution.started_at|naturaltime }}</td>
+  <td class="small text-end">{{ execution.total_tokens|intcomma }}</td>
+  <td class="small text-end text-nowrap">${{ execution.cost|floatformat:4 }}</td>
+  <td>
+    <span class="badge badge-soft text-bg-{{ execution.status|execution_status_style }}">
+      {{ execution.get_status_display }}
+    </span>
+  </td>
+  <td>
+    {% if execution.approval_status != "not_required" %}
+      <span class="badge badge-soft text-bg-{{ execution.approval_status|approval_style }}">
+        {{ execution.get_approval_status_display }}
+      </span>
+    {% else %}<span class="text-muted small">—</span>{% endif %}
+  </td>
+</tr>
+
+<tr data-execution-id="{{ execution.pk }}" class="ct-live-detail" hidden>
+  <td colspan="10">
+    <div class="ct-exchange">
+      {% if execution.exchange.redacted %}
+        <p class="ct-exchange-notice">
+          <i class="bi bi-shield-lock"></i> {{ execution.exchange.notice }}
+          {% if execution.exchange.has_pii %}
+            <span class="ct-exchange-pii-note">
+              Scanned before redaction: {{ execution.exchange.pii_summary }}.
+            </span>
+          {% endif %}
+        </p>
+      {% else %}
+        <div class="ct-exchange-pane">
+          <h4><i class="bi bi-chat-left-text"></i> Prompt</h4>
+          {% if execution.exchange.prompt %}
+            {% comment %}
+              prompt_html escapes the engine's text and then wraps matches, so
+              the marks are ours and the content can never be markup.
+            {% endcomment %}
+            <pre>{{ execution.exchange.prompt_html }}</pre>
+          {% else %}
+            <p class="ct-exchange-empty">The engine did not report a prompt.</p>
+          {% endif %}
+        </div>
+        <div class="ct-exchange-pane">
+          <h4><i class="bi bi-robot"></i> Response</h4>
+          {% if execution.exchange.completion %}
+            <pre>{{ execution.exchange.completion_html }}</pre>
+          {% else %}
+            <p class="ct-exchange-empty">
+              {% if execution.status == "running" or execution.status == "queued" %}
+                Still running — no response yet.
+              {% else %}
+                The engine did not report a response.
+              {% endif %}
+            </p>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if execution.exchange.has_pii and not execution.exchange.redacted %}
+        <p class="ct-exchange-pii">
+          <i class="bi bi-person-vcard"></i>
+          Highlighted: {{ execution.exchange.pii_summary }}.
+          <span class="ct-exchange-caveat">
+            Pattern matching only — it finds common identifiers, not all personal data.
+          </span>
+        </p>
+      {% endif %}
+
+      {% if execution.exchange.truncated %}
+        <p class="ct-exchange-more">
+          Shortened for the monitor.
+          <a href="{% url 'executions:detail' execution.pk %}">Open the full timeline</a>
+        </p>
+      {% endif %}
+    </div>
+  </td>
+</tr>

@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Execution {{ execution.label }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'executions:list' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Executions</a>
+    <h2 class="h5 mt-1 mb-1 font-monospace">{{ execution.external_id }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-{{ execution.status|execution_status_style }}">{{ execution.get_status_display }}</span>
+      <span class="badge badge-soft text-bg-{{ execution.environment|environment_style }}">{{ execution.get_environment_display }}</span>
+      {% if execution.approval_status != "not_required" %}
+        <span class="badge badge-soft text-bg-{{ execution.approval_status|approval_style }}">Approval: {{ execution.get_approval_status_display }}</span>
+      {% endif %}
+      {% if execution.trace %}
+        <a href="{% url 'executions:list' %}?q={{ execution.trace.trace_id }}"
+           class="badge badge-soft text-bg-light text-dark text-decoration-none">
+          <i class="bi bi-diagram-3"></i> {{ execution.trace.trace_id }}
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if execution.error_message %}
+  <div class="alert alert-danger d-flex gap-2 py-2">
+    <i class="bi bi-exclamation-octagon-fill"></i>
+    <div class="small">{{ execution.error_message }}</div>
+  </div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3 col-xl">
+    <div class="ct-metric"><span class="ct-metric-label">Duration</span>
+      <div class="ct-metric-value">{{ execution.duration_display }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl">
+    <div class="ct-metric"><span class="ct-metric-label">Input Tokens</span>
+      <div class="ct-metric-value">{{ execution.input_tokens|intcomma }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl">
+    <div class="ct-metric"><span class="ct-metric-label">Output Tokens</span>
+      <div class="ct-metric-value">{{ execution.output_tokens|intcomma }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl">
+    <div class="ct-metric"><span class="ct-metric-label">Total Tokens</span>
+      <div class="ct-metric-value">{{ execution.total_tokens|intcomma }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Cost</span>
+      <div class="ct-metric-value">${{ execution.cost|floatformat:4 }}</div>
+      <div class="ct-metric-hint">
+        {% if execution.cost_is_derived %}Priced from registry{% else %}Reported by engine{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl">
+    <div class="ct-metric"><span class="ct-metric-label">Events</span>
+      <div class="ct-metric-value">{{ events|length }}</div></div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-4">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Context</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12">
+            <dt>Agent</dt>
+            <dd>
+              {% if execution.agent %}
+                <a href="{% url 'inventory:agent_detail' execution.agent.pk %}">{{ execution.agent.name }}</a>
+                <div class="small text-muted">{{ execution.agent.get_framework_display }}</div>
+              {% else %}—{% endif %}
+            </dd>
+          </div>
+          <div class="col-12">
+            <dt>Application</dt>
+            <dd>
+              {% if execution.application %}
+                <a href="{% url 'inventory:application_detail' execution.application.pk %}">{{ execution.application.name }}</a>
+              {% else %}—{% endif %}
+            </dd>
+          </div>
+          <div class="col-6">
+            <dt>Model</dt>
+            <dd>
+              {% if execution.model %}
+                <a href="{% url 'inventory:model_detail' execution.model.pk %}">{{ execution.model.model_name }}</a>
+              {% else %}—{% endif %}
+            </dd>
+          </div>
+          <div class="col-6">
+            <dt>Provider</dt>
+            <dd>
+              {% if execution.provider %}
+                <a href="{% url 'inventory:provider_detail' execution.provider.pk %}">{{ execution.provider.name }}</a>
+              {% else %}—{% endif %}
+            </dd>
+          </div>
+          <div class="col-6"><dt>Started</dt><dd>{{ execution.started_at|date:"Y-m-d H:i:s" }}</dd></div>
+          <div class="col-6"><dt>Ended</dt><dd>{{ execution.ended_at|date:"Y-m-d H:i:s"|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Reported By</dt>
+            <dd>{{ execution.service_account.name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Source Adapter</dt>
+            <dd class="mb-0"><code>{{ execution.source_adapter|default:"—" }}</code></dd></div>
+        </dl>
+      </div>
+    </div>
+
+    {% if related_executions %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">Same Trace <span class="badge text-bg-secondary">{{ related_executions|length }}</span></div>
+        <div class="ct-card-body">
+          {% for related in related_executions %}
+            <a class="ct-node mb-2" href="{% url 'executions:detail' related.pk %}">
+              <p class="ct-node-name font-monospace small">{{ related.external_id }}</p>
+              <p class="ct-node-meta">{{ related.agent.name|default:"—" }} &middot; {{ related.get_status_display }}</p>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if raw_payloads %}
+      <div class="ct-card">
+        <div class="ct-card-header">Raw Telemetry</div>
+        <div class="ct-card-body">
+          <p class="small text-muted">
+            The original payloads, kept separately so normalization can be replayed.
+          </p>
+          {% for raw in raw_payloads %}
+            <div class="small d-flex justify-content-between border-bottom py-1">
+              <span><code>{{ raw.adapter_key }}</code></span>
+              <span class="text-muted">{{ raw.received_at|naturaltime }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-xl-8">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Execution Timeline</span>
+        <span class="badge text-bg-secondary">{{ events|length }} event{{ events|length|pluralize }}</span>
+      </div>
+      <div class="ct-card-body">
+        {% if events %}
+          <ol class="ct-timeline">
+            {% for event in events %}
+              <li class="ct-timeline-item">
+                <span class="ct-timeline-marker tone-{{ event.event_type|event_style }}">
+                  <i class="bi {{ event.event_type|event_icon }}"></i>
+                </span>
+                <div class="ct-timeline-body">
+                  <div class="d-flex justify-content-between align-items-baseline gap-2">
+                    <span class="ct-timeline-title">{{ event.get_event_type_display }}</span>
+                    <span class="ct-timeline-time">{{ event.timestamp|date:"H:i:s.u"|slice:":12" }}</span>
+                  </div>
+
+                  <div class="ct-timeline-meta">
+                    {% if event.duration_ms %}<span><i class="bi bi-stopwatch"></i> {{ event.duration_ms|intcomma }} ms</span>{% endif %}
+                    {% if event.total_tokens %}<span><i class="bi bi-hash"></i> {{ event.total_tokens|intcomma }} tokens</span>{% endif %}
+                    {% if event.metadata.tool %}<span><i class="bi bi-wrench"></i> {{ event.metadata.tool }}</span>{% endif %}
+                    {% if event.metadata.step %}<span><i class="bi bi-signpost"></i> {{ event.metadata.step }}</span>{% endif %}
+                    {% if event.model_id %}<span><i class="bi bi-cpu"></i> {{ event.model_id }}</span>{% endif %}
+                  </div>
+
+                  {% if event.error_message %}
+                    <div class="small text-danger mt-1">{{ event.error_message }}</div>
+                  {% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="ct-empty">
+            <i class="bi bi-list-ol"></i>
+            <p class="mb-0">No events recorded for this execution.</p>
+            <p class="small mb-0">Engines append events via <code>POST /api/v1/executions/{id}/events/</code>.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

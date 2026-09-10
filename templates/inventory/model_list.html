@@ -1,0 +1,97 @@
+﻿{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}AI Models{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>AI Models</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Model name, id or family">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Provider</label>
+        <select name="provider" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for provider in providers %}
+            <option value="{{ provider.id }}" {% if active_filters.provider == provider.id|stringformat:"s" %}selected{% endif %}>
+              {{ provider.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Type</label>
+        <select name="type" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in model_types %}
+            <option value="{{ value }}" {% if active_filters.type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Approved</label>
+        <select name="approved" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="True" {% if active_filters.approved == "True" %}selected{% endif %}>Approved</option>
+          <option value="False" {% if active_filters.approved == "False" %}selected{% endif %}>Unapproved</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Model</th><th>Provider</th><th>Type</th><th>Context</th>
+          <th class="text-end">Input /1K</th><th class="text-end">Output /1K</th>
+          <th>Approved</th><th>Risk</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for model in ai_models %}
+          <tr>
+            <td>
+              <a href="{% url 'inventory:model_detail' model.pk %}" class="fw-semibold text-decoration-none">{{ model.model_name }}</a>
+              <div class="small text-muted">{{ model.model_id }}{% if model.version %} &middot; {{ model.version }}{% endif %}</div>
+            </td>
+            <td class="small">{{ model.provider.name }}</td>
+            <td class="small">{{ model.get_model_type_display }}</td>
+            <td class="small">{{ model.context_window|default:"—" }}</td>
+            <td class="small text-end">{{ model.currency }} {{ model.input_cost_per_1k }}</td>
+            <td class="small text-end">{{ model.currency }} {{ model.output_cost_per_1k }}</td>
+            <td>
+              {% if model.approved_for_use %}
+                <span class="badge badge-soft text-bg-success">Yes</span>
+              {% else %}
+                <span class="badge badge-soft text-bg-warning">No</span>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ model.risk_classification|risk_style }}">{{ model.get_risk_classification_display }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ model.status|status_style }}">{{ model.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9">
+            <div class="ct-empty"><i class="bi bi-cpu"></i>
+              <p class="mb-0">No models match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,195 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}AI Costs{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+
+  <div id="results" data-ajax-region>
+  <div class="d-flex justify-content-end mb-3">
+    <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#results">
+      <label class="small fw-semibold text-muted mb-0">Period</label>
+      <select name="days" class="form-select form-select-sm" style="width:auto">
+        <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+        <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Today</span>
+        <div class="ct-metric-value">${{ summary.today|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">This Week</span>
+        <div class="ct-metric-value">${{ summary.week|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">This Month</span>
+        <div class="ct-metric-value">${{ summary.month|floatformat:2 }}</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Projected Month</span>
+        <div class="ct-metric-value text-primary">${{ summary.projected_month|floatformat:2 }}</div>
+        <div class="ct-metric-hint">Straight-line from spend so far</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Avg / Request</span>
+        <div class="ct-metric-value">${{ summary.avg_per_request|floatformat:4 }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Avg / Success</span>
+        <div class="ct-metric-value">${{ summary.avg_per_successful|floatformat:4 }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if open_alerts %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-exclamation-triangle me-1"></i> Budget Alerts</span>
+        <a href="{% url 'costs:budgets' %}" class="small text-decoration-none">Manage budgets</a>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for alert in open_alerts %}
+          <div class="ct-attention-item">
+            <i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">{{ alert.budget.name }} reached {{ alert.threshold }}%</p>
+              <p class="ct-attention-detail">
+                ${{ alert.spend|floatformat:2 }} of ${{ alert.budget_amount|floatformat:2 }}
+                for the period starting {{ alert.period_start }}
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-8">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Spend Over Time</div>
+        <div class="ct-card-body"><div style="height:260px"><canvas id="chart-spend"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">Spend by Provider</div>
+        <div class="ct-card-body"><div style="height:260px"><canvas id="chart-provider"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    {% include "costs/partials/_breakdown.html" with title="By Application" rows=by_application icon="bi-window-stack" %}
+    {% include "costs/partials/_breakdown.html" with title="By Agent" rows=by_agent icon="bi-robot" %}
+    {% include "costs/partials/_breakdown.html" with title="By Model" rows=by_model icon="bi-cpu" %}
+    {% include "costs/partials/_breakdown.html" with title="By Team" rows=by_team icon="bi-people" %}
+  </div>
+
+  <div class="ct-card mt-3">
+    <div class="ct-card-body d-flex align-items-center gap-3 py-2 flex-wrap">
+      <i class="bi bi-info-circle text-primary"></i>
+      <div class="small text-muted flex-grow-1">
+        {{ summary.derived_share|floatformat:0 }}% of runs in this window were priced by the Control
+        Tower from the pricing registry; the rest reported their own cost.
+        {% if pricing_versions %}
+          Active price lists:
+          {% for version in pricing_versions %}<strong>{{ version.name }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        {% else %}
+          No pricing versions defined yet &mdash; rates fall back to the model registry.
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Inside the region so the data swaps together with the markup. #}
+  <script id="series-data" type="application/json">{{ series_json|safe }}</script>
+  <script id="provider-data" type="application/json">{{ provider_chart_json|safe }}</script>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.renderCostCharts = function () {
+  const seriesEl = document.getElementById('series-data');
+  const providerEl = document.getElementById('provider-data');
+  if (!seriesEl || !providerEl) return;
+
+  const series = JSON.parse(seriesEl.textContent);
+  const providers = JSON.parse(providerEl.textContent);
+  const palette = window.ctPalette.series;
+
+  function noData(canvas) {
+    canvas.replaceWith(Object.assign(document.createElement('p'), {
+      className: 'text-muted small text-center mb-0 py-5', textContent: 'No spend recorded yet.'
+    }));
+  }
+
+  function reset(canvas) {
+    // Chart.js refuses to reuse a canvas that still owns an instance.
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+    return canvas;
+  }
+
+  const spendCanvas = document.getElementById('chart-spend');
+  if (spendCanvas) {
+    if (series.labels.length && series.cost.some(v => v > 0)) {
+      new Chart(reset(spendCanvas), {
+        type: 'line',
+        data: {
+          labels: series.labels,
+          datasets: [{
+            label: 'Cost (USD)', data: series.cost,
+            borderColor: window.ctPalette.green, backgroundColor: window.ctPalette.greenFill,
+            fill: true, tension: .3, pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    } else { noData(spendCanvas); }
+  }
+
+  const providerCanvas = document.getElementById('chart-provider');
+  if (providerCanvas) {
+    if (providers.labels.length) {
+      new Chart(reset(providerCanvas), {
+        type: 'doughnut',
+        data: {
+          labels: providers.labels,
+          datasets: [{ data: providers.values, backgroundColor: palette, borderWidth: 0 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+        }
+      });
+    } else { noData(providerCanvas); }
+  }
+};
+
+$(function () { window.renderCostCharts(); });
+$(document).on('controltower:swapped', function () { window.renderCostCharts(); });
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ risk.risk_id }} {{ risk.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'risks:list' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Risk register</a>
+    <h2 class="h5 mt-1 mb-1">{{ risk.title }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark font-monospace">{{ risk.risk_id }}</span>
+      <span class="badge badge-soft text-bg-light text-dark">{{ risk.get_risk_category_display }}</span>
+      <span class="badge badge-soft text-bg-{{ risk.effective_level|risk_style }}">
+        {{ risk.effective_level|title }} &middot; score {{ risk.effective_score }}
+      </span>
+      <span class="badge badge-soft text-bg-{{ risk.status|status_style }}">{{ risk.get_status_display }}</span>
+    </div>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:risks_risk_change' risk.pk %}">
+    <i class="bi bi-pencil"></i> Edit
+  </a>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Assessment</div>
+      <div class="ct-card-body">
+        <div class="row g-3 text-center mb-3">
+          <div class="col-6">
+            <div class="ct-metric">
+              <span class="ct-metric-label">Inherent</span>
+              <div class="ct-metric-value text-{{ risk.inherent_level|risk_style }}">{{ risk.inherent_risk_score }}</div>
+              <div class="ct-metric-hint">
+                Likelihood {{ risk.likelihood }} &times; Impact {{ risk.impact }}
+              </div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="ct-metric">
+              <span class="ct-metric-label">Residual</span>
+              {% if risk.residual_risk_score %}
+                <div class="ct-metric-value text-{{ risk.residual_level|risk_style }}">{{ risk.residual_risk_score }}</div>
+                <div class="ct-metric-hint">
+                  Likelihood {{ risk.residual_likelihood }} &times; Impact {{ risk.residual_impact }}
+                  &middot; down {{ risk.reduction }}
+                </div>
+              {% else %}
+                <div class="ct-metric-value unavailable">—</div>
+                <div class="ct-metric-hint">Not yet assessed</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <dl class="ct-kv mb-0">
+          <dt>Description</dt>
+          <dd>{{ risk.description|default:"—"|linebreaksbr }}</dd>
+          <dt>Mitigation</dt>
+          <dd class="mb-0">{{ risk.mitigation|default:"No mitigation recorded."|linebreaksbr }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Ownership</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Owner</dt><dd>{{ risk.owner.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Review Date</dt><dd>{{ risk.review_date|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Status</dt><dd>{{ risk.get_status_display }}</dd></div>
+          <div class="col-6"><dt>Raised</dt><dd class="mb-0">{{ risk.created_at|date:"Y-m-d" }}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Affected Assets</div>
+      <div class="ct-card-body">
+        {% if risk.agent %}
+          <a class="ct-node border-risk-{{ risk.agent.risk_level }} mb-2" href="{% url 'inventory:agent_detail' risk.agent.pk %}">
+            <p class="ct-node-name">{{ risk.agent.name }}</p>
+            <p class="ct-node-meta">Agent &middot; {{ risk.agent.get_framework_display }}</p>
+          </a>
+        {% endif %}
+        {% if risk.application %}
+          <a class="ct-node mb-2" href="{% url 'inventory:application_detail' risk.application.pk %}">
+            <p class="ct-node-name">{{ risk.application.name }}</p>
+            <p class="ct-node-meta">Application &middot; {{ risk.application.get_environment_display }}</p>
+          </a>
+        {% endif %}
+        {% if risk.model %}
+          <a class="ct-node mb-2" href="{% url 'inventory:model_detail' risk.model.pk %}">
+            <p class="ct-node-name">{{ risk.model.model_name }}</p>
+            <p class="ct-node-meta">Model &middot; {{ risk.model.provider.name }}</p>
+          </a>
+        {% endif %}
+        {% if risk.provider %}
+          <a class="ct-node" href="{% url 'inventory:provider_detail' risk.provider.pk %}">
+            <p class="ct-node-name">{{ risk.provider.name }}</p>
+            <p class="ct-node-meta">Provider &middot; {{ risk.provider.get_health_status_display }}</p>
+          </a>
+        {% endif %}
+        {% if not risk.subject %}
+          <p class="text-muted small mb-0">Not linked to a specific asset.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

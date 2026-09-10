@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Audit Entry{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'audit:list' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> Audit trail
+    </a>
+    <h2 class="h5 mt-1 mb-1">{{ entry.action }} &middot; {{ entry.resource_label|default:entry.resource_type }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{{ entry.resource_type }}</span>
+      <span class="badge badge-soft text-bg-light text-dark">{{ entry.get_source_display }}</span>
+      {% if not entry.is_verifiable %}
+        <span class="badge badge-soft text-bg-secondary">Unverifiable (pre-hash)</span>
+      {% elif verified %}
+        <span class="badge badge-soft text-bg-success"><i class="bi bi-shield-check"></i> Verified</span>
+      {% else %}
+        <span class="badge badge-soft text-bg-danger"><i class="bi bi-shield-exclamation"></i> Modified</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if entry.is_verifiable and not verified %}
+  <div class="alert alert-danger d-flex gap-2 py-2">
+    <i class="bi bi-shield-exclamation"></i>
+    <div class="small">
+      This entry's content no longer matches the hash recorded when it was written.
+      It has been altered outside the platform.
+    </div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Entry</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>When</dt><dd>{{ entry.created_at|date:"Y-m-d H:i:s" }}</dd></div>
+          <div class="col-6"><dt>Actor</dt><dd>{{ entry.actor_label|default:"system" }}</dd></div>
+          <div class="col-6"><dt>Source</dt><dd>{{ entry.get_source_display }}</dd></div>
+          <div class="col-6"><dt>Organization</dt><dd>{{ entry.organization.name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>IP address</dt><dd>{{ entry.ip_address|default:"—" }}</dd></div>
+          <div class="col-12"><dt>Resource</dt>
+            <dd>
+              {{ entry.resource_label|default:"—" }}
+              <div class="small text-muted font-monospace">{{ entry.resource_type }} {{ entry.resource_id }}</div>
+            </dd>
+          </div>
+          {% if entry.user_agent %}
+            <div class="col-12"><dt>User agent</dt>
+              <dd class="small text-muted text-break">{{ entry.user_agent }}</dd></div>
+          {% endif %}
+          <div class="col-12"><dt>Content hash</dt>
+            <dd class="mb-0 small font-monospace text-break">{{ entry.entry_hash|default:"—" }}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    {% if entry.metadata %}
+      <div class="ct-card">
+        <div class="ct-card-header">Context</div>
+        <div class="ct-card-body">
+          <pre class="small bg-light border rounded p-2 mb-0">{{ entry.metadata|pprint }}</pre>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>What Changed</span>
+        <span class="badge text-bg-secondary">{{ changes|length }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>
+            {% for change in changes %}
+              <tr>
+                <td class="small fw-semibold">{{ change.field }}</td>
+                <td class="small text-muted text-break">{{ change.before|default_if_none:"—" }}</td>
+                <td class="small text-break">{{ change.after|default_if_none:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3">
+                <div class="ct-empty py-4">
+                  <i class="bi bi-file-earmark-text"></i>
+                  <p class="mb-0">This entry records an event, not a field change.</p>
+                </div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

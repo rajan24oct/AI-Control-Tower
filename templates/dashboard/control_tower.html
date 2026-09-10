@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}AI Control Tower{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+
+  {# Section 34: the eight questions, answered in one band. #}
+  <div class="ct-posture mb-3">
+    <div class="ct-posture-item">
+      <span class="ct-posture-label">Ecosystem Health</span>
+      <span class="ct-posture-value text-{{ summary.overall_health|health_style }}">
+        <i class="bi bi-heart-pulse"></i> {{ summary.overall_health|title }}
+      </span>
+      <span class="ct-posture-hint">
+        {% if summary.unhealthy_providers %}
+          {{ summary.unhealthy_providers }} provider{{ summary.unhealthy_providers|pluralize }} affected
+        {% else %}All providers nominal{% endif %}
+      </span>
+    </div>
+
+    <div class="ct-posture-item">
+      <span class="ct-posture-label">Running Now</span>
+      <span class="ct-posture-value">{{ summary.live }}</span>
+      <span class="ct-posture-hint">{{ summary.executions|intcomma }} runs in {{ summary.window_days }} days</span>
+    </div>
+
+    <div class="ct-posture-item">
+      <span class="ct-posture-label">Reliability</span>
+      <span class="ct-posture-value {% if summary.failure_rate >= 5 %}text-danger{% else %}text-success{% endif %}">
+        {{ summary.failure_rate|floatformat:1 }}%
+      </span>
+      <span class="ct-posture-hint">{{ summary.failed|intcomma }} failed runs</span>
+    </div>
+
+    <div class="ct-posture-item">
+      <span class="ct-posture-label">Spend</span>
+      <span class="ct-posture-value">${{ summary.cost|floatformat:2 }}</span>
+      <span class="ct-posture-hint">
+        {% if summary.budget_alerts %}
+          <a href="{% url 'costs:budgets' %}" class="text-danger text-decoration-none">
+            {{ summary.budget_alerts }} budget alert{{ summary.budget_alerts|pluralize }}
+          </a>
+        {% else %}Within budget{% endif %}
+      </span>
+    </div>
+
+    <div class="ct-posture-item">
+      <span class="ct-posture-label">Risk</span>
+      <span class="ct-posture-value {% if summary.critical_risks %}text-danger{% endif %}">
+        {{ summary.open_risks }}
+      </span>
+      <span class="ct-posture-hint">
+        <a href="{% url 'risks:matrix' %}" class="text-decoration-none">
+          {{ summary.critical_risks }} critical
+        </a>
+      </span>
+    </div>
+
+    <div class="ct-posture-item">
+      <span class="ct-posture-label">Human Attention</span>
+      <span class="ct-posture-value {% if summary.pending_approvals %}text-warning{% endif %}">
+        {{ summary.pending_approvals }}
+      </span>
+      <span class="ct-posture-hint">
+        <a href="{% url 'approvals:centre' %}" class="text-decoration-none">
+          {{ summary.critical_approvals }} critical pending
+        </a>
+      </span>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-xxl-4">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span><i class="bi bi-bell me-1"></i> Needs Attention</span>
+          <span class="badge text-bg-secondary">{{ attention|length }}</span>
+        </div>
+        <div class="ct-card-body py-0" style="max-height:640px;overflow-y:auto">
+          {% for item in attention %}
+            <a href="{{ item.url }}" class="ct-attention-item">
+              <i class="bi {{ item.severity|severity_icon }} text-{{ item.severity|severity_style }}"></i>
+              <div class="flex-grow-1">
+                <p class="ct-attention-title">{{ item.title }}</p>
+                {% if item.detail %}<p class="ct-attention-detail">{{ item.detail }}</p>{% endif %}
+              </div>
+              <i class="bi bi-chevron-right text-muted small align-self-center"></i>
+            </a>
+          {% empty %}
+            <div class="ct-empty">
+              <i class="bi bi-check-circle"></i>
+              <p class="mb-0">Nothing needs attention.</p>
+              <p class="small mb-0">No incidents, autonomy exceptions or pending decisions.</p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xxl-8">
+      <div class="ct-card">
+        <div class="ct-card-header">
+          <span><i class="bi bi-diagram-3 me-1"></i> AI Landscape</span>
+          <span class="small text-muted">Business users consume the layers below</span>
+        </div>
+        <div class="ct-card-body">
+
+          <div class="ct-consumer-band">
+            <i class="bi bi-people-fill"></i> Business Users
+          </div>
+          <div class="ct-flow-arrow"><i class="bi bi-arrow-down"></i></div>
+
+          {% for layer in ecosystem.layers %}
+            <div class="ct-layer">
+              <div class="ct-layer-title has-action">
+                <i class="bi {{ layer.icon }}"></i> {{ layer.title }}
+                <span class="badge text-bg-light text-dark ms-1">{{ layer.count }}</span>
+                <a href="{{ layer.url }}" class="ms-auto small text-decoration-none fw-normal">View all</a>
+              </div>
+
+              <div class="row g-2">
+                {% for node in layer.nodes %}
+                  <div class="col-12 col-md-6 col-xl-4">
+                    <a class="ct-node ct-node-rich border-risk-{{ node.risk_level }} {% if node.needs_attention %}is-flagged{% endif %}"
+                       href="{{ node.url }}">
+                      <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="flex-grow-1 min-w-0">
+                          <p class="ct-node-name text-truncate">{{ node.name }}</p>
+                          <p class="ct-node-meta text-truncate">{{ node.subtitle }}</p>
+                        </div>
+                        <span class="ct-health-dot tone-{{ node.health }}"
+                              title="Health: {{ node.health|title }}"></span>
+                      </div>
+
+                      <div class="ct-node-stats">
+                        <span title="Executions in the last 30 days">
+                          <i class="bi bi-activity"></i> {{ node.runs|intcomma }}
+                        </span>
+                        {% if node.failed %}
+                          <span class="text-danger" title="Failed runs">
+                            <i class="bi bi-x-octagon"></i> {{ node.failed }}
+                          </span>
+                        {% endif %}
+                        {% if node.live %}
+                          <span class="text-primary" title="Running now">
+                            <i class="bi bi-broadcast"></i> {{ node.live }}
+                          </span>
+                        {% endif %}
+                        <span title="Cost in the last 30 days">
+                          <i class="bi bi-currency-dollar"></i>{{ node.cost|floatformat:2 }}
+                        </span>
+                        {% if node.open_risks %}
+                          <span class="text-warning" title="Open risks">
+                            <i class="bi bi-clipboard-data"></i> {{ node.open_risks }}
+                          </span>
+                        {% endif %}
+                        {% if node.pending_approvals %}
+                          <span class="text-warning" title="Pending approvals">
+                            <i class="bi bi-person-check"></i> {{ node.pending_approvals }}
+                          </span>
+                        {% endif %}
+                      </div>
+
+                      <div class="ct-node-tags">
+                        <span class="badge badge-soft text-bg-{{ node.risk_level|risk_style }}">
+                          {{ node.risk_level|title }}
+                        </span>
+                        <span class="badge badge-soft text-bg-{{ node.status|status_style }}">
+                          {{ node.status_label }}
+                        </span>
+                        {% for flag in node.flags %}
+                          <span class="badge badge-soft text-bg-light text-dark">{{ flag }}</span>
+                        {% endfor %}
+                      </div>
+                    </a>
+                  </div>
+                {% empty %}
+                  <div class="col-12">
+                    <p class="text-muted small mb-0">Nothing registered in this layer.</p>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            {% if not forloop.last %}
+              <div class="ct-flow-arrow"><i class="bi bi-arrow-down"></i></div>
+            {% endif %}
+          {% endfor %}
+
+          <div class="ct-flow-arrow"><i class="bi bi-arrow-down"></i></div>
+          <div class="ct-consumer-band muted">
+            <i class="bi bi-tools"></i> Tools, APIs &amp; Data Sources
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

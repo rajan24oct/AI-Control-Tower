@@ -1,0 +1,144 @@
+﻿{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Risk Matrix{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <a href="{% url 'risks:list' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Risk register</a>
+  <div class="btn-group btn-group-sm" role="group">
+    <a href="{% url 'risks:matrix' %}"
+       class="btn btn-outline-secondary {% if not show_residual %}active{% endif %}">Inherent</a>
+    <a href="{% url 'risks:matrix' %}?view=residual"
+       class="btn btn-outline-secondary {% if show_residual %}active{% endif %}">Residual</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-8">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span>{% if show_residual %}Residual{% else %}Inherent{% endif %} Risk Matrix</span>
+        <span class="small text-muted">{{ summary.open }} open risk{{ summary.open|pluralize }}</span>
+      </div>
+      <div class="ct-card-body">
+        <div class="ct-matrix-wrap">
+          <div class="ct-matrix-ylabel">Impact</div>
+          <table class="ct-matrix">
+            <tbody>
+              {% for row in grid %}
+                <tr>
+                  <th class="ct-matrix-axis">{{ row.0.impact }}</th>
+                  {% for cell in row %}
+                    <td class="ct-matrix-cell tone-{{ cell.level }}" title="Likelihood {{ cell.likelihood }} x Impact {{ cell.impact }} = {{ cell.score }}">
+                      <span class="ct-matrix-score">{{ cell.score }}</span>
+                      {% if cell.count %}
+                        <span class="ct-matrix-count">{{ cell.count }}</span>
+                        <div class="ct-matrix-names">
+                          {% for risk in cell.risks %}
+                            <a href="{% url 'risks:detail' risk.pk %}">{{ risk.risk_id }}</a>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+              <tr>
+                <th></th>
+                {% for cell in grid.0 %}
+                  <th class="ct-matrix-axis">{{ cell.likelihood }}</th>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center small text-muted mt-1">Likelihood</div>
+
+        <div class="d-flex gap-3 justify-content-center mt-3 flex-wrap small">
+          <span><span class="ct-matrix-key tone-low"></span> Low</span>
+          <span><span class="ct-matrix-key tone-moderate"></span> Moderate</span>
+          <span><span class="ct-matrix-key tone-high"></span> High</span>
+          <span><span class="ct-matrix-key tone-critical"></span> Critical</span>
+        </div>
+        {% if show_residual %}
+          <p class="small text-muted text-center mt-2 mb-0">
+            Risks without a residual assessment are not plotted here.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Level Distribution</div>
+      <div class="ct-card-body"><div style="height:200px"><canvas id="chart-levels"></canvas></div></div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">By Category</div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for row in by_category %}
+              <tr>
+                <td class="small">{{ row.label }}</td>
+                <td class="small text-end fw-semibold">{{ row.count }}</td>
+              </tr>
+            {% empty %}
+              <tr><td class="text-center text-muted small py-4">No open risks.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% comment %}Inside the content region so it swaps with the markup it describes.{% endcomment %}
+<script id="levels-data" type="application/json">{{ distribution_json|safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Re-runnable: the Inherent/Residual toggle swaps this region rather than
+// navigating, so the chart has to be rebuilt against the incoming canvas.
+window.renderRiskMatrixChart = function () {
+  const el = document.getElementById('levels-data');
+  const canvas = document.getElementById('chart-levels');
+  if (!el || !canvas) return;
+
+  const data = JSON.parse(el.textContent);
+  if (!data.values.some(v => v > 0)) {
+    canvas.replaceWith(Object.assign(document.createElement('p'), {
+      className: 'text-muted small text-center mb-0 py-5', textContent: 'No open risks.'
+    }));
+    return;
+  }
+
+  // Chart.js refuses to reuse a canvas that still owns an instance.
+  const existing = Chart.getChart(canvas);
+  if (existing) existing.destroy();
+
+  new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: data.labels,
+      datasets: [{
+        data: data.values,
+        backgroundColor: window.ctPalette.risk,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }
+    }
+  });
+};
+
+$(function () { window.renderRiskMatrixChart(); });
+$(document).on('controltower:swapped', function () { window.renderRiskMatrixChart(); });
+</script>
+{% endblock %}

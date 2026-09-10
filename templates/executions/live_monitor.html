@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Live Monitor{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+
+  <div class="d-flex justify-content-end mb-2">
+    <span id="stream-status" class="ct-stream-status is-connecting">
+      <span class="ct-stream-dot"></span> <span data-label>Connecting…</span>
+    </span>
+  </div>
+
+  {% comment %}
+    Aggregate counters and the finished list refresh on a slow poll. Only the
+    running table needs to be live, and section 25 warns against pushing
+    real-time machinery further than it earns its place.
+  {% endcomment %}
+  <div id="monitor-shell"
+       data-organization="{{ active_organization.id }}"
+       data-ajax-poll="{% url 'executions:live_table' %}"
+       data-ajax-interval="15">
+    <div class="ct-card">
+      <div class="ct-card-body ct-empty">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <p class="mb-0 mt-2 small">Loading the execution stream…</p>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if active_organization %}
+<script>
+(function () {
+  let socket = null;
+  let socketOrganizationId = null;
+  let retryDelay = 1000;
+  let pollingFallback = false;
+
+  // Everything below is looked up per use rather than cached: switching
+  // organization swaps the content region, so today's nodes are not tomorrow's.
+  function currentOrganizationId() {
+    const shell = document.getElementById('monitor-shell');
+    return shell ? shell.dataset.organization : null;
+  }
+
+  let status = {state: 'connecting', label: 'Connecting…'};
+
+  function setStatus(state, label) {
+    status = {state: state, label: label};
+    paintStatus();
+  }
+
+  function paintStatus() {
+    const statusEl = document.getElementById('stream-status');
+    if (!statusEl) return;
+    statusEl.className = 'ct-stream-status is-' + status.state;
+    statusEl.querySelector('[data-label]').textContent = status.label;
+  }
+
+  function liveTableBody() {
+    // The shell is swapped by HTMX, so the body is looked up per use rather
+    // than cached.
+    return document.querySelector('#monitor-shell tbody');
+  }
+
+  function removeEmptyRow(body) {
+    const empty = body.querySelector('td[colspan]');
+    if (empty) empty.closest('tr').remove();
+  }
+
+  function showEmptyRow(body) {
+    if (body.querySelector('tr')) return;
+    body.innerHTML =
+      '<tr><td colspan="10"><div class="ct-empty py-4">' +
+      '<i class="bi bi-check-circle"></i>' +
+      '<p class="mb-0">Nothing running right now.</p></div></td></tr>';
+  }
+
+  function rowsFor(body, id) {
+    return [...body.querySelectorAll('tr[data-execution-id="' + CSS.escape(id) + '"]')];
+  }
+
+  function upsert(id, html) {
+    const body = liveTableBody();
+    if (!body) return;
+    removeEmptyRow(body);
+
+    const template = document.createElement('tbody');
+    template.innerHTML = html.trim();
+    // One execution renders as a summary row plus its transcript row.
+    const incoming = [...template.children];
+    if (!incoming.length) return;
+
+    const existing = rowsFor(body, id);
+    if (existing.length) {
+      existing[0].replaceWith(...incoming);
+      existing.slice(1).forEach(row => row.remove());
+    } else {
+      incoming.reverse().forEach(row => body.prepend(row));
+      incoming.reverse();
+    }
+
+    applyExpanded();
+
+    const summary = incoming[0];
+    summary.classList.add('ct-row-flash');
+    setTimeout(() => summary.classList.remove('ct-row-flash'), 1200);
+  }
+
+  /* Which transcripts are open, held outside the DOM.
+
+     The rows underneath get replaced constantly -- a socket push rewrites one
+     pair, the 15s poll rewrites the whole shell -- so reading a transcript on a
+     busy monitor is only possible if the open state outlives the markup. */
+  const expanded = new Set();
+
+  function paintRow(body, id) {
+    const open = expanded.has(id);
+    rowsFor(body, id).forEach(function (row) {
+      if (row.classList.contains('ct-live-detail')) row.hidden = !open;
+    });
+    const toggle = body.querySelector('[data-toggle-execution="' + CSS.escape(id) + '"]');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.classList.toggle('is-open', open);
+    }
+  }
+
+  function applyExpanded() {
+    const body = liveTableBody();
+    if (!body) return;
+    // Drop ids that have finished and left the board, so the set cannot grow
+    // for the lifetime of the page.
+    [...expanded].forEach(function (id) {
+      if (!rowsFor(body, id).length) expanded.delete(id);
+    });
+    expanded.forEach(id => paintRow(body, id));
+  }
+
+  function setExpanded(id, open) {
+    const body = liveTableBody();
+    if (!body) return;
+    if (open) expanded.add(id); else expanded.delete(id);
+    paintRow(body, id);
+  }
+
+  // Delegated, so it keeps working across every socket push and poll refresh.
+  $(document).on('click', '[data-toggle-execution]', function () {
+    const id = this.getAttribute('data-toggle-execution');
+    setExpanded(id, this.getAttribute('aria-expanded') !== 'true');
+  });
+
+  function remove(id) {
+    const body = liveTableBody();
+    if (!body) return;
+    rowsFor(body, id).forEach(row => row.remove());
+    showEmptyRow(body);
+  }
+
+  function replaceAll(rows) {
+    const body = liveTableBody();
+    if (!body) return;
+    body.innerHTML = rows.join('');
+    showEmptyRow(body);
+    applyExpanded();
+  }
+
+  function startPollingFallback() {
+    if (pollingFallback) return;
+    pollingFallback = true;
+    setStatus('polling', 'Polling');
+    // The shell already refreshes every 15s; tighten it so the fallback is
+    // usable as a substitute for the stream rather than just a backstop.
+    const shell = $('#monitor-shell');
+    const url = shell.data('ajax-poll');
+    setInterval(function () {
+      if (!document.hidden) shell.load(url);
+    }, 5000);
+  }
+
+  function connect() {
+    const organizationId = currentOrganizationId();
+    if (!organizationId) return;
+    socketOrganizationId = organizationId;
+
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const url = scheme + '://' + window.location.host + '/ws/executions/' + organizationId + '/';
+
+    try {
+      socket = new WebSocket(url);
+    } catch (err) {
+      startPollingFallback();
+      return;
+    }
+
+    socket.onopen = function () {
+      retryDelay = 1000;
+      setStatus('live', 'Live');
+    };
+
+    socket.onmessage = function (event) {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'snapshot') {
+        replaceAll(payload.rows);
+      } else if (payload.type === 'upsert') {
+        upsert(payload.id, payload.html);
+      } else if (payload.type === 'remove') {
+        remove(payload.id);
+      }
+    };
+
+    socket.onclose = function (event) {
+      // 4401/4403 are our own auth refusals; retrying will not help.
+      if (event.code === 4401 || event.code === 4403) {
+        startPollingFallback();
+        return;
+      }
+      // 4000 is our own "the tenant changed" close; connect() is already queued.
+      if (event.code === 4000) return;
+      setStatus('connecting', 'Reconnecting…');
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30000);
+    };
+
+    socket.onerror = function () {
+      if (socket && socket.readyState !== WebSocket.OPEN) setStatus('connecting', 'Reconnecting…');
+    };
+  }
+
+  // The slow poll replaces the whole shell, discarding rows the socket had
+  // pushed; ask for a fresh snapshot so the two never disagree.
+  $(document).on('controltower:polled', function (event, region) {
+    if (region.attr('id') !== 'monitor-shell') return;
+    // The poll replaced every row, including any transcript being read.
+    applyExpanded();
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({action: 'refresh'}));
+    }
+  });
+
+  // Switching organization swaps the page in place. The stream is per tenant,
+  // so drop the old subscription and open one against the new one.
+  $(document).on('controltower:swapped', function () {
+    const organizationId = currentOrganizationId();
+    if (!organizationId) return;
+    if (organizationId === socketOrganizationId) {
+      // Same tenant: the swap merely brought in a fresh, server-rendered badge
+      // that says "Connecting" again. Put the real state back.
+      paintStatus();
+      return;
+    }
+    setStatus('connecting', 'Connecting…');
+    if (socket) socket.close(4000, 'organization changed');
+    socket = null;
+    retryDelay = 1000;
+    connect();
+  });
+
+  connect();
+})();
+</script>
+{% endif %}
+{% endblock %}

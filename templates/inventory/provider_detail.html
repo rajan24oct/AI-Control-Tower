@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ provider.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'inventory:providers' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Providers</a>
+    <h2 class="h4 mt-1 mb-1">{{ provider.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{{ provider.get_provider_type_display }}</span>
+      <span class="badge badge-soft text-bg-{{ provider.health_status|health_style }}">{{ provider.get_health_status_display }}</span>
+      {% if provider.is_approved %}
+        <span class="badge badge-soft text-bg-success">Approved</span>
+      {% else %}
+        <span class="badge badge-soft text-bg-warning">Not approved</span>
+      {% endif %}
+      <span class="badge badge-soft text-bg-{{ provider.status|status_style }}">{{ provider.get_status_display }}</span>
+    </div>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:providers_aiprovider_change' provider.pk %}">
+    <i class="bi bi-pencil"></i> Edit
+  </a>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Connection</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Adapter Key</dt><dd><code>{{ provider.adapter_key }}</code></dd></div>
+          <div class="col-6"><dt>Region</dt><dd>{{ provider.region|default:"—" }}</dd></div>
+          <div class="col-12"><dt>Endpoint</dt><dd class="text-break">{{ provider.endpoint|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Deployment</dt><dd>{{ provider.deployment|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Auth Method</dt><dd>{{ provider.get_authentication_method_display }}</dd></div>
+          <div class="col-12">
+            <dt>Credential Reference</dt>
+            <dd class="mb-0">
+              {% if provider.credential_ref %}
+                <code>{{ provider.credential_ref }}</code>
+                {% if provider.has_resolvable_credential %}
+                  <span class="badge badge-soft text-bg-success ms-1">Resolved</span>
+                {% else %}
+                  <span class="badge badge-soft text-bg-danger ms-1">Not resolvable</span>
+                {% endif %}
+                <div class="small text-muted mt-1">
+                  The Control Tower stores only this variable name. The secret itself never
+                  enters the database.
+                </div>
+              {% else %}
+                <span class="text-muted">No credential required</span>
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Health</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Status</dt>
+            <dd><span class="badge badge-soft text-bg-{{ provider.health_status|health_style }}">{{ provider.get_health_status_display }}</span></dd></div>
+          <div class="col-6"><dt>Latency</dt>
+            <dd>{% if provider.last_health_latency_ms %}{{ provider.last_health_latency_ms }} ms{% else %}—{% endif %}</dd></div>
+          <div class="col-12"><dt>Last Checked</dt><dd>{{ provider.last_health_check|default:"Never" }}</dd></div>
+          {% if provider.last_health_message %}
+            <div class="col-12"><dt>Message</dt><dd class="mb-0 small">{{ provider.last_health_message }}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Adapter Capabilities</div>
+      <div class="ct-card-body">
+        {% if adapter_available %}
+          {% for capability in adapter_capabilities %}
+            <span class="badge badge-soft text-bg-primary me-1 mb-1">{{ capability }}</span>
+          {% empty %}
+            <p class="text-muted small mb-0">This adapter advertises no capabilities.</p>
+          {% endfor %}
+          <p class="small text-muted mb-0 mt-2">
+            Reported live by the <code>{{ provider.adapter_key }}</code> adapter. Operations are
+            refused before dispatch when a required capability is absent.
+          </p>
+        {% else %}
+          <div class="alert alert-warning py-2 small mb-0">
+            <i class="bi bi-exclamation-triangle"></i>
+            Adapter <code>{{ provider.adapter_key }}</code> could not be loaded: {{ adapter_error }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Models <span class="badge text-bg-secondary">{{ provider.models.count }}</span></div>
+      <div class="ct-card-body">
+        <div class="row g-2">
+          {% for model in provider.models.all %}
+            <div class="col-12 col-md-6">
+              <a class="ct-node" href="{% url 'inventory:model_detail' model.pk %}">
+                <p class="ct-node-name">{{ model.model_name }}</p>
+                <p class="ct-node-meta">{{ model.get_model_type_display }}</p>
+                <div class="ct-node-tags">
+                  {% if model.approved_for_use %}
+                    <span class="badge badge-soft text-bg-success">Approved</span>
+                  {% else %}
+                    <span class="badge badge-soft text-bg-warning">Unapproved</span>
+                  {% endif %}
+                </div>
+              </a>
+            </div>
+          {% empty %}
+            <div class="col-12"><p class="text-muted small mb-0">No models registered.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Agents <span class="badge text-bg-secondary">{{ provider.agents.count }}</span></div>
+      <div class="ct-card-body">
+        <div class="row g-2">
+          {% for agent in provider.agents.all %}
+            <div class="col-12 col-md-6">
+              <a class="ct-node border-risk-{{ agent.risk_level }}" href="{% url 'inventory:agent_detail' agent.pk %}">
+                <p class="ct-node-name">{{ agent.name }}</p>
+                <p class="ct-node-meta">{{ agent.get_framework_display }}</p>
+              </a>
+            </div>
+          {% empty %}
+            <div class="col-12"><p class="text-muted small mb-0">No agents use this provider.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,179 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Executions{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Executions</span>
+      <div class="ct-metric-value">{{ summary.total|intcomma }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Failed</span>
+      <div class="ct-metric-value {% if summary.failed %}text-danger{% endif %}">{{ summary.failed|intcomma }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Tokens</span>
+      <div class="ct-metric-value">{{ summary.tokens|intcomma }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Cost</span>
+      <div class="ct-metric-value">${{ summary.cost|floatformat:2 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Avg Latency</span>
+      <div class="ct-metric-value">{{ summary.latency|intcomma }}<span class="fs-6 text-muted"> ms</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Executions</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count|intcomma }} of {{ total_count|intcomma }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Execution id, trace or error">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in statuses %}
+            <option value="{{ value }}" {% if active_filters.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Agent</label>
+        <select name="agent" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for agent in agents %}
+            <option value="{{ agent.id }}" {% if active_filters.agent == agent.id|stringformat:"s" %}selected{% endif %}>{{ agent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Application</label>
+        <select name="application" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for application in applications %}
+            <option value="{{ application.id }}" {% if active_filters.application == application.id|stringformat:"s" %}selected{% endif %}>{{ application.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Provider</label>
+        <select name="provider" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for provider in providers %}
+            <option value="{{ provider.id }}" {% if active_filters.provider == provider.id|stringformat:"s" %}selected{% endif %}>{{ provider.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Environment</label>
+        <select name="environment" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in environments %}
+            <option value="{{ value }}" {% if active_filters.environment == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Approval</label>
+        <select name="approval" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in approval_states %}
+            <option value="{{ value }}" {% if active_filters.approval == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Period</label>
+        <select name="days" class="form-select form-select-sm">
+          <option value="">All time</option>
+          <option value="1" {% if selected_days == "1" %}selected{% endif %}>Last 24 hours</option>
+          <option value="7" {% if selected_days == "7" %}selected{% endif %}>Last 7 days</option>
+          <option value="30" {% if selected_days == "30" %}selected{% endif %}>Last 30 days</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Filter</button>
+        <a href="{% url 'executions:list' %}" class="btn btn-sm btn-outline-secondary" data-ajax-link="#results">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Execution</th><th>Agent</th><th>Application</th><th>Model</th><th>Provider</th>
+          <th>Started</th><th class="text-end">Duration</th><th class="text-end">Tokens</th>
+          <th class="text-end">Cost</th><th>Status</th><th>Approval</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for execution in executions %}
+          <tr>
+            <td>
+              <a href="{% url 'executions:detail' execution.pk %}" class="fw-semibold text-decoration-none font-monospace small">
+                {{ execution.external_id }}
+              </a>
+              {% if execution.error_message %}
+                <div class="small text-danger text-truncate" style="max-width:220px">{{ execution.error_message }}</div>
+              {% endif %}
+            </td>
+            <td class="small">{{ execution.agent.name|default:"—" }}</td>
+            <td class="small">{{ execution.application.name|default:"—" }}</td>
+            <td class="small">{{ execution.model.model_name|default:"—" }}</td>
+            <td class="small">{{ execution.provider.name|default:"—" }}</td>
+            <td class="small text-nowrap" title="{{ execution.started_at }}">{{ execution.started_at|naturaltime }}</td>
+            <td class="small text-end text-nowrap">{{ execution.duration_display }}</td>
+            <td class="small text-end">{{ execution.total_tokens|intcomma }}</td>
+            <td class="small text-end text-nowrap">
+              ${{ execution.cost|floatformat:4 }}
+              {% if execution.cost_is_derived %}
+                <i class="bi bi-calculator text-muted" title="Priced by the Control Tower from the model registry"></i>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ execution.status|execution_status_style }}">{{ execution.get_status_display }}</span></td>
+            <td>
+              {% if execution.approval_status != "not_required" %}
+                <span class="badge badge-soft text-bg-{{ execution.approval_status|approval_style }}">{{ execution.get_approval_status_display }}</span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="11">
+            <div class="ct-empty"><i class="bi bi-activity"></i>
+              <p class="mb-0">No executions match these filters.</p>
+              <p class="small mb-0">External engines report runs to <code>POST /api/v1/executions/</code>.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

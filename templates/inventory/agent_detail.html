@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ agent.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'inventory:agents' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Agents</a>
+    <h2 class="h4 mt-1 mb-1">{{ agent.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{{ agent.get_framework_display }}</span>
+      <span class="badge badge-soft text-bg-{{ agent.environment|environment_style }}">{{ agent.get_environment_display }}</span>
+      <span class="badge badge-soft text-bg-{{ agent.risk_level|risk_style }}">{{ agent.get_risk_level_display }} risk</span>
+      <span class="badge badge-soft text-bg-{{ agent.autonomy_level|autonomy_style }}">{{ agent.get_autonomy_level_display }}</span>
+      <span class="badge badge-soft text-bg-{{ agent.status|status_style }}">{{ agent.get_status_display }}</span>
+    </div>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:agents_aiagent_change' agent.pk %}">
+    <i class="bi bi-pencil"></i> Edit
+  </a>
+</div>
+
+{% if agent.has_excessive_autonomy %}
+  <div class="alert alert-danger d-flex gap-2 align-items-center py-2">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <div class="small">
+      This agent operates at autonomy level {{ agent.autonomy_level }} on {{ agent.get_risk_level_display|lower }} risk
+      with no human approval requirement. Governance review is recommended.
+    </div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Registration</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Agent ID</dt><dd><code>{{ agent.agent_id }}</code></dd></div>
+          <div class="col-6"><dt>Owner</dt><dd>{{ agent.owner.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Team</dt><dd>{{ agent.team.name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Data Classification</dt><dd>{{ agent.get_data_classification_display }}</dd></div>
+          <div class="col-6"><dt>Approval Required</dt>
+            <dd>{% if agent.approval_required %}Yes{% else %}No{% endif %}</dd></div>
+          <div class="col-6"><dt>Adapter</dt><dd><code>{{ agent.adapter_key }}</code></dd></div>
+          {% if agent.remote_endpoint %}
+            <div class="col-12"><dt>Remote Endpoint</dt><dd class="text-break">{{ agent.remote_endpoint }}</dd></div>
+          {% endif %}
+          {% if agent.system_prompt_reference %}
+            <div class="col-12"><dt>System Prompt Reference</dt><dd class="text-break">{{ agent.system_prompt_reference }}</dd></div>
+          {% endif %}
+          <div class="col-12"><dt>Business Purpose</dt><dd class="mb-0">{{ agent.business_purpose|default:"—"|linebreaksbr }}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Boundaries</div>
+      <div class="ct-card-body">
+        <dt class="small text-uppercase text-muted fw-semibold mb-1" style="font-size:.7rem">Allowed Tools</dt>
+        <div class="mb-3">
+          {% for tool in agent.allowed_tools %}
+            <span class="badge badge-soft text-bg-success me-1 mb-1">{{ tool }}</span>
+          {% empty %}<span class="text-muted small">None specified</span>{% endfor %}
+        </div>
+
+        <dt class="small text-uppercase text-muted fw-semibold mb-1" style="font-size:.7rem">Restricted Tools</dt>
+        <div class="mb-3">
+          {% for tool in agent.restricted_tools %}
+            <span class="badge badge-soft text-bg-danger me-1 mb-1">{{ tool }}</span>
+          {% empty %}<span class="text-muted small">None specified</span>{% endfor %}
+        </div>
+
+        <dt class="small text-uppercase text-muted fw-semibold mb-1" style="font-size:.7rem">Knowledge Sources</dt>
+        <div>
+          {% for source in agent.knowledge_sources %}
+            <span class="badge badge-soft text-bg-light text-dark me-1 mb-1">{{ source }}</span>
+          {% empty %}<span class="text-muted small">None specified</span>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Execution Chain</div>
+      <div class="ct-card-body">
+        <div class="ct-layer-title">Primary Model</div>
+        {% if agent.primary_model %}
+          <a class="ct-node mb-2" href="{% url 'inventory:model_detail' agent.primary_model.pk %}">
+            <p class="ct-node-name">{{ agent.primary_model.model_name }}</p>
+            <p class="ct-node-meta">{{ agent.primary_model.get_model_type_display }} &middot;
+              {{ agent.primary_model.currency }} {{ agent.primary_model.input_cost_per_1k }} in /
+              {{ agent.primary_model.output_cost_per_1k }} out per 1K</p>
+          </a>
+        {% else %}<p class="text-muted small">No primary model assigned.</p>{% endif %}
+
+        {% if agent.fallback_model %}
+          <div class="ct-layer-title mt-3">Fallback Model</div>
+          <a class="ct-node" href="{% url 'inventory:model_detail' agent.fallback_model.pk %}">
+            <p class="ct-node-name">{{ agent.fallback_model.model_name }}</p>
+            <p class="ct-node-meta">{{ agent.fallback_model.provider.name }}</p>
+          </a>
+        {% endif %}
+
+        {% if agent.provider %}
+          <div class="ct-layer-title mt-3">Provider</div>
+          <a class="ct-node" href="{% url 'inventory:provider_detail' agent.provider.pk %}">
+            <p class="ct-node-name">{{ agent.provider.name }}</p>
+            <p class="ct-node-meta">{{ agent.provider.get_provider_type_display }} &middot;
+              {{ agent.provider.get_health_status_display }}</p>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Used By <span class="badge text-bg-secondary">{{ agent.applications.count }}</span></div>
+      <div class="ct-card-body">
+        <div class="row g-2">
+          {% for application in agent.applications.all %}
+            <div class="col-12 col-md-6">
+              <a class="ct-node border-risk-{{ application.risk_level }}"
+                 href="{% url 'inventory:application_detail' application.pk %}">
+                <p class="ct-node-name">{{ application.name }}</p>
+                <p class="ct-node-meta">{{ application.get_environment_display }}</p>
+              </a>
+            </div>
+          {% empty %}
+            <div class="col-12"><p class="text-muted small mb-0">Not linked to any application.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

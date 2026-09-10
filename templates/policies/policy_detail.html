@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}{{ policy.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'policies:list' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> Policies
+    </a>
+    <h2 class="h5 mt-1 mb-1">{{ policy.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{{ policy.get_policy_type_display }}</span>
+      <span class="badge badge-soft text-bg-{{ policy.effect|effect_style }}">{{ policy.get_effect_display }}</span>
+      <span class="badge badge-soft text-bg-{{ policy.severity|risk_style }}">{{ policy.get_severity_display }}</span>
+      <span class="badge badge-soft text-bg-{{ policy.status|status_style }}">{{ policy.get_status_display }}</span>
+    </div>
+  </div>
+  {% if can_manage %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:policies_policy_change' policy.pk %}">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Definition</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv mb-0">
+          <dt>Description</dt>
+          <dd>{{ policy.description|default:"—"|linebreaksbr }}</dd>
+          <dt>Effect when matched</dt>
+          <dd>
+            {% if policy.effect == "deny" %}
+              The action is refused. Engines are expected to stop.
+            {% elif policy.effect == "require_approval" %}
+              The action is routed to a human in the Approval Centre.
+            {% else %}
+              The action proceeds, but the match is recorded.
+            {% endif %}
+          </dd>
+          <dt>Evaluation priority</dt>
+          <dd>{{ policy.priority }} <span class="text-muted small">(lower runs first)</span></dd>
+          {% if policy.reference %}
+            <dt>Control reference</dt>
+            <dd>{{ policy.reference }}</dd>
+          {% endif %}
+          <dt>Settings</dt>
+          <dd class="mb-0">
+            {% if policy.configuration %}
+              <pre class="small bg-light border rounded p-2 mb-0">{{ policy.configuration|pprint }}</pre>
+            {% else %}
+              <span class="text-muted">This type takes no settings.</span>
+            {% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Recorded Activity</span>
+        <span class="badge text-bg-secondary">{{ violation_total }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead>
+            <tr><th>When</th><th>Effect</th><th>Reason</th><th>Agent</th><th>Execution</th></tr>
+          </thead>
+          <tbody>
+            {% for violation in violations %}
+              <tr>
+                <td class="small text-nowrap">{{ violation.created_at|naturaltime }}</td>
+                <td><span class="badge badge-soft text-bg-{{ violation.effect|effect_style }}">{{ violation.get_effect_display }}</span></td>
+                <td class="small">{{ violation.reason }}</td>
+                <td class="small">{{ violation.agent.name|default:"—" }}</td>
+                <td class="small">
+                  {% if violation.execution %}
+                    <a href="{% url 'executions:detail' violation.execution.pk %}" class="font-monospace text-decoration-none">
+                      {{ violation.execution.external_id }}
+                    </a>
+                  {% else %}
+                    <span class="text-muted">Pre-flight check</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5">
+                <div class="ct-empty py-4">
+                  <i class="bi bi-shield-check"></i>
+                  <p class="mb-0">This policy has never been triggered.</p>
+                </div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}AI Inventory{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-md-6 col-xl-3">
+    <a href="{% url 'inventory:applications' %}" class="text-decoration-none text-reset">
+      <div class="ct-metric">
+        <div class="d-flex justify-content-between"><span class="ct-metric-label">Applications</span>
+          <i class="bi bi-window-stack ct-metric-icon"></i></div>
+        <div class="ct-metric-value">{{ counts.applications }}</div>
+        <div class="ct-metric-hint">Business-facing AI applications</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <a href="{% url 'inventory:agents' %}" class="text-decoration-none text-reset">
+      <div class="ct-metric">
+        <div class="d-flex justify-content-between"><span class="ct-metric-label">Agents</span>
+          <i class="bi bi-robot ct-metric-icon"></i></div>
+        <div class="ct-metric-value">{{ counts.agents }}</div>
+        <div class="ct-metric-hint">Registered across all frameworks</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <a href="{% url 'inventory:models' %}" class="text-decoration-none text-reset">
+      <div class="ct-metric">
+        <div class="d-flex justify-content-between"><span class="ct-metric-label">Models</span>
+          <i class="bi bi-cpu ct-metric-icon"></i></div>
+        <div class="ct-metric-value">{{ counts.models }}</div>
+        <div class="ct-metric-hint">With pricing and capabilities</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <a href="{% url 'inventory:providers' %}" class="text-decoration-none text-reset">
+      <div class="ct-metric">
+        <div class="d-flex justify-content-between"><span class="ct-metric-label">Providers</span>
+          <i class="bi bi-hdd-network ct-metric-icon"></i></div>
+        <div class="ct-metric-value">{{ counts.providers }}</div>
+        <div class="ct-metric-hint">Reached through adapters</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div class="ct-card mt-3">
+  <div class="ct-card-header">Inventory Hierarchy</div>
+  <div class="ct-card-body">
+    <p class="text-muted small mb-3">
+      Every asset is linked to the ones above and below it, so an incident on a provider
+      can be traced up to the business applications it affects.
+    </p>
+    <div class="d-flex flex-wrap align-items-center gap-2 small">
+      <span class="badge text-bg-primary">Business Users</span>
+      <i class="bi bi-arrow-right text-muted"></i>
+      <a href="{% url 'inventory:applications' %}" class="badge text-bg-light text-dark text-decoration-none">AI Applications</a>
+      <i class="bi bi-arrow-right text-muted"></i>
+      <a href="{% url 'inventory:agents' %}" class="badge text-bg-light text-dark text-decoration-none">AI Agents</a>
+      <i class="bi bi-arrow-right text-muted"></i>
+      <a href="{% url 'inventory:models' %}" class="badge text-bg-light text-dark text-decoration-none">AI Models</a>
+      <i class="bi bi-arrow-right text-muted"></i>
+      <a href="{% url 'inventory:providers' %}" class="badge text-bg-light text-dark text-decoration-none">AI Providers</a>
+      <i class="bi bi-arrow-right text-muted"></i>
+      <span class="badge text-bg-light text-dark">Tools / APIs / Data</span>
+    </div>
+  </div>
+</div>
+{% endblock %}

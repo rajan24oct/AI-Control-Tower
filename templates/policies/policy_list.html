@@ -1,0 +1,162 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}AI Control Policies{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="ct-metric"><span class="ct-metric-label">Active Policies</span>
+      <div class="ct-metric-value">{{ counts.active }}</div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Blocking</span>
+      <div class="ct-metric-value">{{ counts.blocking }}</div>
+      <div class="ct-metric-hint">Deny outright</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Open Violations</span>
+      <div class="ct-metric-value {% if counts.open_violations %}text-danger{% endif %}">
+        {{ counts.open_violations }}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Total Denials</span>
+      <div class="ct-metric-value">{{ counts.denials }}</div>
+      <div class="ct-metric-hint">Blocked before they ran</div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card mb-3">
+  <div class="ct-card-body d-flex gap-3 align-items-start py-2">
+    <i class="bi bi-info-circle text-primary mt-1"></i>
+    <div class="small text-muted">
+      Engines ask <code>POST /api/v1/policy/check/</code> before acting. A policy either
+      permits, routes to a human, or denies. Denials and warnings are recorded here even
+      when an engine proceeds anyway, so the trail survives.
+    </div>
+  </div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Policies</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Name, description or reference">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Type</label>
+        <select name="type" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in policy_types %}
+            <option value="{{ value }}" {% if active_filters.type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Effect</label>
+        <select name="effect" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in effects %}
+            <option value="{{ value }}" {% if active_filters.effect == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Policy</th><th>Type</th><th>Effect</th><th>Conditions</th>
+          <th>Severity</th><th class="text-end">Priority</th>
+          <th class="text-end">Open</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for policy in policies %}
+          <tr>
+            <td>
+              <a href="{% url 'policies:detail' policy.pk %}" class="fw-semibold text-decoration-none">
+                {{ policy.name }}
+              </a>
+              {% if policy.reference %}
+                <div class="small text-muted">{{ policy.reference }}</div>
+              {% endif %}
+            </td>
+            <td class="small">{{ policy.get_policy_type_display }}</td>
+            <td><span class="badge badge-soft text-bg-{{ policy.effect|effect_style }}">{{ policy.get_effect_display }}</span></td>
+            <td class="small text-muted" style="max-width:260px">{{ policy.summary }}</td>
+            <td><span class="badge badge-soft text-bg-{{ policy.severity|risk_style }}">{{ policy.get_severity_display }}</span></td>
+            <td class="small text-end">{{ policy.priority }}</td>
+            <td class="small text-end">
+              {% if policy.violation_count %}
+                <span class="badge badge-soft text-bg-danger">{{ policy.violation_count }}</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ policy.status|status_style }}">{{ policy.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8">
+            <div class="ct-empty"><i class="bi bi-file-earmark-ruled"></i>
+              <p class="mb-0">No policies match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+
+{% if recent_violations %}
+  <div class="ct-card mt-3">
+    <div class="ct-card-header">Recent Policy Activity</div>
+    <div class="ct-card-body py-0">
+      {% for violation in recent_violations %}
+        <div class="ct-attention-item" data-ajax-row>
+          <i class="bi {% if violation.effect == 'deny' %}bi-shield-slash-fill{% else %}bi-exclamation-triangle-fill{% endif %} text-{{ violation.severity|risk_style }}"></i>
+          <div class="flex-grow-1">
+            <p class="ct-attention-title">
+              {{ violation.policy.name }}
+              <span class="badge badge-soft text-bg-{{ violation.effect|effect_style }} ms-1">
+                {{ violation.get_effect_display }}
+              </span>
+            </p>
+            <p class="ct-attention-detail">
+              {{ violation.reason }}
+              {% if violation.agent %} &middot; {{ violation.agent.name }}{% endif %}
+              &middot; {{ violation.created_at|naturaltime }}
+            </p>
+          </div>
+          {% if can_manage and not violation.is_acknowledged %}
+            <form method="post" action="{% url 'policies:acknowledge_violation' violation.pk %}"
+                  class="align-self-center" data-ajax-action="remove">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

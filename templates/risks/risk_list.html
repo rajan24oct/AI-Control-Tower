@@ -1,0 +1,137 @@
+﻿{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Risk Register{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Open Risks</span>
+      <div class="ct-metric-value">{{ summary.open }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Critical</span>
+      <div class="ct-metric-value {% if summary.critical %}text-danger{% endif %}">{{ summary.critical }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">High</span>
+      <div class="ct-metric-value {% if summary.high %}text-warning{% endif %}">{{ summary.high }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Unmitigated</span>
+      <div class="ct-metric-value">{{ summary.unmitigated }}</div>
+      <div class="ct-metric-hint">No mitigation recorded</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Avg Reduction</span>
+      <div class="ct-metric-value">{{ summary.average_reduction }}</div>
+      <div class="ct-metric-hint">Score points removed</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <a href="{% url 'risks:matrix' %}" class="text-decoration-none text-reset">
+      <div class="ct-metric h-100 d-flex flex-column justify-content-center">
+        <span class="ct-metric-label"><i class="bi bi-grid-3x3 me-1"></i> Heat Map</span>
+        <div class="small text-primary mt-1">Open the 5 &times; 5 matrix</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Risk Register</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Id, title, description or mitigation">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Category</label>
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in categories %}
+            <option value="{{ value }}" {% if active_filters.category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in statuses %}
+            <option value="{{ value }}" {% if active_filters.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Agent</label>
+        <select name="agent" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for agent in agents %}
+            <option value="{{ agent.id }}" {% if active_filters.agent == agent.id|stringformat:"s" %}selected{% endif %}>{{ agent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Risk</th><th>Category</th><th>Affected</th>
+          <th class="text-center">L</th><th class="text-center">I</th>
+          <th class="text-center">Inherent</th><th class="text-center">Residual</th>
+          <th>Owner</th><th>Review</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for risk in risks %}
+          <tr>
+            <td>
+              <a href="{% url 'risks:detail' risk.pk %}" class="fw-semibold text-decoration-none">{{ risk.title }}</a>
+              <div class="small text-muted font-monospace">{{ risk.risk_id }}</div>
+            </td>
+            <td class="small">{{ risk.get_risk_category_display }}</td>
+            <td class="small">{{ risk.subject|default:"—" }}</td>
+            <td class="text-center small">{{ risk.likelihood }}</td>
+            <td class="text-center small">{{ risk.impact }}</td>
+            <td class="text-center">
+              <span class="badge badge-soft text-bg-{{ risk.inherent_level|risk_style }}">{{ risk.inherent_risk_score }}</span>
+            </td>
+            <td class="text-center">
+              {% if risk.residual_risk_score %}
+                <span class="badge badge-soft text-bg-{{ risk.residual_level|risk_style }}">{{ risk.residual_risk_score }}</span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td class="small">{{ risk.owner.get_full_name|default:"—" }}</td>
+            <td class="small text-nowrap">{{ risk.review_date|default:"—" }}</td>
+            <td><span class="badge badge-soft text-bg-{{ risk.status|status_style }}">{{ risk.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="10">
+            <div class="ct-empty"><i class="bi bi-clipboard-data"></i>
+              <p class="mb-0">No risks match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

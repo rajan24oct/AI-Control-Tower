@@ -1,0 +1,179 @@
+﻿{% load control_tower %}
+{% comment %}
+  Section groupings match the original sidebar; on small screens the whole
+  set collapses behind the hamburger.
+{% endcomment %}
+<header class="ct-header">
+  <nav class="navbar navbar-expand-lg ct-navbar">
+    <div class="ct-navbar-inner">
+      <a class="ct-brand" href="{% url 'dashboard:home' %}">
+        <i class="bi bi-broadcast-pin"></i>
+        <span>
+          <span class="ct-brand-name">AI Control Tower</span>
+          <span class="ct-brand-sub">Enterprise AI Mission Control</span>
+        </span>
+      </a>
+
+      <button class="navbar-toggler ct-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#primary-nav" aria-controls="primary-nav"
+              aria-expanded="false" aria-label="Toggle navigation">
+        <i class="bi bi-list"></i>
+      </button>
+
+      <div class="collapse navbar-collapse" id="primary-nav">
+        <ul class="navbar-nav ct-nav">
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Dashboard</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'dashboard:control_tower' %}">
+                <i class="bi bi-diagram-3"></i> Control Tower</a></li>
+              <li><a class="dropdown-item" href="{% url 'dashboard:home' %}">
+                <i class="bi bi-speedometer2"></i> Dashboard</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'inventory' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Landscape</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'inventory:applications' %}">
+                <i class="bi bi-window-stack"></i> Applications Registry</a></li>
+              <li><a class="dropdown-item" href="{% url 'inventory:agents' %}">
+                <i class="bi bi-robot"></i> Agents Registry</a></li>
+              <li><a class="dropdown-item" href="{% url 'inventory:models' %}">
+                <i class="bi bi-cpu"></i> Models Registry</a></li>
+              <li><a class="dropdown-item" href="{% url 'inventory:providers' %}">
+                <i class="bi bi-hdd-network"></i> Platform Providers Registry</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'executions' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Observability</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'executions:list' %}">
+                <i class="bi bi-activity"></i> Executions</a></li>
+              <li><a class="dropdown-item" href="{% url 'executions:live' %}">
+                <i class="bi bi-broadcast"></i> Live Monitor</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'costs' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI FinOps</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'costs:dashboard' %}">
+                <i class="bi bi-cash-stack"></i> Costs</a></li>
+              <li><a class="dropdown-item" href="{% url 'costs:budgets' %}">
+                <i class="bi bi-wallet2"></i> Budgets</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'risks approvals policies' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Governance</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'risks:list' %}">
+                <i class="bi bi-clipboard-data"></i> Risks</a></li>
+              <li><a class="dropdown-item" href="{% url 'risks:matrix' %}">
+                <i class="bi bi-grid-3x3"></i> Risk Matrix</a></li>
+              <li><a class="dropdown-item" href="{% url 'approvals:centre' %}">
+                <i class="bi bi-person-check"></i> Approvals</a></li>
+              <li><a class="dropdown-item" href="{% url 'policies:list' %}">
+                <i class="bi bi-file-earmark-ruled"></i> Policies</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'audit' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Control and Settings</a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{% url 'audit:list' %}">
+                <i class="bi bi-journal-text"></i> Audit Trail</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{% url 'admin:accounts_user_changelist' %}">
+                <i class="bi bi-people"></i> Users</a></li>
+              <li><a class="dropdown-item" href="{% url 'admin:organizations_team_changelist' %}">
+                <i class="bi bi-diagram-2"></i> Teams</a></li>
+              <li><a class="dropdown-item" href="{% url 'admin:api_serviceaccount_changelist' %}">
+                <i class="bi bi-plug"></i> Integrations</a></li>
+              <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                <i class="bi bi-gear"></i> Settings</a></li>
+              <li><hr class="dropdown-divider"></li>
+              {% comment %}
+                Opens in its own tab: the handbook carries its own design and
+                replacing the app with it would strand anyone mid-task.
+              {% endcomment %}
+              <li><a class="dropdown-item" href="{% url 'dashboard:integration_handbook' %}"
+                     target="_blank" rel="noopener">
+                <i class="bi bi-book"></i> Integration Handbook
+                <i class="bi bi-box-arrow-up-right ct-ext"></i></a></li>
+            </ul>
+          </li>
+        </ul>
+
+        <div class="ct-header-actions">
+          {% if user.is_authenticated %}
+            {% if available_organizations %}
+              <form method="post" action="{% url 'dashboard:switch_organization' %}"
+                    class="d-flex align-items-center gap-2 m-0"
+                    data-ajax-action data-ajax-refresh="#ct-main">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <select name="organization_id" class="form-select form-select-sm ct-org-select"
+                        data-ajax-submit aria-label="Organization">
+                  {% for org in available_organizations %}
+                    <option value="{{ org.id }}" {% if active_organization and org.id == active_organization.id %}selected{% endif %}>
+                      {{ org.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <noscript><button type="submit" class="btn btn-sm btn-light">Switch</button></noscript>
+              </form>
+            {% endif %}
+
+            <div data-ajax-poll="{% url 'notifications:bell' %}" data-ajax-interval="30">
+              <button class="btn btn-sm ct-icon-btn" disabled aria-label="Notifications">
+                <i class="bi bi-bell"></i>
+              </button>
+            </div>
+
+            <div class="dropdown">
+              <button class="btn btn-sm ct-user-btn dropdown-toggle" data-bs-toggle="dropdown"
+                      aria-expanded="false">
+                <span class="ct-avatar">{{ user.initials }}</span>
+                <span class="d-none d-xl-inline">{{ user.get_full_name|default:user.email }}</span>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li class="dropdown-header">
+                  {{ user.email }}<br>
+                  <small class="text-muted">{{ active_role|default:"No role"|title }}</small>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{% url 'notifications:list' %}">Notifications</a></li>
+                <li><a class="dropdown-item" href="{% url 'notifications:preferences' %}">Notification settings</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <form method="post" action="{% url 'accounts:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-item">Sign out</button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+          {% else %}
+            <a class="btn btn-sm btn-light" href="{% url 'accounts:login' %}">Sign in</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="ct-pagebar">
+    <div class="ct-pagebar-inner">
+      <h1>{{ page_title|default:"AI Control Tower" }}</h1>
+      {% if page_subtitle %}<p>{{ page_subtitle }}</p>{% endif %}
+    </div>
+  </div>
+</header>

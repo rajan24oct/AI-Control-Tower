@@ -1,0 +1,96 @@
+﻿{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}AI Providers{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>AI Providers</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Name, endpoint or adapter key">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Type</label>
+        <select name="type" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in provider_types %}
+            <option value="{{ value }}" {% if active_filters.type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Health</label>
+        <select name="health" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in health_statuses %}
+            <option value="{{ value }}" {% if active_filters.health == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Provider</th><th>Type</th><th>Adapter</th><th>Region</th>
+          <th>Models</th><th>Health</th><th>Credential</th><th>Approved</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for provider in providers %}
+          <tr>
+            <td>
+              <a href="{% url 'inventory:provider_detail' provider.pk %}" class="fw-semibold text-decoration-none">{{ provider.name }}</a>
+              {% if provider.endpoint %}<div class="small text-muted text-truncate" style="max-width:230px">{{ provider.endpoint }}</div>{% endif %}
+            </td>
+            <td class="small">{{ provider.get_provider_type_display }}</td>
+            <td><code class="small">{{ provider.adapter_key }}</code></td>
+            <td class="small">{{ provider.region|default:"—" }}</td>
+            <td class="small">{{ provider.model_total }}</td>
+            <td>
+              <span class="badge badge-soft text-bg-{{ provider.health_status|health_style }}">{{ provider.get_health_status_display }}</span>
+            </td>
+            <td class="small">
+              {% if not provider.credential_ref %}
+                <span class="text-muted">None required</span>
+              {% elif provider.has_resolvable_credential %}
+                <i class="bi bi-check-circle-fill text-success"></i> Resolved
+              {% else %}
+                <i class="bi bi-x-circle-fill text-danger"></i> Missing
+              {% endif %}
+            </td>
+            <td>
+              {% if provider.is_approved %}
+                <span class="badge badge-soft text-bg-success">Yes</span>
+              {% else %}
+                <span class="badge badge-soft text-bg-warning">No</span>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ provider.status|status_style }}">{{ provider.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9">
+            <div class="ct-empty"><i class="bi bi-hdd-network"></i>
+              <p class="mb-0">No providers match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

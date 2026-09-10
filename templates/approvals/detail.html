@@ -1,0 +1,168 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}{{ approval.request_id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'approvals:centre' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Approval centre</a>
+    <h2 class="h5 mt-1 mb-1">{{ approval.requested_action }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark font-monospace">{{ approval.request_id }}</span>
+      <span class="badge badge-soft text-bg-{{ approval.risk_level|risk_style }}">{{ approval.get_risk_level_display }} risk</span>
+      <span class="badge badge-soft text-bg-{{ approval.status|approval_style }}">{{ approval.get_status_display }}</span>
+    </div>
+  </div>
+</div>
+
+{% if approval.is_pending %}
+  <div class="ct-card mb-3">
+    <div class="ct-card-body">
+      {% if can_decide %}
+        <p class="small text-muted mb-2">
+          Approving releases the pause and records the decision. The engine resumes the run
+          itself &mdash; the Control Tower governs, it does not execute.
+        </p>
+        <div class="row g-2">
+          <div class="col-12 col-md-8">
+            <form method="post" action="{% url 'approvals:decide' approval.pk 'approve' %}" id="approve-form"
+                  data-ajax-action data-ajax-refresh="#ct-main">
+              {% csrf_token %}
+              <input type="text" name="notes" class="form-control form-control-sm"
+                     placeholder="Decision notes (optional)" form="approve-form">
+            </form>
+          </div>
+          <div class="col-12 col-md-4 d-flex gap-2">
+            <button type="submit" form="approve-form" class="btn btn-sm btn-success flex-grow-1">
+              <i class="bi bi-check-lg"></i> Approve
+            </button>
+            <form method="post" action="{% url 'approvals:decide' approval.pk 'reject' %}" class="flex-grow-1"
+                  data-ajax-action data-ajax-refresh="#ct-main">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                <i class="bi bi-x-lg"></i> Reject
+              </button>
+            </form>
+          </div>
+        </div>
+      {% else %}
+        <div class="d-flex gap-2 align-items-center small text-muted">
+          <i class="bi bi-lock"></i>
+          Your role does not allow deciding approval requests.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Request</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>Reason</dt><dd>{{ approval.reason|default:"—"|linebreaksbr }}</dd></div>
+          <div class="col-6"><dt>Agent</dt>
+            <dd>
+              {% if approval.agent %}
+                <a href="{% url 'inventory:agent_detail' approval.agent.pk %}">{{ approval.agent.name }}</a>
+              {% else %}—{% endif %}
+            </dd>
+          </div>
+          <div class="col-6"><dt>Application</dt>
+            <dd>
+              {% if approval.application %}
+                <a href="{% url 'inventory:application_detail' approval.application.pk %}">{{ approval.application.name }}</a>
+              {% else %}—{% endif %}
+            </dd>
+          </div>
+          <div class="col-6"><dt>Requested By</dt>
+            <dd>{{ approval.requested_by.get_full_name|default:approval.requested_by_system|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Requested</dt><dd>{{ approval.requested_at|naturaltime }}</dd></div>
+          <div class="col-6"><dt>Assigned To</dt>
+            <dd>{{ approval.assigned_approver.get_full_name|default:"Unassigned" }}</dd></div>
+          <div class="col-6"><dt>Expires</dt><dd class="mb-0">{{ approval.expires_at|default:"—" }}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    {% if approval.is_decided or approval.status == "expired" %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">Decision</div>
+        <div class="ct-card-body">
+          <dl class="ct-kv row mb-0">
+            <div class="col-6"><dt>Outcome</dt>
+              <dd><span class="badge badge-soft text-bg-{{ approval.status|approval_style }}">{{ approval.get_status_display }}</span></dd></div>
+            <div class="col-6"><dt>Decided By</dt>
+              <dd>{{ approval.decision_by.get_full_name|default:"system" }}</dd></div>
+            <div class="col-6"><dt>Decided At</dt><dd>{{ approval.decision_at|date:"Y-m-d H:i" }}</dd></div>
+            <div class="col-6"><dt>Time Taken</dt><dd>{{ approval.decision_latency|default:"—" }}</dd></div>
+            {% if approval.decision_notes %}
+              <div class="col-12"><dt>Notes</dt><dd class="mb-0">{{ approval.decision_notes }}</dd></div>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if approval.matched_rules %}
+      <div class="ct-card">
+        <div class="ct-card-header">Why Approval Was Required</div>
+        <div class="ct-card-body">
+          {% for rule in approval.matched_rules %}
+            <div class="d-flex justify-content-between border-bottom py-1 small">
+              <span>{{ rule.name }}</span>
+              <span class="badge badge-soft text-bg-{{ rule.severity|risk_style }}">{{ rule.severity|title }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-lg-7">
+    {% if approval.execution %}
+      <div class="ct-card">
+        <div class="ct-card-header">
+          <span>Execution Timeline</span>
+          <a href="{% url 'executions:detail' approval.execution.pk %}" class="small text-decoration-none">
+            {{ approval.execution.external_id }}
+          </a>
+        </div>
+        <div class="ct-card-body">
+          <ol class="ct-timeline">
+            {% for event in events %}
+              <li class="ct-timeline-item">
+                <span class="ct-timeline-marker tone-{{ event.event_type|event_style }}">
+                  <i class="bi {{ event.event_type|event_icon }}"></i>
+                </span>
+                <div class="ct-timeline-body">
+                  <div class="d-flex justify-content-between align-items-baseline gap-2">
+                    <span class="ct-timeline-title">{{ event.get_event_type_display }}</span>
+                    <span class="ct-timeline-time">{{ event.timestamp|date:"H:i:s" }}</span>
+                  </div>
+                  <div class="ct-timeline-meta">
+                    {% if event.duration_ms %}<span><i class="bi bi-stopwatch"></i> {{ event.duration_ms|intcomma }} ms</span>{% endif %}
+                    {% if event.metadata.tool %}<span><i class="bi bi-wrench"></i> {{ event.metadata.tool }}</span>{% endif %}
+                  </div>
+                </div>
+              </li>
+            {% empty %}
+              <p class="text-muted small mb-0">No events recorded.</p>
+            {% endfor %}
+          </ol>
+        </div>
+      </div>
+    {% else %}
+      <div class="ct-card h-100">
+        <div class="ct-card-body ct-empty">
+          <i class="bi bi-activity"></i>
+          <p class="mb-0">This request is not tied to a tracked execution.</p>
+          <p class="small mb-0">It was raised independently of a monitored run.</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ ai_model.model_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'inventory:models' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Models</a>
+    <h2 class="h4 mt-1 mb-1">{{ ai_model.model_name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{{ ai_model.get_model_type_display }}</span>
+      {% if ai_model.approved_for_use %}
+        <span class="badge badge-soft text-bg-success">Approved for use</span>
+      {% else %}
+        <span class="badge badge-soft text-bg-warning">Not approved</span>
+      {% endif %}
+      <span class="badge badge-soft text-bg-{{ ai_model.risk_classification|risk_style }}">{{ ai_model.get_risk_classification_display }} risk</span>
+      <span class="badge badge-soft text-bg-{{ ai_model.status|status_style }}">{{ ai_model.get_status_display }}</span>
+    </div>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:models_registry_aimodel_change' ai_model.pk %}">
+    <i class="bi bi-pencil"></i> Edit
+  </a>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Specification</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Model ID</dt><dd><code>{{ ai_model.model_id }}</code></dd></div>
+          <div class="col-6"><dt>Family</dt><dd>{{ ai_model.model_family|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Version</dt><dd>{{ ai_model.version|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Context Window</dt><dd>{{ ai_model.context_window|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Max Output</dt><dd>{{ ai_model.max_output_tokens|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Region</dt><dd>{{ ai_model.region|default:"—" }}</dd></div>
+          <div class="col-12"><dt>Deployment</dt><dd class="mb-0">{{ ai_model.deployment|default:"—" }}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Pricing</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Input / 1K tokens</dt><dd>{{ ai_model.currency }} {{ ai_model.input_cost_per_1k }}</dd></div>
+          <div class="col-6"><dt>Output / 1K tokens</dt><dd>{{ ai_model.currency }} {{ ai_model.output_cost_per_1k }}</dd></div>
+        </dl>
+        <p class="small text-muted mb-0">
+          These rates are the registry's source of truth for cost. Versioned pricing tables
+          arrive with the FinOps module.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Provider</div>
+      <div class="ct-card-body">
+        <a class="ct-node" href="{% url 'inventory:provider_detail' ai_model.provider.pk %}">
+          <p class="ct-node-name">{{ ai_model.provider.name }}</p>
+          <p class="ct-node-meta">{{ ai_model.provider.get_provider_type_display }} &middot;
+            adapter <code>{{ ai_model.provider.adapter_key }}</code></p>
+          <div class="ct-node-tags">
+            <span class="badge badge-soft text-bg-{{ ai_model.provider.health_status|health_style }}">
+              {{ ai_model.provider.get_health_status_display }}
+            </span>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Capabilities</div>
+      <div class="ct-card-body">
+        {% for capability in ai_model.capabilities %}
+          <span class="badge badge-soft text-bg-light text-dark me-1 mb-1">{{ capability }}</span>
+        {% empty %}
+          <p class="text-muted small mb-0">No capabilities recorded.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Used By</div>
+      <div class="ct-card-body">
+        <div class="ct-layer-title">Agents</div>
+        <div class="row g-2 mb-3">
+          {% for agent in ai_model.primary_for_agents.all %}
+            <div class="col-12 col-md-6">
+              <a class="ct-node border-risk-{{ agent.risk_level }}" href="{% url 'inventory:agent_detail' agent.pk %}">
+                <p class="ct-node-name">{{ agent.name }}</p>
+                <p class="ct-node-meta">{{ agent.get_framework_display }}</p>
+              </a>
+            </div>
+          {% empty %}
+            <div class="col-12"><p class="text-muted small mb-0">No agents use this as their primary model.</p></div>
+          {% endfor %}
+        </div>
+
+        <div class="ct-layer-title">Applications</div>
+        <div class="row g-2">
+          {% for application in ai_model.applications.all %}
+            <div class="col-12 col-md-6">
+              <a class="ct-node" href="{% url 'inventory:application_detail' application.pk %}">
+                <p class="ct-node-name">{{ application.name }}</p>
+                <p class="ct-node-meta">{{ application.get_environment_display }}</p>
+              </a>
+            </div>
+          {% empty %}
+            <div class="col-12"><p class="text-muted small mb-0">Not linked to an application.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

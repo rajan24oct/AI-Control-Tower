@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Notification Settings{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-8">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>What reaches you</span>
+        <a href="{% url 'notifications:list' %}" class="small text-decoration-none">Back to inbox</a>
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="table-responsive">
+          <table class="table ct-table align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th class="text-center" style="width:110px">In-app</th>
+                <th class="text-center" style="width:110px">Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td class="small fw-semibold">
+                    {{ row.label }}
+                    {% if row.default_email %}
+                      <div class="text-muted fw-normal">Emailed by default</div>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox"
+                           name="{{ row.category }}:in_app" {% if row.in_app %}checked{% endif %}>
+                  </td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox"
+                           name="{{ row.category }}:email" {% if row.email %}checked{% endif %}>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3" class="text-center text-muted small py-4">
+                  Join an organization to configure notifications.
+                </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if rows %}
+          <div class="ct-card-body border-top d-flex justify-content-end">
+            <button type="submit" class="btn btn-sm btn-primary">Save settings</button>
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="ct-card">
+      <div class="ct-card-header">How routing works</div>
+      <div class="ct-card-body small text-muted">
+        <p>
+          You receive a category when your role in this organization grants the matching
+          capability &mdash; approvers get approval requests, cost managers get budget
+          alerts, governance managers get policy denials.
+        </p>
+        <p class="mb-0">
+          Turning a category off here silences it for you without affecting anyone else,
+          and without changing who is accountable for it.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

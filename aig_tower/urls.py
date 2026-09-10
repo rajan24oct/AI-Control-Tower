@@ -1,0 +1,21 @@
+from django.contrib import admin
+from django.urls import include, path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("accounts/", include("apps.accounts.urls")),
+    path("", include("apps.dashboard.urls")),
+    path("inventory/", include("apps.inventory.urls")),
+    path("executions/", include("apps.executions.urls")),
+    path("costs/", include("apps.costs.urls")),
+    path("risks/", include("apps.risks.urls")),
+    path("approvals/", include("apps.approvals.urls")),
+    path("policies/", include("apps.policies.urls")),
+    path("notifications/", include("apps.notifications.urls")),
+    path("audit/", include("apps.audit.urls")),
+    path("api/v1/", include("apps.api.urls")),
+]
+
+admin.site.site_header = "AI Control Tower"
+admin.site.site_title = "AI Control Tower"
+admin.site.index_title = "Control Tower Administration"

@@ -1,0 +1,48 @@
+﻿{% load control_tower humanize %}
+<div class="dropdown">
+  <button class="btn btn-sm btn-light position-relative" data-bs-toggle="dropdown"
+          aria-expanded="false" aria-label="Notifications">
+    <i class="bi bi-bell"></i>
+    {% if unread_count %}
+      <span class="ct-bell-badge">{{ unread_count }}</span>
+    {% endif %}
+  </button>
+
+  <div class="dropdown-menu dropdown-menu-end ct-bell-menu">
+    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+      <span class="fw-semibold small">Notifications</span>
+      {% if unread_count %}
+        <form method="post" action="{% url 'notifications:mark_all_read' %}" class="m-0" data-ajax-action>
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-link btn-sm p-0 small text-decoration-none">
+            Mark all read
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="ct-bell-list">
+      {% for notification in recent %}
+        <a href="{{ notification.url|default:'#' }}"
+           class="ct-bell-item {% if not notification.is_read %}is-unread{% endif %}">
+          <i class="bi {{ notification.severity|notification_icon }} text-{{ notification.severity|notification_style }}"></i>
+          <div class="flex-grow-1 min-w-0">
+            <p class="ct-bell-title">{{ notification.title }}</p>
+            <p class="ct-bell-meta">{{ notification.created_at|naturaltime }}</p>
+          </div>
+        </a>
+      {% empty %}
+        <div class="text-center text-muted small py-4">
+          <i class="bi bi-check-circle d-block mb-1" style="font-size:1.4rem;opacity:.4"></i>
+          Nothing to report.
+        </div>
+      {% endfor %}
+    </div>
+
+    <a href="{% url 'notifications:list' %}"
+       class="d-block text-center small py-2 border-top text-decoration-none">
+      View all notifications
+    </a>
+  </div>
+</div>

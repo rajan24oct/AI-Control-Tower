@@ -1,0 +1,110 @@
+﻿{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}AI Agents{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>AI Agents</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Name, id, purpose">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Framework</label>
+        <select name="framework" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in frameworks %}
+            <option value="{{ value }}" {% if active_filters.framework == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Environment</label>
+        <select name="environment" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in environments %}
+            <option value="{{ value }}" {% if active_filters.environment == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Risk</label>
+        <select name="risk" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in risk_levels %}
+            <option value="{{ value }}" {% if active_filters.risk == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Autonomy</label>
+        <select name="autonomy" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in autonomy_levels %}
+            <option value="{{ value }}" {% if active_filters.autonomy == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-1 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Agent</th><th>Framework</th><th>Model</th><th>Provider</th>
+          <th>Env</th><th>Risk</th><th>Autonomy</th><th>Approval</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for agent in agents %}
+          <tr>
+            <td>
+              <a href="{% url 'inventory:agent_detail' agent.pk %}" class="fw-semibold text-decoration-none">{{ agent.name }}</a>
+              <div class="small text-muted">{{ agent.agent_id }}</div>
+            </td>
+            <td class="small">{{ agent.get_framework_display }}</td>
+            <td class="small">{{ agent.primary_model.model_name|default:"—" }}</td>
+            <td class="small">{{ agent.provider.name|default:"—" }}</td>
+            <td><span class="badge badge-soft text-bg-{{ agent.environment|environment_style }}">{{ agent.get_environment_display }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ agent.risk_level|risk_style }}">{{ agent.get_risk_level_display }}</span></td>
+            <td>
+              <span class="badge badge-soft text-bg-{{ agent.autonomy_level|autonomy_style }}">L{{ agent.autonomy_level }}</span>
+              {% if agent.has_excessive_autonomy %}
+                <i class="bi bi-exclamation-triangle-fill text-danger ms-1"
+                   title="High autonomy on a high-risk agent with no approval gate"></i>
+              {% endif %}
+            </td>
+            <td class="small">
+              {% if agent.approval_required %}
+                <i class="bi bi-check-circle-fill text-success"></i> Required
+              {% else %}
+                <span class="text-muted">Not required</span>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ agent.status|status_style }}">{{ agent.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9">
+            <div class="ct-empty"><i class="bi bi-robot"></i>
+              <p class="mb-0">No agents match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

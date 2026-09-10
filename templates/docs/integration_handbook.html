@@ -1,0 +1,1930 @@
+<!doctype html>
+<html lang="en">
+{% comment %}
+  Served standalone rather than extending base.html: the handbook carries its
+  own design system, and its type and table rules would collide with the app's.
+  This file is the only copy -- edit it here.
+{% endcomment %}
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+</style>
+<title>Control Tower Integration Handbook</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    /* Light palette. Neutrals carry a slight green bias so they sit with the
+       primary rather than beside it. */
+    --ground:      #f6f8f7;
+    --surface:     #ffffff;
+    --surface-alt: #eef2f0;
+    --ink:         #10231c;
+    --ink-soft:    #33443d;
+    --muted:       #5c6b65;
+    --rule:        #dbe3e0;
+    --rule-strong: #b9c6c1;
+
+    --green:   #003f2d;
+    --green-2: #10614a;
+    --accent:  #17e88f;
+    --teal:    #14607a;
+    --amber:   #8a5810;
+    --danger:  #a32b26;
+
+    --code-bg:   #0d1f19;
+    --code-ink:  #dce9e3;
+    --code-dim:  #7b978c;
+    --code-key:  #7ee2b8;
+    --code-str:  #f0c987;
+    --code-num:  #93c9e0;
+
+    /* Table rows: the stripe only has to hold the eye across a wide row, so it
+       stays near the surface; hover is several steps stronger. */
+    --row-stripe: #f2f5f4;
+    --row-hover:  #e4eeea;
+
+    --measure: 68ch;
+    --radius: 3px;
+
+    --step--1: 0.815rem;
+    --step-0:  1rem;
+    --step-1:  1.2rem;
+    --step-2:  1.5rem;
+    --step-3:  1.95rem;
+    --step-4:  2.6rem;
+
+    --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0c1613;
+      --surface:     #121e1a;
+      --surface-alt: #182723;
+      --ink:         #e6efea;
+      --ink-soft:    #c3d2cb;
+      --muted:       #8ba098;
+      --rule:        #253630;
+      --rule-strong: #385047;
+
+      --green:   #8ed3ba;
+      --green-2: #6cbfa1;
+      --accent:  #17e88f;
+      --teal:    #77bcd6;
+      --amber:   #e0ab5f;
+      --danger:  #e58a84;
+
+      --code-bg:   #08110e;
+      --code-ink:  #d3e4dc;
+
+      --row-stripe: #16241f;
+      --row-hover:  #1f322b;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0c1613;
+    --surface:     #121e1a;
+    --surface-alt: #182723;
+    --ink:         #e6efea;
+    --ink-soft:    #c3d2cb;
+    --muted:       #8ba098;
+    --rule:        #253630;
+    --rule-strong: #385047;
+
+    --green:   #8ed3ba;
+    --green-2: #6cbfa1;
+    --accent:  #17e88f;
+    --teal:    #77bcd6;
+    --amber:   #e0ab5f;
+    --danger:  #e58a84;
+
+    --code-bg:   #08110e;
+    --code-ink:  #d3e4dc;
+
+    --row-stripe: #16241f;
+    --row-hover:  #1f322b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Shell ---------- */
+
+  .shell {
+    display: grid;
+    grid-template-columns: 15.5rem minmax(0, 1fr);
+    gap: 3.5rem;
+    max-width: 74rem;
+    margin: 0 auto;
+    padding: 0 2rem 6rem;
+    align-items: start;
+  }
+
+  .masthead {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--rule);
+    padding: 3.25rem 0 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem 2rem;
+  }
+
+  .masthead h1 {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: var(--step-4);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    margin: 0.35rem 0 0;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  .eyebrow a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .eyebrow a:hover { border-bottom-color: currentColor; }
+  .eyebrow a:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin: 0;
+  }
+
+  .masthead p.standfirst {
+    margin: 0.7rem 0 0;
+    max-width: 46ch;
+    color: var(--ink-soft);
+    font-size: 1.06rem;
+  }
+
+  .stamp {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    line-height: 1.75;
+    color: var(--muted);
+    border-left: 2px solid var(--accent);
+    padding-left: 0.9rem;
+  }
+  .stamp b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---------- Rail ---------- */
+
+  .rail {
+    position: sticky;
+    top: 1.75rem;
+    align-self: start;
+    padding-top: 2.75rem;
+    font-size: var(--step--1);
+    max-height: calc(100vh - 3.5rem);
+    overflow-y: auto;
+  }
+
+  .rail h2 {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.85rem;
+    font-weight: 500;
+  }
+
+  .rail ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    counter-reset: none;
+  }
+
+  .rail a {
+    display: block;
+    padding: 0.3rem 0 0.3rem 0.85rem;
+    border-left: 2px solid var(--rule);
+    color: var(--muted);
+    text-decoration: none;
+    transition: color .15s, border-color .15s;
+  }
+  .rail a:hover { color: var(--ink); border-left-color: var(--rule-strong); }
+  .rail a.is-current {
+    color: var(--ink);
+    border-left-color: var(--accent);
+    font-weight: 500;
+  }
+  .rail a:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  /* ---------- Content ---------- */
+
+  main { padding-top: 2.75rem; min-width: 0; }
+
+  section { margin-bottom: 3.5rem; scroll-margin-top: 1.5rem; }
+
+  h2.sec {
+    font-family: var(--serif);
+    font-size: var(--step-3);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.18;
+    margin: 0 0 0.2rem;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--serif);
+    font-size: var(--step-1);
+    font-weight: 600;
+    margin: 2.1rem 0 0.55rem;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+
+  h4 {
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    font-weight: 600;
+    margin: 1.5rem 0 0.4rem;
+  }
+
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.5rem;
+  }
+
+  p, ul, ol { max-width: var(--measure); }
+  p { margin: 0 0 0.9rem; color: var(--ink-soft); }
+  main > section > p:first-of-type { color: var(--ink-soft); }
+
+  ul, ol { padding-left: 1.15rem; margin: 0 0 1rem; color: var(--ink-soft); }
+  li { margin-bottom: 0.35rem; }
+  li::marker { color: var(--rule-strong); }
+
+  a { color: var(--green); text-underline-offset: 2px; }
+
+  strong { color: var(--ink); font-weight: 600; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-alt);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 0.08em 0.32em;
+    color: var(--ink);
+    word-break: break-word;
+  }
+
+  /* ---------- Code blocks ---------- */
+
+  .code {
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    margin: 1rem 0 1.4rem;
+    overflow: hidden;
+    border: 1px solid transparent;
+  }
+
+  .code-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0.95rem;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--code-dim);
+  }
+  .code-head .verb { color: var(--code-key); font-weight: 700; letter-spacing: .06em; }
+
+  .code pre {
+    margin: 0;
+    padding: 0.95rem 1.05rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.68;
+    color: var(--code-ink);
+    tab-size: 2;
+  }
+  .code .c { color: var(--code-dim); font-style: italic; }
+  .code .k { color: var(--code-key); }
+  .code .s { color: var(--code-str); }
+  .code .n { color: var(--code-num); }
+
+  /* ---------- Layer diagram ---------- */
+
+  .layers {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 1.5rem 0 0.75rem;
+    align-items: stretch;
+  }
+
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--rule-strong);
+    border-radius: var(--radius);
+    padding: 0.9rem 0.95rem 1rem;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .layer:nth-child(1) { border-top-color: var(--green); }
+  .layer:nth-child(2) { border-top-color: var(--accent); }
+  .layer:nth-child(3) { border-top-color: var(--teal); }
+  .layer:nth-child(4) { border-top-color: var(--rule-strong); border-style: dashed; border-top-style: solid; }
+
+  .layer .name {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .layer .body { font-size: var(--step--1); color: var(--muted); line-height: 1.5; }
+
+  .layer::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -0.42rem;
+    width: 0.55rem; height: 0.55rem;
+    border-top: 1.5px solid var(--rule-strong);
+    border-right: 1.5px solid var(--rule-strong);
+    transform: translateY(-50%) rotate(45deg);
+    z-index: 1;
+  }
+  .layer:last-child::after { display: none; }
+
+  .layers-note {
+    font-size: var(--step--1);
+    color: var(--muted);
+    max-width: var(--measure);
+    margin: 0.4rem 0 0;
+  }
+
+  /* ---------- Steps ---------- */
+
+  .steps { list-style: none; padding: 0; margin: 1.5rem 0 0; max-width: none; counter-reset: step; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
+    gap: 0 1.15rem;
+    padding-bottom: 1.9rem;
+    margin: 0;
+    position: relative;
+  }
+  .step::before {
+    counter-increment: step;
+    content: counter(step, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--green);
+    padding-top: 0.28rem;
+  }
+  .step::after {
+    content: "";
+    position: absolute;
+    left: 0.72rem;
+    top: 1.85rem;
+    bottom: 0;
+    width: 1px;
+    background: var(--rule);
+  }
+  .step:last-child::after { display: none; }
+  .step h3 { margin: 0 0 0.35rem; font-size: var(--step-1); }
+  .step > div { min-width: 0; }
+  .step p:last-child { margin-bottom: 0; }
+
+  /* ---------- Tables ---------- */
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    margin: 1.1rem 0 1.4rem;
+    background: var(--surface);
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.69rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--muted);
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+    background: var(--surface-alt);
+  }
+
+  td {
+    padding: 0.62rem 0.9rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  tbody tr:nth-child(even) { background: var(--row-stripe); }
+
+  /* Must follow the stripe: same specificity, so source order decides which of
+     the two paints a hovered even-numbered row. */
+  tbody tr:hover { background: var(--row-hover); }
+
+  td code { background: none; border: none; padding: 0; font-size: 0.84rem; }
+  td.path { white-space: nowrap; }
+
+  .verb-tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--green);
+  }
+  .verb-tag.post { color: var(--teal); }
+
+  /* ---------- Callouts ---------- */
+
+  .note {
+    border-left: 3px solid var(--teal);
+    background: var(--surface);
+    padding: 0.85rem 1.1rem;
+    margin: 1.2rem 0 1.4rem;
+    max-width: var(--measure);
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .note.warn   { border-left-color: var(--amber); }
+  .note.danger { border-left-color: var(--danger); }
+  .note p { margin: 0; font-size: 0.93rem; }
+  .note p + p { margin-top: 0.55rem; }
+  .note .label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--teal);
+    display: block;
+    margin-bottom: 0.3rem;
+    font-weight: 500;
+  }
+  .note.warn .label   { color: var(--amber); }
+  .note.danger .label { color: var(--danger); }
+
+  /* ---------- Event vocabulary ---------- */
+
+  .vocab {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: 1.2rem 0 1rem;
+  }
+  .vocab-group { background: var(--surface); padding: 0.9rem 1rem 1rem; }
+  .vocab-group h4 {
+    margin: 0 0 0.55rem;
+    font-family: var(--mono);
+    font-size: 0.69rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .vocab-group ul { list-style: none; padding: 0; margin: 0; }
+  .vocab-group li {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--ink);
+    margin-bottom: 0.28rem;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  /* ---------- FAQ ---------- */
+
+  .faq { border-top: 1px solid var(--rule); margin-top: 1.4rem; }
+  .faq details {
+    border-bottom: 1px solid var(--rule);
+  }
+  .faq summary {
+    cursor: pointer;
+    padding: 0.9rem 2rem 0.9rem 0;
+    font-weight: 500;
+    color: var(--ink);
+    list-style: none;
+    position: relative;
+    font-size: 0.97rem;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after {
+    content: "+";
+    position: absolute;
+    right: 0.35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--mono);
+    color: var(--green);
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+  .faq details[open] summary::after { content: "\2212"; }
+  .faq summary:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .faq .answer { padding: 0 2rem 1.1rem 0; }
+  .faq .answer p:last-child { margin-bottom: 0; }
+  .faq .answer p, .faq .answer ul { font-size: 0.94rem; }
+
+  /* ---------- Footer ---------- */
+
+  .colophon {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--rule);
+    padding-top: 1.5rem;
+    margin-top: 1rem;
+    font-size: var(--step--1);
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 2.5rem;
+    justify-content: space-between;
+  }
+  .colophon p { margin: 0; color: var(--muted); max-width: 52ch; }
+  .colophon .mono { font-family: var(--mono); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+
+  @media (max-width: 61rem) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 1.35rem 4rem; }
+    .rail {
+      position: static;
+      max-height: none;
+      padding: 2rem 0 0;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 1.4rem;
+    }
+    .rail ol { flex-direction: row; flex-wrap: wrap; gap: 0.35rem 0.5rem; }
+    .rail a {
+      border-left: none;
+      border: 1px solid var(--rule);
+      border-radius: 100px;
+      padding: 0.22rem 0.7rem;
+    }
+    .rail a.is-current { border-color: var(--green); color: var(--green); }
+    main { padding-top: 2rem; }
+    .masthead { padding-top: 2.25rem; }
+    .layers { grid-template-columns: minmax(0, 1fr); }
+    .layer::after {
+      top: auto; right: auto;
+      bottom: -0.42rem; left: 1.35rem;
+      transform: rotate(135deg);
+    }
+  }
+</style>
+
+</head>
+<body>
+<div class="shell">
+
+  <header class="masthead">
+    <div>
+      <p class="eyebrow"><a href="{% url 'dashboard:home' %}">&larr; AI Control Tower</a></p>
+      <h1>Integration Handbook</h1>
+      <p class="standfirst">
+        How to connect an AI execution engine to the Control Tower &mdash; what to register,
+        how to authenticate, what to send, and what you get back.
+      </p>
+    </div>
+    <div class="stamp">
+      <b>Audience</b> &nbsp;Platform &amp; AI engineering<br>
+      <b>API</b> &nbsp;<code>/api/v1/</code> &middot; key auth<br>
+      <b>Stack</b> &nbsp;Django 6.1 &middot; DRF 3.18 &middot; Channels 4.3<br>
+      <b>Status</b> &nbsp;Examples verified against a live instance
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#boundary">The boundary</a></li>
+      <li><a href="#onboarding">Onboarding path</a></li>
+      <li><a href="#paths">Three ways to integrate</a></li>
+      <li><a href="#api">API reference</a></li>
+      <li><a href="#events">Event vocabulary</a></li>
+      <li><a href="#identifiers">Identifier resolution</a></li>
+      <li><a href="#governance">Policy &amp; approvals</a></li>
+      <li><a href="#adapters">Writing an adapter</a></li>
+      <li><a href="#security">Security model</a></li>
+      <li><a href="#ops">Running it</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#troubleshooting">Troubleshooting</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ================= BOUNDARY ================= -->
+    <section id="boundary">
+      <p class="kicker">Start here</p>
+      <h2 class="sec">The Control Tower does not run your AI</h2>
+      <p>
+        This is the single architectural fact that explains every design decision below.
+        The Control Tower <strong>manages and observes</strong> AI execution engines. It does not
+        host models, orchestrate agents, or sit in your request path. Your engine keeps running
+        exactly where it runs today &mdash; in your cluster, in a Lambda, on a laptop &mdash; and
+        reports what it did.
+      </p>
+
+      <div class="layers">
+        <div class="layer">
+          <span class="name">Control Tower</span>
+          <span class="body">Registries, cost, risk, policy, approvals, audit, the live monitor.</span>
+        </div>
+        <div class="layer">
+          <span class="name">Internal interfaces</span>
+          <span class="body">One normalized execution and event model. The only vocabulary the Tower knows.</span>
+        </div>
+        <div class="layer">
+          <span class="name">Adapter layer</span>
+          <span class="body">Translates each vendor's shape into that vocabulary. Registered by key.</span>
+        </div>
+        <div class="layer">
+          <span class="name">Execution engines</span>
+          <span class="body">Your services. OpenAI calls, LangGraph runs, bespoke workers.</span>
+        </div>
+      </div>
+      <p class="layers-note">
+        Traffic flows right to left: engines push, the Tower never reaches into your runtime.
+        Nothing above the adapter layer knows which vendor produced a run.
+      </p>
+
+      <h3>What this buys you</h3>
+      <ul>
+        <li><strong>One inventory</strong> of every application, agent, model and provider in the estate.</li>
+        <li><strong>One timeline format</strong>, so a LangGraph run and a raw OpenAI call are comparable.</li>
+        <li><strong>Cost attribution</strong> derived from a versioned price list, priced against each run's own timestamp.</li>
+        <li><strong>Pre-flight governance</strong>: ask whether an action is permitted before you take it.</li>
+        <li><strong>A tamper-evident audit trail</strong> of who changed what, and which system reported what.</li>
+      </ul>
+
+      <div class="note">
+        <span class="label">Design constraint</span>
+        <p>
+          There is no provider branching anywhere in the codebase &mdash; no
+          <code>if provider == "openai"</code>. Adding a vendor means registering an adapter class
+          under a key. If you find yourself needing to change a call site to add a vendor, the
+          integration is being done the wrong way.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= ONBOARDING ================= -->
+    <section id="onboarding">
+      <p class="kicker">Day one</p>
+      <h2 class="sec">Onboarding path</h2>
+      <p>
+        Five steps from empty instance to a live execution on the monitor. Steps 1&ndash;3 are done
+        once per team by an administrator; steps 4&ndash;5 are what your engine does forever after.
+      </p>
+
+      <ol class="steps">
+
+        <li class="step">
+          <div>
+            <h3>Register what you own</h3>
+            <p>
+              Create the four registry records your runs will refer to, in dependency order:
+              <strong>Provider</strong> &rarr; <strong>Model</strong> &rarr; <strong>Agent</strong> &rarr;
+              <strong>Application</strong>. Use the web UI under <em>AI Landscape</em>, or the REST
+              registries under <code>/api/v1/</code>.
+            </p>
+            <p>
+              The fields that matter for integration are the <em>identifiers</em>: a provider's
+              <code>slug</code>, a model's <code>model_id</code>, an agent's <code>agent_id</code>,
+              an application's <code>slug</code>. These are what your engine will send.
+            </p>
+            <p>
+              To explore against realistic data instead, seed a demo estate:
+              <code>python manage.py seed_demo</code> builds an organization with users, teams,
+              providers, models, agents, applications, 500 executions, budgets, risks and policies.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Create a service account for the engine</h3>
+            <p>
+              Every external system authenticates as its own non-human identity, so the Tower always
+              knows which system submitted what. A service account belongs to exactly
+              <strong>one organization</strong> and carries a role like any user.
+            </p>
+            <p>
+              Create it in Django Admin under <em>Control and Settings &rarr; Integrations</em>. Set
+              <code>external_system</code> to the engine's name &mdash; it lands in the audit trail on
+              every write. The default role, <em>AI Developer</em>, already grants
+              <code>telemetry.ingest</code>.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Mint an API key</h3>
+            <p>
+              Keys are <code>act_&lt;prefix&gt;_&lt;secret&gt;</code>. Only a SHA-256 hash of the secret
+              is stored, so the raw key is shown <strong>once</strong> at creation and is not
+              recoverable afterwards. Put it straight into your secret manager.
+            </p>
+            <div class="code">
+              <div class="code-head"><span>python manage.py shell</span></div>
+<pre><span class="c"># Keys are minted, never typed. Copy the printed value once.</span>
+<span class="k">from</span> apps.api.models <span class="k">import</span> APIKey, ServiceAccount
+
+sa <span class="k">=</span> ServiceAccount.objects.get(name<span class="k">=</span><span class="s">"underwriting-engine"</span>)
+key, raw <span class="k">=</span> APIKey.generate(sa, name<span class="k">=</span><span class="s">"prod-eu-west"</span>)
+print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span></pre>
+            </div>
+            <p>
+              Keys support <code>expires_at</code> and can be revoked with <code>key.revoke()</code>;
+              <code>last_used_at</code> is stamped on every authenticated call so you can spot
+              credentials nobody uses any more.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Report your first execution</h3>
+            <p>
+              One POST registers a run. Send it when the run starts &mdash; you do not need to wait
+              for it to finish.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/executions/</span></div>
+<pre>curl -X POST https://tower.example.com/api/v1/executions/ \
+  -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{
+    "execution_id": "run-2026-09-10-8842",
+    "agent": "underwriting-copilot",
+    "status": "running",
+    "environment": "production",
+    "framework": "langgraph",
+    "trace_id": "otel-4f9c1b22",
+    "events": [{"event_type": "EXECUTION_STARTED", "sequence": 0}]
+  }'</span></pre>
+            </div>
+            <p>
+              The response echoes the resolved run. Note that <code>"underwriting-copilot"</code>
+              came back resolved to the registered agent &mdash; you send the identifier you already
+              have, not a Control Tower UUID.
+            </p>
+            <div class="code">
+              <div class="code-head"><span>201 Created</span></div>
+<pre>{
+  <span class="k">"id"</span>: <span class="s">"f657343f-8fea-4a02-ab84-a3e566eb2415"</span>,
+  <span class="k">"execution_id"</span>: <span class="s">"run-2026-09-10-8842"</span>,
+  <span class="k">"status"</span>: <span class="s">"running"</span>,
+  <span class="k">"agent_name"</span>: <span class="s">"Underwriting Copilot"</span>,
+  <span class="k">"trace_id"</span>: <span class="s">"otel-4f9c1b22"</span>,
+  <span class="k">"source_adapter"</span>: <span class="s">"control_tower_api"</span>,
+  <span class="k">"event_count"</span>: <span class="n">1</span>,
+  <span class="k">"cost"</span>: <span class="s">"0.000000"</span>,
+  <span class="k">"cost_is_derived"</span>: <span class="n">false</span>
+}</pre>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Stream events, then close the run</h3>
+            <p>
+              Append events as the run progresses, addressing the execution by
+              <em>your own</em> id. Then call <code>complete</code>, <code>fail</code> or
+              <code>cancel</code>.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/executions/run-2026-09-10-8842/events/</span></div>
+<pre>[
+  {<span class="k">"event_type"</span>: <span class="s">"MODEL_REQUEST_STARTED"</span>, <span class="k">"sequence"</span>: <span class="n">1</span>},
+  {<span class="k">"event_type"</span>: <span class="s">"MODEL_REQUEST_COMPLETED"</span>, <span class="k">"sequence"</span>: <span class="n">2</span>,
+   <span class="k">"input_tokens"</span>: <span class="n">1200</span>, <span class="k">"output_tokens"</span>: <span class="n">340</span>,
+   <span class="k">"duration_ms"</span>: <span class="n">880</span>, <span class="k">"model_id"</span>: <span class="s">"gpt-4o"</span>}
+]</pre>
+            </div>
+            <p>
+              Totals roll up automatically. With no cost reported, the Tower priced those 1,540
+              tokens from the pricing registry and returned <code>"cost": "0.011100"</code> with
+              <code>"cost_is_derived": true</code>. Report your own <code>cost</code> and it wins.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/executions/run-2026-09-10-8842/complete/</span></div>
+<pre>{<span class="k">"latency_ms"</span>: <span class="n">1240</span>}</pre>
+            </div>
+            <p>
+              The run now appears in <em>Observability &rarr; Executions</em>, and while it was
+              running it was pushed live to <em>Live Monitor</em> over the WebSocket.
+            </p>
+          </div>
+        </li>
+
+      </ol>
+    </section>
+
+    <!-- ================= PATHS ================= -->
+    <section id="paths">
+      <p class="kicker">Choosing an approach</p>
+      <h2 class="sec">Three ways to integrate</h2>
+      <p>
+        All three end at the same normalized model. Pick by how much control you have over the
+        engine's code.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Path</th>
+              <th>Use when</th>
+              <th>You write</th>
+              <th>Effort</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Native API</strong></td>
+              <td>You own the engine's code and can add calls at run boundaries.</td>
+              <td>A few HTTP calls in your existing code.</td>
+              <td>Lowest</td>
+            </tr>
+            <tr>
+              <td><strong>Webhook + generic adapter</strong></td>
+              <td>The engine already emits a payload you cannot reshape.</td>
+              <td>Nothing. A field mapping in config.</td>
+              <td>None</td>
+            </tr>
+            <tr>
+              <td><strong>Custom adapter class</strong></td>
+              <td>A vendor's format needs real translation logic, or you need signature checks.</td>
+              <td>One Python class, ~40 lines.</td>
+              <td>Moderate</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The webhook path in practice</h3>
+      <p>
+        Post whatever your engine already produces, naming an adapter to normalize it. The
+        <code>generic_webhook</code> adapter ships by default and maps common shapes without any
+        code from you.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/telemetry/webhook/</span></div>
+<pre>{
+  <span class="k">"adapter"</span>: <span class="s">"generic_webhook"</span>,
+  <span class="k">"payload"</span>: {
+    <span class="k">"execution_id"</span>: <span class="s">"wf-88421"</span>,
+    <span class="k">"status"</span>: <span class="s">"success"</span>,          <span class="c">// mapped -> "completed"</span>
+    <span class="k">"agent"</span>: <span class="s">"underwriting-copilot"</span>,
+    <span class="k">"model"</span>: <span class="s">"gpt-4o"</span>,
+    <span class="k">"latency_ms"</span>: <span class="n">1830</span>,
+    <span class="k">"usage"</span>: {<span class="k">"input_tokens"</span>: <span class="n">900</span>, <span class="k">"output_tokens"</span>: <span class="n">220</span>},
+    <span class="k">"events"</span>: [
+      {<span class="k">"type"</span>: <span class="s">"EXECUTION_STARTED"</span>},
+      {<span class="k">"type"</span>: <span class="s">"EXECUTION_COMPLETED"</span>}
+    ]
+  }
+}</pre>
+      </div>
+      <p>
+        The adapter translates vendor status vocabularies for you &mdash; <code>success</code>,
+        <code>succeeded</code>, <code>ok</code>, <code>done</code> and <code>finished</code> all
+        become <code>completed</code>; <code>error</code> and <code>failure</code> become
+        <code>failed</code>; <code>paused</code> and <code>waiting</code> become
+        <code>waiting_for_approval</code>.
+      </p>
+      <p>
+        If your field names differ, supply a <code>field_mapping</code> in the adapter's
+        configuration rather than reshaping the payload. Dotted paths work:
+        <code>{"cost": "billing.total_usd"}</code>. Event names you do not recognize are dropped
+        rather than guessed at &mdash; but the <strong>raw payload is always retained</strong>, so
+        nothing is lost while you tune the mapping.
+      </p>
+
+      <div class="note">
+        <span class="label">Delivery guarantees</span>
+        <p>
+          Ingestion is idempotent on <code>execution_id</code> within an organization: re-sending a
+          run updates it rather than duplicating it, and re-sending an event with the same id is a
+          no-op. That is exactly what at-least-once delivery from a queue requires, so retry freely.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= API ================= -->
+    <section id="api">
+      <p class="kicker">Reference</p>
+      <h2 class="sec">API surface</h2>
+      <p>
+        Everything lives under <code>/api/v1/</code>. Authenticate with
+        <code>X-API-Key: act_...</code> or <code>Authorization: Api-Key act_...</code>. An
+        unauthenticated call returns <strong>401</strong> with an
+        <code>Api-Key realm="ai-control-tower"</code> challenge.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Method</th>
+              <th>Purpose</th>
+              <th>Permission</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="path"><code>/health/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>Liveness. The only unauthenticated route.</td>
+              <td>&mdash;</td>
+            </tr>
+            <tr>
+              <td class="path"><code>/adapters/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>What this instance can connect to, by adapter kind.</td>
+              <td><code>authenticated</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/executions/</code></td>
+              <td><span class="verb-tag">GET</span> <span class="verb-tag post">POST</span></td>
+              <td>List runs; register or update one.</td>
+              <td><code>execution.view</code> / <code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/executions/{id}/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>One run. <code>{id}</code> is a Tower UUID <em>or</em> your own id.</td>
+              <td><code>execution.view</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/executions/{id}/events/</code></td>
+              <td><span class="verb-tag">GET</span> <span class="verb-tag post">POST</span></td>
+              <td>Read the timeline; append one event or a batch.</td>
+              <td><code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/executions/{id}/complete/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>Close a run successfully.</td>
+              <td><code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/executions/{id}/fail/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>Close a run with <code>error_message</code>.</td>
+              <td><code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/executions/{id}/cancel/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>Close a run with a <code>reason</code>.</td>
+              <td><code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/telemetry/webhook/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>Whole engine payload, normalized by a named adapter.</td>
+              <td><code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/policy/check/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>May this action proceed?</td>
+              <td><code>authenticated</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/approval-requests/</code></td>
+              <td><span class="verb-tag">GET</span> <span class="verb-tag post">POST</span></td>
+              <td>Raise a request for a human decision.</td>
+              <td><code>approval.view</code> / <code>telemetry.ingest</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/approval-requests/{id}/status/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>Lightweight poll target for a waiting engine.</td>
+              <td><code>approval.view</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/providers/</code> <code>/models/</code><br><code>/agents/</code> <code>/applications/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>The four registries.</td>
+              <td><code>inventory.view</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>ws://…/ws/executions/{org_id}/</code></td>
+              <td><span class="verb-tag">WS</span></td>
+              <td>Live push of running executions.</td>
+              <td>session + org membership</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Execution fields you can send</h3>
+      <p>
+        Every field is optional. Send what you know; the Tower fills in what it can from the
+        registry record your identifiers resolve to.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>execution_id</code></td><td>string</td><td>Your id. The idempotency key.</td></tr>
+            <tr><td><code>trace_id</code></td><td>string</td><td>Groups related runs. Pair it with your OTel trace.</td></tr>
+            <tr><td><code>agent</code> <code>application</code><br><code>provider</code> <code>model</code></td><td>string</td><td>Loose identifiers &mdash; see <a href="#identifiers">resolution</a>.</td></tr>
+            <tr><td><code>status</code></td><td>enum</td><td><code>queued</code> <code>running</code> <code>waiting_for_approval</code> <code>completed</code> <code>failed</code> <code>cancelled</code> <code>timed_out</code></td></tr>
+            <tr><td><code>environment</code></td><td>enum</td><td>Defaults to the agent's environment.</td></tr>
+            <tr><td><code>framework</code></td><td>string</td><td>Defaults to the agent's framework.</td></tr>
+            <tr><td><code>started_at</code> <code>ended_at</code></td><td>ISO 8601</td><td>Default to server time.</td></tr>
+            <tr><td><code>latency_ms</code></td><td>int</td><td>Your measurement beats the wall clock between calls.</td></tr>
+            <tr><td><code>input_tokens</code><br><code>output_tokens</code></td><td>int</td><td>Roll up from events if you send those instead.</td></tr>
+            <tr><td><code>cost</code> <code>currency</code></td><td>decimal</td><td>Omit to have the Tower derive it from the price list.</td></tr>
+            <tr><td><code>metadata</code></td><td>object</td><td>Free-form. Yours to shape &mdash; see the note on prompts.</td></tr>
+            <tr><td><code>events</code></td><td>array</td><td>Inline the opening timeline with the run.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= EVENTS ================= -->
+    <section id="events">
+      <p class="kicker">The contract</p>
+      <h2 class="sec">Normalized event vocabulary</h2>
+      <p>
+        Seventeen event types, and no others. This is the whole observability contract: an OpenAI
+        call, a LangGraph run and a bespoke service all describe themselves in these terms, which is
+        what makes them comparable. Adapters translate into this vocabulary; nothing downstream
+        translates back out.
+      </p>
+
+      <div class="vocab">
+        <div class="vocab-group">
+          <h4>Lifecycle</h4>
+          <ul>
+            <li>EXECUTION_STARTED</li>
+            <li>EXECUTION_COMPLETED</li>
+            <li>EXECUTION_CANCELLED</li>
+            <li>ERROR</li>
+          </ul>
+        </div>
+        <div class="vocab-group">
+          <h4>Model interaction</h4>
+          <ul>
+            <li>PROMPT_CREATED</li>
+            <li>MODEL_REQUEST_STARTED</li>
+            <li>MODEL_REQUEST_COMPLETED</li>
+          </ul>
+        </div>
+        <div class="vocab-group">
+          <h4>Tool use</h4>
+          <ul>
+            <li>TOOL_SELECTED</li>
+            <li>TOOL_CALL_STARTED</li>
+            <li>TOOL_CALL_COMPLETED</li>
+          </ul>
+        </div>
+        <div class="vocab-group">
+          <h4>Agent steps</h4>
+          <ul>
+            <li>AGENT_STARTED</li>
+            <li>AGENT_STEP_STARTED</li>
+            <li>AGENT_STEP_COMPLETED</li>
+          </ul>
+        </div>
+        <div class="vocab-group">
+          <h4>Governance</h4>
+          <ul>
+            <li>APPROVAL_REQUESTED</li>
+            <li>APPROVAL_GRANTED</li>
+            <li>APPROVAL_REJECTED</li>
+            <li>POLICY_VIOLATION</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>
+        Each event carries <code>timestamp</code>, <code>sequence</code>, <code>duration_ms</code>,
+        <code>input_tokens</code>, <code>output_tokens</code>, <code>cost</code>,
+        <code>model_id</code>, <code>status</code>, <code>error_message</code>,
+        <code>trace_id</code>, <code>parent_event_id</code> and free-form <code>metadata</code>.
+        Only <code>event_type</code> is required.
+      </p>
+
+      <div class="note">
+        <span class="label">Reporting the prompt and the response</span>
+        <p>
+          Two of these events carry the text of the interaction, if you choose to
+          send it. The Live Monitor reads exactly these keys and nothing else:
+        </p>
+        <p>
+          <code>PROMPT_CREATED</code> &rarr; <code>metadata.prompt</code><br>
+          <code>MODEL_REQUEST_COMPLETED</code> &rarr; <code>metadata.completion</code>
+        </p>
+        <p>
+          <code>input</code>/<code>messages</code> and <code>output</code>/<code>response</code>
+          are accepted as aliases. A <code>messages</code> array is rendered as a
+          transcript rather than as JSON. The first prompt and the <em>last</em>
+          completion win, so a multi-step agent shows what it was asked and what
+          it finally answered, not its intermediate reasoning.
+        </p>
+      </div>
+
+      <div class="note">
+        <span class="label">Minimum viable telemetry</span>
+        <p>
+          You do not need all seventeen. An <code>EXECUTION_STARTED</code>, one
+          <code>MODEL_REQUEST_COMPLETED</code> carrying token counts, and a
+          <code>complete</code> call give you cost attribution, latency and the live monitor.
+          Add tool and agent-step events when you want to debug <em>inside</em> a run.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= IDENTIFIERS ================= -->
+    <section id="identifiers">
+      <p class="kicker">Gotcha territory</p>
+      <h2 class="sec">How your identifiers get resolved</h2>
+      <p>
+        Your engine knows <code>"underwriting-copilot"</code>. It does not know, and should not have
+        to store, a Control Tower UUID. So every asset reference accepts a UUID, a business
+        identifier, or a display name &mdash; tried in that order, and always confined to the
+        caller's organization.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>You send</th><th>Matched against, in order</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>agent</code></td><td>UUID &rarr; <code>agent_id</code> &rarr; <code>name</code></td><td><code>"underwriting-copilot"</code></td></tr>
+            <tr><td><code>application</code></td><td>UUID &rarr; <code>slug</code> &rarr; <code>name</code></td><td><code>"claims-portal"</code></td></tr>
+            <tr><td><code>provider</code></td><td>UUID &rarr; <code>slug</code> &rarr; <code>name</code> &rarr; <code>adapter_key</code></td><td><code>"azure-openai-weu"</code></td></tr>
+            <tr><td><code>model</code></td><td>UUID &rarr; <code>model_id</code> &rarr; <code>model_name</code></td><td><code>"gpt-4o"</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn">
+        <span class="label">Unmatched identifiers fail quietly &mdash; on purpose</span>
+        <p>
+          An identifier that matches nothing resolves to <code>null</code>, and the run is
+          <strong>still recorded</strong>. Losing telemetry because a registry record was
+          misspelled would be the worse failure. The cost is that a typo shows up as a run with
+          <code>"agent_name": null</code> rather than as an error.
+        </p>
+        <p>
+          So: check <code>agent_name</code> in the response the first time you wire up an engine.
+          If it came back <code>null</code>, your identifier did not match anything.
+        </p>
+      </div>
+
+      <p>
+        When an agent <em>does</em> resolve, the Tower inherits its <code>framework</code>,
+        <code>environment</code> and <code>approval_required</code> onto the run unless you sent
+        those explicitly. Registering agents well means sending less on every call.
+      </p>
+    </section>
+
+    <!-- ================= GOVERNANCE ================= -->
+    <section id="governance">
+      <p class="kicker">Before you act</p>
+      <h2 class="sec">Policy checks and human approvals</h2>
+
+      <h3>Asking permission</h3>
+      <p>
+        One call, answered synchronously, before your agent does something consequential.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/policy/check/</span></div>
+<pre>{
+  <span class="k">"agent"</span>: <span class="s">"underwriting-copilot"</span>,
+  <span class="k">"action"</span>: <span class="s">"send_customer_email"</span>,
+  <span class="k">"tool"</span>: <span class="s">"smtp_send"</span>,
+  <span class="k">"data_classification"</span>: <span class="s">"confidential"</span>,
+  <span class="k">"environment"</span>: <span class="s">"production"</span>,
+  <span class="k">"estimated_cost"</span>: <span class="s">"4.50"</span>
+}</pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>200 OK</span></div>
+<pre>{
+  <span class="k">"allowed"</span>: <span class="n">true</span>,
+  <span class="k">"requires_approval"</span>: <span class="n">false</span>,
+  <span class="k">"policy_ids"</span>: [],
+  <span class="k">"policy_names"</span>: [],
+  <span class="k">"reason"</span>: <span class="s">""</span>,
+  <span class="k">"severity"</span>: <span class="s">"low"</span>,
+  <span class="k">"denied_by"</span>: [],
+  <span class="k">"warnings"</span>: []
+}</pre>
+      </div>
+      <p>
+        Read it as: <strong><code>allowed: false</code></strong> means stop.
+        <strong><code>requires_approval: true</code></strong> means pause and raise an approval
+        request. Both false means proceed &mdash; check <code>warnings</code> anyway and log them.
+      </p>
+
+      <h3>What can be evaluated</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Policy type</th><th>Configuration keys</th><th>With no config, checks</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>model_approval</code></td><td><code>blocked_risk_classifications</code></td><td>model must be approved for use</td></tr>
+            <tr><td><code>provider</code></td><td><code>allowed_providers</code>, <code>blocked_providers</code>, <code>allowed_regions</code>, <code>require_approved</code></td><td>nothing</td></tr>
+            <tr><td><code>data_classification</code></td><td><code>classifications</code>, <code>blocked_providers</code>, <code>environments</code>, <code>require_approved_provider</code></td><td>nothing</td></tr>
+            <tr><td><code>agent_autonomy</code></td><td><code>max_autonomy_level</code>, <code>environments</code>, <code>risk_levels</code></td><td>nothing</td></tr>
+            <tr><td><code>cost_limit</code></td><td><code>max_cost_per_execution</code></td><td>nothing</td></tr>
+            <tr><td><code>tool_access</code></td><td><code>blocked_tools</code>, <code>environments</code></td><td>nothing</td></tr>
+            <tr><td><code>human_approval</code></td><td>&mdash;</td><td>delegates to the approval rules</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Each policy has an <strong>effect</strong> &mdash; <code>deny</code>,
+        <code>require_approval</code> or <code>warn</code> &mdash; and a priority. Unknown
+        configuration keys are rejected at save time, so a typo cannot silently disable a control.
+        There is deliberately no policy DSL: a new kind of control is a new evaluator function,
+        not a new grammar for operators to learn.
+      </p>
+
+      <h3>Pausing for a human</h3>
+      <p>
+        When a check comes back <code>requires_approval</code>, raise a request and park the run
+        at <code>waiting_for_approval</code>.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/approval-requests/</span></div>
+<pre>{
+  <span class="k">"requested_action"</span>: <span class="s">"Issue a policy quote above $50,000"</span>,
+  <span class="k">"agent"</span>: <span class="s">"underwriting-copilot"</span>,
+  <span class="k">"execution_id"</span>: <span class="s">"run-2026-09-10-8842"</span>,
+  <span class="k">"reason"</span>: <span class="s">"Exceeds the desk limit"</span>,
+  <span class="k">"expires_in_hours"</span>: <span class="n">4</span>
+}</pre>
+      </div>
+      <p>
+        You get back a human-readable <code>request_id</code> like <code>APR-0018</code>, an
+        auto-assessed <code>risk_level</code>, and an <code>expires_at</code>. Then poll the cheap
+        status route until <code>decided</code> flips:
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">GET</span><span>/api/v1/approval-requests/{id}/status/</span></div>
+<pre>{
+  <span class="k">"request_id"</span>: <span class="s">"APR-0018"</span>,
+  <span class="k">"status"</span>: <span class="s">"pending"</span>,
+  <span class="k">"decided"</span>: <span class="n">false</span>,
+  <span class="k">"approved"</span>: <span class="n">false</span>,
+  <span class="k">"decision_at"</span>: <span class="n">null</span>,
+  <span class="k">"decision_notes"</span>: <span class="s">""</span>,
+  <span class="k">"expires_at"</span>: <span class="s">"2026-09-10T09:35:56Z"</span>
+}</pre>
+      </div>
+
+      <div class="note danger">
+        <span class="label">The Tower governs; it does not execute</span>
+        <p>
+          Approving a request does not resume your run &mdash; the Control Tower has no handle on
+          your process. It records the decision and releases the pause. <strong>Your engine is
+          responsible for polling and resuming.</strong> Likewise, a <code>deny</code> verdict is
+          advice your engine can technically ignore; the verdict is recorded either way, so
+          ignoring one leaves an auditable trail rather than a silent hole.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= ADAPTERS ================= -->
+    <section id="adapters">
+      <p class="kicker">Extending</p>
+      <h2 class="sec">Writing an adapter</h2>
+      <p>
+        Reach for this when a vendor's payload needs real translation, or when you want signature
+        verification on the ingestion endpoint. The <code>integrations</code> package deliberately
+        does not import Django, so adapters are plain Python: unit-testable, and reusable by workers
+        running outside the Tower entirely.
+      </p>
+
+      <div class="code">
+        <div class="code-head"><span>integrations/webhooks/acme.py</span></div>
+<pre><span class="k">from</span> integrations.base.events <span class="k">import</span> EventType, NormalizedEvent
+<span class="k">from</span> integrations.base.execution <span class="k">import</span> BaseExecutionAdapter
+<span class="k">from</span> integrations.registry <span class="k">import</span> register_execution
+
+
+<span class="k">@register_execution</span>(<span class="s">"acme_orchestrator"</span>)
+<span class="k">class</span> AcmeExecutionAdapter(BaseExecutionAdapter):
+    adapter_key <span class="k">=</span> <span class="s">"acme_orchestrator"</span>
+    display_name <span class="k">=</span> <span class="s">"Acme Orchestrator"</span>
+
+    <span class="k">def</span> normalize_execution(self, payload):
+        <span class="c">"""Asset keys carry loose identifiers; resolution is not our job."""</span>
+        <span class="k">return</span> {
+            <span class="s">"external_id"</span>: payload[<span class="s">"runId"</span>],
+            <span class="s">"status"</span>: self.map_status(payload[<span class="s">"state"</span>]),
+            <span class="s">"agent"</span>: payload[<span class="s">"workflowName"</span>],
+            <span class="s">"input_tokens"</span>: payload[<span class="s">"tokens"</span>][<span class="s">"prompt"</span>],
+            <span class="s">"output_tokens"</span>: payload[<span class="s">"tokens"</span>][<span class="s">"completion"</span>],
+        }
+
+    <span class="k">def</span> normalize_events(self, payload):
+        <span class="k">return</span> [
+            NormalizedEvent(
+                event_type<span class="k">=</span>EventType.MODEL_REQUEST_COMPLETED,
+                execution_id<span class="k">=</span>payload[<span class="s">"runId"</span>],
+                duration_ms<span class="k">=</span>step[<span class="s">"elapsedMs"</span>],
+                sequence<span class="k">=</span>index,
+            )
+            <span class="k">for</span> index, step <span class="k">in</span> enumerate(payload[<span class="s">"steps"</span>])
+        ]</pre>
+      </div>
+
+      <p>
+        Register the module in <code>integrations/bootstrap.py</code> and it becomes selectable by
+        key &mdash; in the <code>adapter</code> field of a webhook post, or on a provider record.
+        Confirm it is live with <code>GET /api/v1/adapters/</code>, which lists every registered
+        adapter by kind:
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">GET</span><span>/api/v1/adapters/</span></div>
+<pre>{
+  <span class="k">"provider"</span>:      [<span class="s">"generic_rest"</span>, <span class="s">"mock"</span>, <span class="s">"openai"</span>],
+  <span class="k">"agent"</span>:         [<span class="s">"mock"</span>],
+  <span class="k">"execution"</span>:     [<span class="s">"generic_webhook"</span>],
+  <span class="k">"tool"</span>:          [],
+  <span class="k">"mcp"</span>:           [],
+  <span class="k">"observability"</span>: [],
+  <span class="k">"cost"</span>:          []
+}</pre>
+      </div>
+      <p>
+        The registry refuses to register a class that does not subclass the right base, and refuses
+        to shadow an existing key unless you pass <code>replace=True</code>. Both failures happen at
+        import time rather than in production.
+      </p>
+
+      <h3>Signature verification</h3>
+      <p>
+        Override <code>verify_signature</code>, or configure the shipped generic adapter: with a
+        <code>credential_ref</code> set, it requires a constant-time HMAC-SHA256 of the raw body in
+        <code>X-Signature</code> (header name configurable, <code>sha256=</code> prefix optional).
+        With no secret configured it accepts everything &mdash; which is fine behind API-key auth,
+        and not fine on a public endpoint.
+      </p>
+    </section>
+
+    <!-- ================= SECURITY ================= -->
+    <section id="security">
+      <p class="kicker">Non-negotiables</p>
+      <h2 class="sec">Security model</h2>
+
+      <h3>Credentials never touch the database</h3>
+      <p>
+        Provider records store a <code>credential_ref</code> &mdash; the <em>name</em> of an
+        environment variable or secret-manager key &mdash; never the secret. Resolution happens at
+        call time from the process environment, and the value is never held on a model instance.
+      </p>
+      <div class="code">
+        <div class="code-head"><span>Provider record vs. runtime</span></div>
+<pre><span class="c"># In the database:</span>
+credential_ref <span class="k">=</span> <span class="s">"AZURE_OPENAI_WEU_KEY"</span>
+
+<span class="c"># At call time, from the environment:</span>
+secret <span class="k">=</span> config.resolve_credential()   <span class="c"># raises if unset</span></pre>
+      </div>
+      <p>
+        API keys follow the same rule from the other direction: only a SHA-256 hash of the secret is
+        stored, verified with a constant-time comparison. A failed authentication returns an
+        identical message whether or not the key prefix existed, so the endpoint cannot be used to
+        enumerate valid prefixes.
+      </p>
+
+      <h3>Tenancy is enforced in the query, not the template</h3>
+      <p>
+        Every organization-owned queryset is filtered by <code>for_user()</code> before it reaches a
+        view. Hiding rows in the UI is not access control; a service account authenticated to
+        organization A cannot read, write or even confirm the existence of anything in organization
+        B. Requesting another tenant's object returns <strong>404</strong>, not 403 &mdash; a 403
+        would confirm the object exists.
+      </p>
+
+      <h3>Roles</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Role</th><th>Beyond read-only</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Super Administrator</td><td>Everything, across organizations.</td></tr>
+            <tr><td>Organization Administrator</td><td>Everything, within one organization.</td></tr>
+            <tr><td>AI Platform Administrator</td><td>Inventory, providers, models, agents, applications, telemetry, cost.</td></tr>
+            <tr><td>AI Developer</td><td>Agents, applications, inventory, telemetry. <em>The service-account default.</em></td></tr>
+            <tr><td>AI Governance Manager</td><td>Model approval, policy, risk, approval decisions, audit.</td></tr>
+            <tr><td>Risk Manager</td><td>Risk, audit.</td></tr>
+            <tr><td>Approver</td><td>Approval decisions.</td></tr>
+            <tr><td>Auditor</td><td>Audit.</td></tr>
+            <tr><td>Viewer</td><td>Nothing &mdash; read-only, and the one role that cannot read prompt text.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Roles are organization-scoped, so the same person can be an Approver in one organization and
+        a Viewer in another. Grant a service account the narrowest role that works: an engine that
+        only reports telemetry needs <code>telemetry.ingest</code> and nothing else.
+      </p>
+
+      <h3>Audit</h3>
+      <p>
+        Audit entries record actor, action, resource, organization, timestamp, IP, old value, new
+        value and metadata &mdash; and for API writes, which service account and which key prefix.
+        Each row carries a SHA-256 hash of its own canonical content, and the queryset refuses bulk
+        <code>delete()</code> and <code>update()</code>. Verify the chain with:
+      </p>
+      <div class="code">
+        <div class="code-head"><span>bash</span></div>
+<pre>python manage.py verify_audit_log</pre>
+      </div>
+      <p>
+        This makes the log <em>tamper-evident</em>, not tamper-proof. Someone with database access
+        can still alter a row &mdash; they just cannot do it without the verification failing.
+      </p>
+
+      <h3>Prompt and completion text</h3>
+      <p>
+        The Tower captures no prompt text implicitly. What an engine reports under the
+        <a href="#events">documented metadata keys</a> is stored as sent, and the Live Monitor
+        can show it &mdash; behind two controls, because this is the one place customer data
+        reliably appears.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>prompt.view</code></td>
+              <td>
+                Held by every role except Viewer. Withholding it lets you put a broad internal
+                audience on the monitor without handing them content.
+              </td>
+            </tr>
+            <tr>
+              <td>Classification redaction</td>
+              <td>
+                A run whose agent is marked <code>confidential</code> or <code>restricted</code>
+                shows a redaction notice instead of text &mdash; <em>including</em> to holders of
+                <code>prompt.view</code>. Configure with
+                <code>PROMPT_REDACT_CLASSIFICATIONS</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Text is truncated to <code>PROMPT_DISPLAY.MAX_CHARS</code> (1,200 by default) on the
+        monitor; the full timeline is on the execution's own page. The permission is enforced when
+        each row is <em>rendered</em>, including on the WebSocket, so a push carries different
+        markup to two people watching the same organization.
+      </p>
+
+      <div class="note warn">
+        <span class="label">Think before you send it</span>
+        <p>
+          These controls limit who sees the text. They do not un-store it. If a prompt contains
+          something that should not sit in an observability database at all, send a reference into
+          your own prompt store instead of the prompt.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= OPS ================= -->
+    <section id="ops">
+      <p class="kicker">Environments</p>
+      <h2 class="sec">Running it</h2>
+
+      <h3>Local</h3>
+      <div class="code">
+        <div class="code-head"><span>bash</span></div>
+<pre>pip install -r requirements.txt
+export USE_SQLITE<span class="k">=</span>1              <span class="c"># SQLite + in-memory channel layer</span>
+python manage.py migrate
+python manage.py seed_demo       <span class="c"># optional: a full demo estate</span>
+python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets included</span></pre>
+      </div>
+      <p>
+        <code>seed_demo</code> prints the sign-in it created. Options:
+        <code>--password</code>, <code>--superuser</code>, <code>--executions N</code>
+        (<code>0</code> to skip telemetry). To add mock traffic to an existing estate later, use
+        <code>generate_executions</code>.
+      </p>
+
+      <h3>Docker</h3>
+      <p>
+        <code>docker compose up</code> brings up PostgreSQL 16, Redis 7, the web service under
+        daphne, a Celery worker and Celery beat. Redis is split by database so the concerns never
+        collide: <code>/0</code> cache, <code>/1</code> broker, <code>/2</code> results,
+        <code>/3</code> monitor broadcasts.
+      </p>
+
+      <h3>Environment variables</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Variable</th><th>Default</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>DJANGO_SECRET_KEY</code></td><td>insecure dev key</td><td>Must be set in production.</td></tr>
+            <tr><td><code>DJANGO_DEBUG</code></td><td><code>True</code></td><td>Set false to enable secure cookies and HSTS.</td></tr>
+            <tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td>localhost</td><td>Comma-separated.</td></tr>
+            <tr><td><code>DJANGO_CSRF_TRUSTED_ORIGINS</code></td><td>localhost:8000</td><td>Comma-separated, with scheme.</td></tr>
+            <tr><td><code>USE_SQLITE</code></td><td><code>True</code></td><td>Also selects the in-memory channel layer and local cache.</td></tr>
+            <tr><td><code>POSTGRES_DB</code> <code>_USER</code><br><code>_PASSWORD</code> <code>_HOST</code> <code>_PORT</code></td><td>aig_tower</td><td>Used when <code>USE_SQLITE=0</code>.</td></tr>
+            <tr><td><code>REDIS_URL</code></td><td><code>redis://localhost:6379/0</code></td><td>Cache.</td></tr>
+            <tr><td><code>CHANNEL_LAYER_URL</code></td><td>falls back to <code>REDIS_URL</code></td><td>Give it its own database.</td></tr>
+            <tr><td><code>CELERY_BROKER_URL</code><br><code>CELERY_RESULT_BACKEND</code></td><td><code>/1</code>, <code>/2</code></td><td>&nbsp;</td></tr>
+            <tr><td><code>USE_MANIFEST_STATIC</code></td><td><code>False</code></td><td>Enable with <code>collectstatic</code> in production.</td></tr>
+            <tr>
+              <td><code>PROMPT_REDACT_CLASSIFICATIONS</code></td>
+              <td><code>confidential,restricted</code></td>
+              <td>Agent classifications whose prompt text is never displayed.</td>
+            </tr>
+            <tr><td><code>EMAIL_BACKEND</code><br><code>DJANGO_FROM_EMAIL</code> <code>SITE_URL</code></td><td>console</td><td>Notification delivery. <code>SITE_URL</code> builds links.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <span class="label">Multi-worker deployments</span>
+        <p>
+          The live monitor broadcasts across web workers through the channel layer. With
+          <code>USE_SQLITE=1</code> that layer is in-memory and per-process, so a second worker
+          simply will not see the first one's broadcasts. Point <code>CHANNEL_LAYER_URL</code> at
+          Redis before you scale past one process. The monitor degrades to a 15-second poll if the
+          socket cannot connect, so this fails visibly-slow rather than silently.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= FAQ ================= -->
+    <section id="faq">
+      <p class="kicker">Questions we actually get</p>
+      <h2 class="sec">FAQ</h2>
+
+      <div class="faq">
+
+        <details open>
+          <summary>Do I have to route my model calls through the Control Tower?</summary>
+          <div class="answer">
+            <p>
+              No, and you should not. The Tower is not a proxy or a gateway &mdash; it never sits in
+              your request path, so it cannot add latency to a model call or take your agents down
+              when it is being upgraded. You call your provider exactly as you do today and report
+              afterwards.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Can executions originate outside Django?</summary>
+          <div class="answer">
+            <p>
+              That is the intended case. Runs are created by authenticated HTTP calls, so any
+              language, runtime or platform that can make a POST can report. The
+              <code>integrations</code> package is pure Python with no Django import specifically so
+              adapters can be reused inside external workers.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Our engine cannot be reached from the network. Is that a problem?</summary>
+          <div class="answer">
+            <p>
+              No. Telemetry is always <em>pushed</em> to the Tower; the Tower never calls into your
+              runtime. Your engine needs outbound access to the Tower and nothing more.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>What happens if I POST the same execution twice?</summary>
+          <div class="answer">
+            <p>
+              The second POST updates the first. Ingestion is idempotent on
+              <code>execution_id</code> within an organization, and events are idempotent on their
+              own id. Retry after a timeout without worrying about duplicates.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Do I need to register everything before I can send anything?</summary>
+          <div class="answer">
+            <p>
+              No. Unmatched identifiers resolve to <code>null</code> and the run is still recorded,
+              so you can start reporting immediately and fill in the registry afterwards. You will
+              lose attribution &mdash; cost by agent, spend by application &mdash; until the records
+              exist, but you will not lose the telemetry.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Can one engine report for several organizations?</summary>
+          <div class="answer">
+            <p>
+              Not with one credential. A service account belongs to exactly one organization, which
+              is what makes the tenancy boundary enforceable rather than advisory. An engine serving
+              several tenants holds one key per tenant and selects by whichever tenant the run
+              belongs to.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Who calculates cost &mdash; us or you?</summary>
+          <div class="answer">
+            <p>
+              Either. Send <code>cost</code> and it is used verbatim, with
+              <code>cost_is_derived: false</code>. Omit it and the Tower prices the token counts
+              against the versioned price list, resolved against <em>the run's own timestamp</em>
+              rather than today's rates &mdash; so re-pricing history after a vendor price change
+              does not silently rewrite last quarter's numbers.
+            </p>
+            <p>
+              The FinOps dashboard shows what share of runs in the window were priced each way.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>How do we add a new vendor?</summary>
+          <div class="answer">
+            <p>
+              Register an adapter class under a key and add it to the bootstrap. No call site
+              changes, no conditionals, no migration. If a change you are making requires touching
+              logic outside the adapter, that logic is in the wrong place.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>What if we ignore a <code>deny</code> verdict?</summary>
+          <div class="answer">
+            <p>
+              Technically you can &mdash; the Tower governs, it does not intercept. But the check is
+              recorded as a violation when it happens, so proceeding leaves an auditable trail
+              rather than a silent hole. That is the deliberate trade: advisory enforcement your
+              engineers can ship around in an incident, with a record that makes it visible.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>How live is the Live Monitor?</summary>
+          <div class="answer">
+            <p>
+              Rows are pushed over a WebSocket as executions change state, typically within a
+              second. If the socket cannot connect &mdash; no Redis, a proxy that strips upgrades
+              &mdash; it falls back to a five-second poll and says so in the status badge, so a
+              degraded stream never looks like a healthy one.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Are prompts and responses stored, and who can read them?</summary>
+          <div class="answer">
+            <p>
+              Only what you put in <code>metadata</code> &mdash; nothing is captured implicitly.
+              What you do send is readable by every role except Viewer, and is redacted entirely
+              for agents marked <code>confidential</code> or <code>restricted</code>, even for
+              people who hold <code>prompt.view</code>.
+            </p>
+            <p>
+              If the text should not sit in an observability database at all, send a reference
+              into your own prompt store instead. See the security section.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Why does my colleague see the prompt on the monitor and I do not?</summary>
+          <div class="answer">
+            <p>
+              One of two reasons. Either your role is Viewer, which is the only role without
+              <code>prompt.view</code>; or you are both looking at a run whose agent is
+              classified, in which case neither of you sees it and you are reading the redaction
+              notice rather than an empty panel.
+            </p>
+            <p>
+              The check runs when each row is rendered, not in the browser, so this holds on the
+              live stream as well as on a page load.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Is the audit log immutable?</summary>
+          <div class="answer">
+            <p>
+              Tamper-<em>evident</em>, which is the honest claim. Each entry hashes its own canonical
+              content, bulk deletes and updates are refused at the queryset level, and
+              <code>verify_audit_log</code> detects alteration. Anyone with direct database access
+              can still change a row &mdash; they just cannot do it invisibly.
+            </p>
+          </div>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- ================= TROUBLESHOOTING ================= -->
+    <section id="troubleshooting">
+      <p class="kicker">When it does not work</p>
+      <h2 class="sec">Troubleshooting</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>401</code> &ldquo;Invalid API key&rdquo;</td>
+              <td>Wrong, revoked or expired key. The message is identical for all three by design.</td>
+              <td>Check <code>revoked_at</code> and <code>expires_at</code> on the key; mint a new one.</td>
+            </tr>
+            <tr>
+              <td><code>401</code> &ldquo;Malformed API key&rdquo;</td>
+              <td>Not in <code>act_&lt;prefix&gt;_&lt;secret&gt;</code> form &mdash; usually a truncated copy.</td>
+              <td>Re-copy the whole value. Both underscores matter.</td>
+            </tr>
+            <tr>
+              <td><code>403</code> &ldquo;Your role does not grant telemetry ingestion&rdquo;</td>
+              <td>Service account role lacks <code>telemetry.ingest</code>.</td>
+              <td>Give it <em>AI Developer</em> or <em>AI Platform Administrator</em>.</td>
+            </tr>
+            <tr>
+              <td><code>400</code> &ldquo;No organization resolved&rdquo;</td>
+              <td>A session user with no active organization &mdash; not seen with API keys.</td>
+              <td>Pick an organization in the header switcher.</td>
+            </tr>
+            <tr>
+              <td><code>404</code> on an execution you just created</td>
+              <td>Different organization, or the id is neither a UUID nor a known <code>external_id</code>.</td>
+              <td>Confirm the key belongs to the tenant that owns the run.</td>
+            </tr>
+            <tr>
+              <td><code>422</code> from the webhook</td>
+              <td>The adapter could not find an <code>execution_id</code> in the payload.</td>
+              <td>Add a <code>field_mapping</code> pointing at your id field.</td>
+            </tr>
+            <tr>
+              <td><code>agent_name</code> comes back <code>null</code></td>
+              <td>The identifier matched no registry record. Recorded anyway, by design.</td>
+              <td>Check the agent's <code>agent_id</code> is exactly what you send.</td>
+            </tr>
+            <tr>
+              <td>Cost stays <code>0.000000</code></td>
+              <td>No pricing version covers the run's timestamp, and no cost was reported.</td>
+              <td>Add a pricing version, or send <code>cost</code> yourself.</td>
+            </tr>
+            <tr>
+              <td>Events accepted, timeline empty</td>
+              <td>Unrecognized <code>type</code> values were dropped by the adapter.</td>
+              <td>Map them via <code>event_type_map</code>. The raw payload was retained.</td>
+            </tr>
+            <tr>
+              <td>WebSocket closes with <code>4401</code></td>
+              <td>Not signed in. The monitor uses your session, not an API key.</td>
+              <td>Sign in and reload.</td>
+            </tr>
+            <tr>
+              <td>WebSocket closes with <code>4403</code></td>
+              <td>Not a member of that organization &mdash; indistinguishable from &ldquo;no such organization&rdquo;.</td>
+              <td>Check membership.</td>
+            </tr>
+            <tr>
+              <td>Monitor says &ldquo;Polling&rdquo;</td>
+              <td>The socket could not be established; the fallback took over.</td>
+              <td>Check the channel layer and any proxy in front of the app.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    <p>
+      Endpoint shapes and responses in this handbook were captured from a running instance rather
+      than transcribed from source.
+    </p>
+    <p class="mono">AI Control Tower &middot; API v1</p>
+  </footer>
+
+</div>
+
+<script>
+  // Mark the section currently in view in the contents rail.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+    var byId = {};
+    links.forEach(function (link) { byId[link.getAttribute('href').slice(1)] = link; });
+
+    var sections = Array.prototype.slice.call(document.querySelectorAll('main section'));
+    if (!sections.length || !('IntersectionObserver' in window)) return;
+
+    var visible = new Set();
+
+    function paint() {
+      // The topmost visible section wins, so scrolling never highlights two.
+      var current = sections.filter(function (s) { return visible.has(s.id); })[0];
+      links.forEach(function (link) { link.classList.remove('is-current'); });
+      if (current && byId[current.id]) byId[current.id].classList.add('is-current');
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) visible.add(entry.target.id);
+        else visible.delete(entry.target.id);
+      });
+      paint();
+    }, { rootMargin: '-10% 0px -70% 0px' });
+
+    sections.forEach(function (section) { observer.observe(section); });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+﻿{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}AI Applications{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>AI Applications</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Name, purpose, department">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Environment</label>
+        <select name="environment" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in environments %}
+            <option value="{{ value }}" {% if active_filters.environment == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Criticality</label>
+        <select name="criticality" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in criticalities %}
+            <option value="{{ value }}" {% if active_filters.criticality == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Risk</label>
+        <select name="risk" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in risk_levels %}
+            <option value="{{ value }}" {% if active_filters.risk == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Filter</button>
+        <a href="{% url 'inventory:applications' %}" class="btn btn-sm btn-outline-secondary" data-ajax-link="#results">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Application</th><th>Team</th><th>Environment</th><th>Criticality</th>
+          <th>Risk</th><th>Agents</th><th>Business Owner</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for application in applications %}
+          <tr>
+            <td>
+              <a href="{% url 'inventory:application_detail' application.pk %}" class="fw-semibold text-decoration-none">
+                {{ application.name }}
+              </a>
+              {% if application.department %}<div class="small text-muted">{{ application.department }}</div>{% endif %}
+            </td>
+            <td class="small">{{ application.team.name|default:"—" }}</td>
+            <td><span class="badge badge-soft text-bg-{{ application.environment|environment_style }}">{{ application.get_environment_display }}</span></td>
+            <td class="small">{{ application.get_criticality_display }}</td>
+            <td><span class="badge badge-soft text-bg-{{ application.risk_level|risk_style }}">{{ application.get_risk_level_display }}</span></td>
+            <td class="small">{{ application.agent_total }}</td>
+            <td class="small">{{ application.business_owner.get_full_name|default:"—" }}</td>
+            <td><span class="badge badge-soft text-bg-{{ application.status|status_style }}">{{ application.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8">
+            <div class="ct-empty"><i class="bi bi-window-stack"></i>
+              <p class="mb-0">No applications match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,104 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>
+      Notifications
+      {% if unread_count %}<span class="badge text-bg-danger ms-1">{{ unread_count }} unread</span>{% endif %}
+    </span>
+    <div class="d-flex gap-2 align-items-center">
+      <a href="{% url 'notifications:preferences' %}" class="small text-decoration-none">Settings</a>
+      {% if unread_count %}
+        <form method="post" action="{% url 'notifications:mark_all_read' %}" class="m-0"
+              data-ajax-action data-ajax-refresh="#results">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-sm btn-outline-secondary">Mark all read</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Category</label>
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All categories</option>
+          {% for value, label in categories %}
+            <option value="{{ value }}" {% if active_category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" name="unread" value="1"
+                 id="unread-only" {% if unread_only %}checked{% endif %}>
+          <label class="form-check-label small" for="unread-only">Unread only</label>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+      <div class="col-12 col-md-2">
+        <a href="{% url 'notifications:list' %}" class="btn btn-sm btn-outline-secondary w-100" data-ajax-link="#results">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="ct-card-body py-0">
+    {% for notification in notifications %}
+      <div class="ct-notification {% if not notification.is_read %}is-unread{% endif %}" data-ajax-row>
+        <i class="bi {{ notification.severity|notification_icon }} text-{{ notification.severity|notification_style }}"></i>
+
+        <div class="flex-grow-1 min-w-0">
+          <div class="d-flex align-items-baseline gap-2 flex-wrap">
+            {% if notification.url %}
+              <a href="{{ notification.url }}" class="ct-notification-title text-decoration-none">
+                {{ notification.title }}
+              </a>
+            {% else %}
+              <span class="ct-notification-title">{{ notification.title }}</span>
+            {% endif %}
+            <span class="badge badge-soft text-bg-light text-dark">
+              {{ notification.get_category_display }}
+            </span>
+          </div>
+          {% if notification.body %}
+            <p class="ct-notification-body">{{ notification.body|linebreaksbr }}</p>
+          {% endif %}
+          <p class="ct-notification-meta">
+            {{ notification.created_at|naturaltime }}
+            {% if notification.delivered_channels %}
+              &middot; delivered via {{ notification.delivered_channels|join:", " }}
+            {% endif %}
+          </p>
+        </div>
+
+        {% if not notification.is_read %}
+          <form method="post" action="{% url 'notifications:mark_read' notification.pk %}"
+                class="align-self-center m-0" data-ajax-action="remove">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Mark read</button>
+          </form>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="ct-empty">
+        <i class="bi bi-bell-slash"></i>
+        <p class="mb-0">No notifications{% if unread_only %} unread{% endif %}.</p>
+        <p class="small mb-0">
+          You are told about approvals, budget thresholds, policy denials and provider incidents.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

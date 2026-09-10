@@ -1,0 +1,185 @@
+﻿{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Approval Centre{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Pending</span>
+      <div class="ct-metric-value {% if counts.pending %}text-warning{% endif %}">{{ counts.pending }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Critical Pending</span>
+      <div class="ct-metric-value {% if critical_pending %}text-danger{% endif %}">{{ critical_pending }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Approved</span>
+      <div class="ct-metric-value">{{ counts.approved }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Rejected</span>
+      <div class="ct-metric-value">{{ counts.rejected }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric"><span class="ct-metric-label">Expired</span>
+      <div class="ct-metric-value">{{ counts.expired }}</div></div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="ct-metric">
+      <span class="ct-metric-label">Active Rules</span>
+      <div class="ct-metric-value">{{ rules|length }}</div>
+      <div class="ct-metric-hint">Trigger conditions</div>
+    </div>
+  </div>
+</div>
+
+{% if not can_decide %}
+  <div class="alert alert-info py-2 small d-flex gap-2 align-items-center">
+    <i class="bi bi-info-circle"></i>
+    Your role can view approval requests but not decide them.
+  </div>
+{% endif %}
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>{% if showing_all %}All Requests{% else %}Pending Queue{% endif %}</span>
+    <div class="d-flex gap-2 align-items-center">
+      {% if not showing_all %}
+        <a href="{% url 'approvals:centre' %}?all=1" class="small text-decoration-none" data-ajax-link="#results">Show all</a>
+      {% else %}
+        <a href="{% url 'approvals:centre' %}" class="small text-decoration-none" data-ajax-link="#results">Pending only</a>
+      {% endif %}
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span>
+    </div>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Request id, action or reason">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Pending only</option>
+          {% for value, label in statuses %}
+            <option value="{{ value }}" {% if active_filters.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Risk</label>
+        <select name="risk" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in risk_levels %}
+            <option value="{{ value }}" {% if active_filters.risk == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          <th>Request</th><th>Action</th><th>Agent</th><th>Application</th>
+          <th>Risk</th><th>Requested</th><th>Status</th><th class="text-end">Decision</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for approval in requests %}
+          <tr>
+            <td>
+              <a href="{% url 'approvals:detail' approval.pk %}" class="fw-semibold text-decoration-none font-monospace small">
+                {{ approval.request_id }}
+              </a>
+            </td>
+            <td class="small">
+              {{ approval.requested_action }}
+              {% if approval.reason %}
+                <div class="text-muted text-truncate" style="max-width:280px">{{ approval.reason }}</div>
+              {% endif %}
+            </td>
+            <td class="small">{{ approval.agent.name|default:"—" }}</td>
+            <td class="small">{{ approval.application.name|default:"—" }}</td>
+            <td><span class="badge badge-soft text-bg-{{ approval.risk_level|risk_style }}">{{ approval.get_risk_level_display }}</span></td>
+            <td class="small text-nowrap" title="{{ approval.requested_at }}">{{ approval.requested_at|naturaltime }}</td>
+            <td>
+              <span class="badge badge-soft text-bg-{{ approval.status|approval_style }}">{{ approval.get_status_display }}</span>
+              {% if approval.is_expired %}
+                <i class="bi bi-clock-history text-warning ms-1" title="Past its expiry"></i>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              {% if approval.is_pending and can_decide %}
+                <div class="d-flex gap-1 justify-content-end">
+                  <form method="post" action="{% url 'approvals:decide' approval.pk 'approve' %}" data-ajax-action data-ajax-refresh="#results">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn btn-sm btn-success" type="submit">Approve</button>
+                  </form>
+                  <form method="post" action="{% url 'approvals:decide' approval.pk 'reject' %}" data-ajax-action data-ajax-refresh="#results">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+                  </form>
+                </div>
+              {% elif approval.is_decided %}
+                <span class="small text-muted">
+                  {{ approval.decision_by.get_full_name|default:"system" }}
+                </span>
+              {% else %}
+                <span class="small text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8">
+            <div class="ct-empty">
+              <i class="bi bi-person-check"></i>
+              <p class="mb-0">Nothing waiting on a decision.</p>
+              <p class="small mb-0">Engines raise requests at <code>POST /api/v1/approval-requests/</code>.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+
+{% if rules %}
+  <div class="ct-card mt-3">
+    <div class="ct-card-header">Approval Rules</div>
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead><tr><th>Rule</th><th>Conditions</th><th>Severity</th><th class="text-end">Priority</th></tr></thead>
+        <tbody>
+          {% for rule in rules %}
+            <tr>
+              <td class="small fw-semibold">{{ rule.name }}
+                {% if rule.description %}<div class="text-muted fw-normal">{{ rule.description }}</div>{% endif %}
+              </td>
+              <td class="small text-muted">{{ rule.conditions|join:"; "|default:"no conditions (never matches)" }}</td>
+              <td><span class="badge badge-soft text-bg-{{ rule.severity|risk_style }}">{{ rule.get_severity_display }}</span></td>
+              <td class="small text-end">{{ rule.priority }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
