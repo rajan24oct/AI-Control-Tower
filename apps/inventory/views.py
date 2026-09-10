@@ -169,6 +169,30 @@ class ModelDetailView(ScopedDetailMixin, DetailView):
             .prefetch_related("applications", "primary_for_agents")
         )
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.evaluations.services import EvaluationService
+
+        # The evidence behind the approval badge, shown next to it. An approval
+        # with nothing behind it should look like one.
+        context["latest_evaluation"] = EvaluationService.latest_for_model(self.object)
+        context["evaluation_gates"] = self._gates(self.request.organization)
+        return context
+
+    @staticmethod
+    def _gates(organization):
+        """Active policies that require evaluation evidence, if any."""
+        from apps.core.constants import LifecycleStatus
+        from apps.policies.models import Policy, PolicyType
+
+        return [
+            policy
+            for policy in Policy.objects.for_organization(organization).filter(
+                policy_type=PolicyType.MODEL_APPROVAL, status=LifecycleStatus.ACTIVE
+            )
+            if policy.option("require_evaluation", False)
+        ]
+
 
 # -- Providers --------------------------------------------------------------
 

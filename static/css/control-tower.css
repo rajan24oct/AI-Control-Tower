@@ -705,6 +705,24 @@ a:hover > .ct-metric { border-color: var(--ct-rule-strong); }
   overflow-y: auto;
 }
 
+/* -- Evaluation output ---------------------------------------------------- */
+
+.ct-eval-output {
+  margin: .4rem 0 0;
+  padding: .5rem .65rem;
+  background: var(--ct-page);
+  border-left: 2px solid var(--ct-rule-strong);
+  border-radius: var(--ct-radius);
+  font-family: var(--ct-sans);
+  font-size: .76rem;
+  line-height: 1.55;
+  color: var(--ct-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
 /* -- Personal data ---------------------------------------------------------
    Amber, not red: a detected identifier is something to look at, not a failure.
    The underline carries the signal on its own, so the highlight still reads if

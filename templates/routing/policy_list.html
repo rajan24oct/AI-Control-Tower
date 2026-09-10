@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Model Routing{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+
+<div id="results" data-ajax-region>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="ct-metric"><span class="ct-metric-label">Decisions (7d)</span>
+        <div class="ct-metric-value">{{ stats.total|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Fallback Rate</span>
+        <div class="ct-metric-value {% if stats.fell_back %}text-warning{% endif %}">
+          {{ stats.fallback_rate|percentage }}
+        </div>
+        <div class="ct-metric-hint">Runs where the first choice failed</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="ct-metric">
+        <span class="ct-metric-label">No Route</span>
+        <div class="ct-metric-value {% if stats.no_route %}text-danger{% endif %}">{{ stats.no_route|intcomma }}</div>
+        <div class="ct-metric-hint">Nothing was eligible to serve</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="ct-metric"><span class="ct-metric-label">Awaiting Outcome</span>
+        <div class="ct-metric-value">{{ stats.pending|intcomma }}</div></div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#results">
+      <input type="search" name="q" value="{{ request.GET.q|default:'' }}"
+             class="form-control form-control-sm" placeholder="Search policies" style="width:14rem">
+      <select name="strategy" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any strategy</option>
+        {% for value, label in strategies %}
+          <option value="{{ value }}" {% if request.GET.strategy == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+    <div class="d-flex gap-2">
+      <a href="{% url 'routing:simulator' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-play-circle"></i> Simulator
+      </a>
+      <a href="{% url 'routing:decisions' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-list-check"></i> Decisions
+      </a>
+    </div>
+  </div>
+
+  <div class="ct-card mb-3">
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>Policy</th><th>Applies to</th><th>Strategy</th><th class="text-end">Chain</th>
+              <th class="text-end">Priority</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for policy in policies %}
+            <tr>
+              <td>
+                <a href="{% url 'routing:detail' policy.pk %}" class="fw-semibold text-decoration-none">
+                  {{ policy.name }}
+                </a>
+                {% if policy.description %}
+                  <div class="ct-attention-detail">{{ policy.description|truncatechars:80 }}</div>
+                {% endif %}
+              </td>
+              <td class="small">
+                {{ policy.get_model_type_display }}
+                {% if policy.agents.exists %}
+                  <span class="text-muted">&middot; {{ policy.agents.count }} agent{{ policy.agents.count|pluralize }}</span>
+                {% else %}
+                  <span class="text-muted">&middot; all agents</span>
+                {% endif %}
+              </td>
+              <td class="small">{{ policy.get_strategy_display }}</td>
+              <td class="small text-end">{{ policy.chain_length }}</td>
+              <td class="small text-end">{{ policy.priority }}</td>
+              <td>
+                <span class="badge badge-soft text-bg-{{ policy.status|status_style }}">
+                  {{ policy.get_status_display }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6">
+              <div class="ct-empty py-5">
+                <i class="bi bi-signpost-split"></i>
+                <p class="mb-1">No routing policies yet.</p>
+                <p class="small text-muted mb-0">
+                  Without one, the gateway ranks every active model of the right type
+                  on a balanced strategy.
+                </p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+
+  <div class="ct-card">
+    <div class="ct-card-header">
+      <span>Recent Decisions</span>
+      <a href="{% url 'routing:decisions' %}" class="small text-decoration-none">All decisions</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>When</th><th>Agent</th><th>Chose</th><th>Served</th><th>Outcome</th></tr>
+        </thead>
+        <tbody>
+          {% for decision in recent %}
+            <tr>
+              <td class="small text-nowrap">{{ decision.created_at|naturaltime }}</td>
+              <td class="small">{{ decision.agent.name|default:"—" }}</td>
+              <td class="small">{{ decision.selected_model.model_name|default:"no route" }}</td>
+              <td class="small">
+                {{ decision.served_model.model_name|default:"—" }}
+                {% if decision.used_fallback %}
+                  <span class="badge badge-soft text-bg-warning">fallback {{ decision.attempt }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-soft text-bg-{% if decision.outcome == 'served' %}success{% elif decision.outcome == 'exhausted' %}danger{% else %}secondary{% endif %}">
+                  {{ decision.get_outcome_display }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5">
+              <div class="ct-empty py-4">
+                <i class="bi bi-hourglass"></i>
+                <p class="mb-0">No routing decisions recorded yet.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

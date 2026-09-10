@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
+
+from django.utils import timezone
 
 from apps.core.constants import RiskLevel
 from apps.policies.models import Policy, PolicyEffect, PolicyType, PolicyViolation
@@ -164,6 +167,83 @@ def _check_model_approval(policy: Policy, context: PolicyContext) -> str | None:
             f"Model '{model.model_name}' carries a "
             f"{model.get_risk_classification_display()} risk classification."
         )
+
+    return _check_evaluation_evidence(policy, model)
+
+
+def _check_evaluation_evidence(policy: Policy, model) -> str | None:
+    """Require the approval to be backed by a passing evaluation.
+
+    The gate reads the model's **latest completed run**, never its best one.
+    Letting a policy pick the best result would turn the control into a search
+    for one good day, which is exactly the failure mode evaluation exists to
+    prevent -- if the most recent evidence says the model regressed, that is
+    the evidence that counts.
+
+    Off unless `require_evaluation` is configured, so adding this to the schema
+    does not silently start blocking traffic for existing policies.
+    """
+    if not policy.option("require_evaluation", False):
+        return None
+
+    # Imported here rather than at module scope: evaluations run through the
+    # gateway, which consults this engine, so a top-level import would close a
+    # cycle at startup.
+    from apps.evaluations.models import EvaluationRun, RunStatus
+
+    latest = (
+        EvaluationRun.objects.filter(model=model, status=RunStatus.COMPLETED)
+        .select_related("suite")
+        .order_by("-finished_at")
+        .first()
+    )
+
+    if latest is None:
+        return (
+            f"Model '{model.model_name}' is approved but has never been evaluated, "
+            "and this policy requires evaluation evidence."
+        )
+
+    if not latest.passed:
+        # "Blocked" is not a low score: say which is which, because the two
+        # need different responses from whoever reads the violation.
+        if latest.blocked_by_category:
+            return (
+                f"Model '{model.model_name}' last failed a "
+                f"{latest.blocked_by_category} case in '{latest.suite.name}', "
+                f"which that suite treats as disqualifying (scored {latest.score}%)."
+            )
+        return (
+            f"Model '{model.model_name}' last scored {latest.score}% on "
+            f"'{latest.suite.name}', below the suite's {latest.suite.pass_threshold}% bar."
+        )
+
+    max_age = policy.option("evaluation_max_age_days")
+    if max_age:
+        # A pass from six months ago is weak evidence about a model the
+        # provider has since changed underneath you.
+        cutoff = timezone.now() - timedelta(days=int(max_age))
+        if latest.finished_at and latest.finished_at < cutoff:
+            age = (timezone.now() - latest.finished_at).days
+            return (
+                f"Model '{model.model_name}' last passed evaluation {age} days ago, "
+                f"beyond this policy's {max_age}-day limit."
+            )
+
+    required = policy.option("required_suites", []) or []
+    if required:
+        passed_suites = set(
+            EvaluationRun.objects.filter(
+                model=model, status=RunStatus.COMPLETED, passed=True
+            ).values_list("suite__name", flat=True)
+        )
+        missing = [name for name in required if name not in passed_suites]
+        if missing:
+            return (
+                f"Model '{model.model_name}' has not passed required "
+                f"{'suite' if len(missing) == 1 else 'suites'}: {', '.join(missing)}."
+            )
+
     return None
 
 

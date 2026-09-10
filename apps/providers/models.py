@@ -125,7 +125,8 @@ class AIProvider(OrganizationScopedModel):
 
     # -- Adapter binding ----------------------------------------------------
 
-    def adapter_config(self) -> AdapterConfig:
+    def adapter_config(self, *, timeout: float | None = None) -> AdapterConfig:
+        options = self.options or {}
         return AdapterConfig(
             key=self.adapter_key,
             name=self.name,
@@ -133,15 +134,18 @@ class AIProvider(OrganizationScopedModel):
             region=self.region,
             deployment=self.deployment,
             credential_ref=self.credential_ref,
-            options=self.options or {},
+            # Per-call override first, then the provider's own setting, then the
+            # adapter default. The gateway sets this from its remaining deadline.
+            timeout=float(timeout if timeout is not None else options.get("timeout", 30.0)),
+            options=options,
         )
 
-    def get_adapter(self):
+    def get_adapter(self, *, timeout: float | None = None):
         """Resolve this provider's adapter through the registry.
 
         Nothing in the platform branches on `provider_type` to pick behaviour.
         """
-        return registry.get_provider(self.adapter_key, self.adapter_config())
+        return registry.get_provider(self.adapter_key, self.adapter_config(timeout=timeout))
 
     @property
     def has_resolvable_credential(self) -> bool:

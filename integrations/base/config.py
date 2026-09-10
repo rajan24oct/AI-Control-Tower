@@ -28,6 +28,10 @@ class AdapterConfig:
     region: str = ""
     deployment: str = ""
     credential_ref: str = ""
+    #: Seconds before a single provider call is abandoned. Every adapter that
+    #: makes a network call must honour it: when the platform is in the request
+    #: path, an upstream that hangs would otherwise hang the caller too.
+    timeout: float = 30.0
     options: dict[str, Any] = field(default_factory=dict)
 
     def resolve_credential(self, *, required: bool = True) -> str | None:

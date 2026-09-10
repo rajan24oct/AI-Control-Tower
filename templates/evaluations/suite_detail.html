@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}{{ suite.name }}{% endblock %}
+
+{% block content %}
+<a href="{% url 'evaluations:home' %}" class="small text-decoration-none">
+  <i class="bi bi-arrow-left"></i> Evaluation Centre
+</a>
+
+<div class="row g-3 mt-1 mb-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">Suite</div>
+      <div class="ct-card-body">
+        {% if suite.description %}<p class="small">{{ suite.description }}</p>{% endif %}
+        <dl class="ct-kv mb-0">
+          <dt>Evaluates</dt><dd>{{ suite.get_target_kind_display }}s</dd>
+          <dt>Cases</dt><dd>{{ suite.case_count }}</dd>
+          <dt>Pass bar</dt><dd>{{ suite.pass_threshold }}% of weighted cases</dd>
+          <dt>Blocking</dt>
+          <dd>
+            {% for category in suite.blocking_categories %}
+              <span class="badge badge-soft text-bg-danger">{{ category }}</span>
+            {% empty %}<span class="text-muted">None &mdash; score alone decides</span>{% endfor %}
+          </dd>
+          <dt>Environment</dt><dd>{{ suite.get_environment_display }}</dd>
+          <dt>Owner</dt><dd>{{ suite.owner.get_full_name|default:"—" }}</dd>
+        </dl>
+
+        {% if can_run %}
+          <hr class="my-3">
+          <form method="post" action="{% url 'evaluations:start_run' suite.pk %}"
+                data-ajax-action data-ajax-message="Evaluation started.">
+            {% csrf_token %}
+            <label class="form-label small fw-semibold">Run against</label>
+            <div class="d-flex gap-2">
+              <select name="target" class="form-select form-select-sm" required>
+                {% for target in targets %}
+                  <option value="{{ target.pk }}">
+                    {% if suite.target_kind == "model" %}{{ target.model_name }} &middot; {{ target.provider.name }}
+                    {% else %}{{ target.name }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                <i class="bi bi-play-fill"></i> Run
+              </button>
+            </div>
+            <p class="small text-muted mt-2 mb-0">
+              Cases run through the gateway, so they are billed and governed like production
+              traffic &mdash; including being refused if a policy would refuse them.
+            </p>
+          </form>
+        {% else %}
+          <hr class="my-3">
+          <p class="small text-muted mb-0">
+            <i class="bi bi-lock"></i>
+            Starting a run spends real money and produces approval evidence, so it needs the
+            model-approval permission.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span>Recent Runs</span>
+        <a href="{% url 'evaluations:runs' %}?suite={{ suite.pk }}" class="small text-decoration-none">All</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <thead>
+            <tr><th>When</th><th>Target</th><th class="text-end">Score</th><th>Verdict</th></tr>
+          </thead>
+          <tbody>
+            {% for run in runs %}
+              <tr>
+                <td class="small text-nowrap">
+                  <a href="{% url 'evaluations:run' run.pk %}" class="text-decoration-none">
+                    {{ run.created_at|naturaltime }}
+                  </a>
+                </td>
+                <td class="small">{{ run.target_label }}</td>
+                <td class="small text-end">{{ run.score|floatformat:1 }}%</td>
+                <td>{% include "evaluations/_verdict.html" %}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4">
+                <div class="ct-empty py-4">
+                  <i class="bi bi-hourglass"></i>
+                  <p class="mb-0">This suite has not been run yet.</p>
+                </div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card">
+  <div class="ct-card-header">
+    <span>Cases</span>
+    <span class="small text-muted">Every check is deterministic &mdash; no model grades another</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table mb-0">
+      <thead>
+        <tr><th>#</th><th>Case</th><th>Category</th><th>Checks</th><th class="text-end">Weight</th></tr>
+      </thead>
+      <tbody>
+        {% for case in cases %}
+          <tr>
+            <td class="small text-muted">{{ case.order }}</td>
+            <td>
+              <div class="fw-semibold small">{{ case.name }}</div>
+              <div class="ct-attention-detail">{{ case.prompt|truncatechars:110 }}</div>
+            </td>
+            <td>
+              <span class="badge badge-soft text-bg-{% if case.category == 'safety' or case.category == 'red_team' %}danger{% else %}light{% endif %}">
+                {{ case.get_category_display }}
+              </span>
+            </td>
+            <td class="small">
+              {{ case.get_scorer_display }}
+              {% if case.configuration %}
+                <div class="ct-attention-detail font-monospace">{{ case.configuration }}</div>
+              {% endif %}
+            </td>
+            <td class="small text-end">{{ case.weight }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">
+            <div class="ct-empty py-4">
+              <i class="bi bi-list-task"></i>
+              <p class="mb-0">This suite has no cases. Add them in the admin.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

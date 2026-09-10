@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Routing Simulator{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="results" data-ajax-region>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="{% url 'routing:list' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> Model routing
+    </a>
+  </div>
+
+  <div class="ct-card mb-3">
+    <div class="ct-card-body">
+      <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+        <div class="col-12 col-md-4">
+          <label class="form-label small fw-semibold">Model type</label>
+          <select name="model_type" class="form-select form-select-sm">
+            {% for value, label in model_types %}
+              <option value="{{ value }}" {% if model_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small fw-semibold">Environment</label>
+          <select name="environment" class="form-select form-select-sm">
+            {% for value, label in environments %}
+              <option value="{{ value }}" {% if environment == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <noscript><button type="submit" class="btn btn-sm btn-primary">Simulate</button></noscript>
+          <p class="small text-muted mb-0">
+            Reflects provider health and observed reliability at this moment, so
+            the answer changes as the estate does.
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if plan %}
+    {% include "routing/_plan.html" %}
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Evaluation Centre{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+
+<div id="results" data-ajax-region>
+  {% if stats.unevaluated_approved_models %}
+    {% comment %}
+      The number a governance manager actually came here for: how much of what
+      we have already blessed has never been tested.
+    {% endcomment %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-body d-flex gap-3 align-items-start py-2">
+        <i class="bi bi-patch-question text-warning"></i>
+        <div class="small">
+          <strong>{{ stats.unevaluated_approved_models }} approved model{{ stats.unevaluated_approved_models|pluralize }}
+          {{ stats.unevaluated_approved_models|pluralize:"has,have" }} never been evaluated.</strong>
+          Approval is a human decision, but it reads better with evidence behind it.
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Suites</span>
+        <div class="ct-metric-value">{{ stats.suites }}</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Runs</span>
+        <div class="ct-metric-value">{{ stats.runs|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Passed</span>
+        <div class="ct-metric-value text-success">{{ stats.passed|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Failed</span>
+        <div class="ct-metric-value {% if stats.failed %}text-danger{% endif %}">{{ stats.failed|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Blocked</span>
+        <div class="ct-metric-value {% if stats.blocked %}text-danger{% endif %}">{{ stats.blocked|intcomma }}</div>
+        <div class="ct-metric-hint">Failed a blocking category</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Spend</span>
+        <div class="ct-metric-value">${{ stats.spend|floatformat:4 }}</div></div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#results">
+      <input type="search" name="q" value="{{ request.GET.q|default:'' }}"
+             class="form-control form-control-sm" placeholder="Search suites" style="width:14rem">
+      <select name="target_kind" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any target</option>
+        <option value="model" {% if request.GET.target_kind == "model" %}selected{% endif %}>Models</option>
+        <option value="agent" {% if request.GET.target_kind == "agent" %}selected{% endif %}>Agents</option>
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+    <a href="{% url 'evaluations:runs' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-list-check"></i> All runs
+    </a>
+  </div>
+
+  <div class="ct-card mb-3">
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>Suite</th><th>Target</th><th class="text-end">Cases</th>
+              <th class="text-end">Pass bar</th><th>Blocking</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for suite in suites %}
+            <tr>
+              <td>
+                <a href="{% url 'evaluations:suite' suite.pk %}" class="fw-semibold text-decoration-none">
+                  {{ suite.name }}
+                </a>
+                {% if suite.description %}
+                  <div class="ct-attention-detail">{{ suite.description|truncatechars:90 }}</div>
+                {% endif %}
+              </td>
+              <td class="small">{{ suite.get_target_kind_display }}</td>
+              <td class="small text-end">{{ suite.case_count }}</td>
+              <td class="small text-end">{{ suite.pass_threshold }}%</td>
+              <td class="small">
+                {% for category in suite.blocking_categories %}
+                  <span class="badge badge-soft text-bg-danger">{{ category }}</span>
+                {% empty %}<span class="text-muted">—</span>{% endfor %}
+              </td>
+              <td>
+                <span class="badge badge-soft text-bg-{{ suite.status|status_style }}">
+                  {{ suite.get_status_display }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6">
+              <div class="ct-empty py-5">
+                <i class="bi bi-clipboard-check"></i>
+                <p class="mb-1">No evaluation suites yet.</p>
+                <p class="small text-muted mb-0">
+                  A suite is a set of prompts and the deterministic checks their answers must pass.
+                </p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+
+  <div class="ct-card">
+    <div class="ct-card-header">
+      <span>Recent Runs</span>
+      <a href="{% url 'evaluations:runs' %}" class="small text-decoration-none">All runs</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>When</th><th>Suite</th><th>Target</th><th class="text-end">Score</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          {% for run in recent_runs %}
+            <tr>
+              <td class="small text-nowrap">
+                <a href="{% url 'evaluations:run' run.pk %}" class="text-decoration-none">
+                  {{ run.created_at|naturaltime }}
+                </a>
+              </td>
+              <td class="small">{{ run.suite.name }}</td>
+              <td class="small">{{ run.target_label }}</td>
+              <td class="small text-end">{{ run.score|floatformat:1 }}%</td>
+              <td>{% include "evaluations/_verdict.html" %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5">
+              <div class="ct-empty py-4">
+                <i class="bi bi-hourglass"></i>
+                <p class="mb-0">Nothing has been evaluated yet.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

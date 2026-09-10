@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Evaluation Runs{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="results" data-ajax-region>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="{% url 'evaluations:home' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> Evaluation Centre
+    </a>
+    <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#results">
+      <input type="search" name="q" value="{{ request.GET.q|default:'' }}"
+             class="form-control form-control-sm" placeholder="Search runs" style="width:14rem">
+      <select name="status" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any status</option>
+        <option value="completed" {% if request.GET.status == "completed" %}selected{% endif %}>Completed</option>
+        <option value="running" {% if request.GET.status == "running" %}selected{% endif %}>Running</option>
+        <option value="queued" {% if request.GET.status == "queued" %}selected{% endif %}>Queued</option>
+        <option value="failed" {% if request.GET.status == "failed" %}selected{% endif %}>Failed</option>
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+  </div>
+
+  <div class="ct-card mb-3">
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>When</th><th>Suite</th><th>Target</th><th class="text-end">Cases</th>
+              <th class="text-end">Score</th><th>Verdict</th><th class="text-end">Cost</th></tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+            <tr>
+              <td class="small text-nowrap">
+                <a href="{% url 'evaluations:run' run.pk %}" class="text-decoration-none">
+                  {{ run.created_at|naturaltime }}
+                </a>
+              </td>
+              <td class="small">{{ run.suite.name }}</td>
+              <td class="small">{{ run.target_label }}</td>
+              <td class="small text-end">{{ run.passed_cases }}/{{ run.total_cases }}</td>
+              <td class="small text-end">{{ run.score|floatformat:1 }}%</td>
+              <td>{% include "evaluations/_verdict.html" %}</td>
+              <td class="small text-end">${{ run.total_cost|floatformat:6 }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7">
+              <div class="ct-empty py-5">
+                <i class="bi bi-clipboard-check"></i>
+                <p class="mb-0">No evaluation runs yet.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endif %}
+{% endblock %}

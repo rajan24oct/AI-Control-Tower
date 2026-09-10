@@ -1,0 +1,86 @@
+{% load control_tower %}
+{% comment %}
+  A route plan, shared by the policy detail page and the simulator. The
+  exclusions are given equal weight to the chain on purpose: most routing
+  questions turn out to be "why is my model *not* being chosen?".
+{% endcomment %}
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span>Route</span>
+        <span class="small text-muted">{{ plan.reason }}</span>
+      </div>
+      {% if plan.has_route %}
+        <div class="table-responsive">
+          <table class="table ct-table mb-0">
+            <thead>
+              <tr><th>#</th><th>Model</th><th>Provider</th><th class="text-end">Score</th><th>Why</th></tr>
+            </thead>
+            <tbody>
+              {% for candidate in plan.candidates %}
+                <tr>
+                  <td class="small fw-semibold">
+                    {% if forloop.first %}
+                      <span class="badge badge-soft text-bg-success">1</span>
+                    {% else %}{{ forloop.counter }}{% endif %}
+                  </td>
+                  <td class="small fw-semibold">{{ candidate.model.model_name }}</td>
+                  <td class="small">
+                    {{ candidate.model.provider.name }}
+                    <span class="badge badge-soft text-bg-{{ candidate.model.provider.health_status|health_style }}">
+                      {{ candidate.model.provider.get_health_status_display }}
+                    </span>
+                  </td>
+                  <td class="small text-end font-monospace">{{ candidate.score|floatformat:3 }}</td>
+                  <td class="small text-muted">{{ candidate.reason }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="ct-card-body">
+          <div class="ct-empty py-4">
+            <i class="bi bi-slash-circle"></i>
+            <p class="mb-1">No model is eligible.</p>
+            <p class="small text-muted mb-0">
+              A request matching this policy would be refused with a 503 rather than
+              routed somewhere the platform is not willing to stand behind.
+            </p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span>Excluded</span>
+        <span class="small text-muted">{{ plan.exclusions|length }} model{{ plan.exclusions|length|pluralize }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for exclusion in plan.exclusions %}
+              <tr>
+                <td class="small">
+                  <div class="fw-semibold">{{ exclusion.model.model_name }}</div>
+                  <div class="ct-attention-detail">{{ exclusion.reason }}</div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td>
+                <div class="ct-empty py-4">
+                  <i class="bi bi-check-circle"></i>
+                  <p class="mb-0">Every registered model was eligible.</p>
+                </div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

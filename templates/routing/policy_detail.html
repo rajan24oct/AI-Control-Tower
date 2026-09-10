@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}{{ policy.name }}{% endblock %}
+
+{% block content %}
+<a href="{% url 'routing:list' %}" class="small text-decoration-none">
+  <i class="bi bi-arrow-left"></i> Model routing
+</a>
+
+<div class="row g-3 mt-1 mb-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">Policy</div>
+      <div class="ct-card-body">
+        {% if policy.description %}<p class="small">{{ policy.description }}</p>{% endif %}
+        <dl class="ct-kv mb-0">
+          <dt>Strategy</dt><dd>{{ policy.get_strategy_display }}</dd>
+          <dt>Model type</dt><dd>{{ policy.get_model_type_display }}</dd>
+          <dt>Chain length</dt><dd>{{ policy.chain_length }} (primary + {{ policy.fallback_depth }})</dd>
+          <dt>Priority</dt><dd>{{ policy.priority }}</dd>
+          <dt>Environments</dt>
+          <dd>{% if policy.environments %}{{ policy.environments|join:", " }}{% else %}All{% endif %}</dd>
+          <dt>Agents</dt>
+          <dd>
+            {% for agent in policy.agents.all %}{{ agent.name }}{% if not forloop.last %}, {% endif %}
+            {% empty %}All agents{% endfor %}
+          </dd>
+          <dt>Approved models only</dt><dd>{{ policy.require_approved_models|yesno:"Yes,No" }}</dd>
+          <dt>Degraded providers</dt>
+          <dd>{{ policy.allow_degraded_providers|yesno:"Kept as fallbacks,Excluded" }}</dd>
+          {% if policy.min_context_window %}
+            <dt>Min context</dt><dd>{{ policy.min_context_window|intcomma }} tokens</dd>
+          {% endif %}
+          {% if policy.max_input_cost_per_1k %}
+            <dt>Cost ceiling</dt><dd>${{ policy.max_input_cost_per_1k }} per 1k input</dd>
+          {% endif %}
+          {% if policy.required_capabilities %}
+            <dt>Capabilities</dt><dd>{{ policy.required_capabilities|join:", " }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span>Recent Decisions</span>
+        <span class="small text-muted">Under this policy</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <thead>
+            <tr><th>When</th><th>Chose</th><th>Served</th><th>Outcome</th></tr>
+          </thead>
+          <tbody>
+            {% for decision in decisions %}
+              <tr>
+                <td class="small text-nowrap">{{ decision.created_at|naturaltime }}</td>
+                <td class="small">{{ decision.selected_model.model_name|default:"no route" }}</td>
+                <td class="small">
+                  {{ decision.served_model.model_name|default:"—" }}
+                  {% if decision.used_fallback %}
+                    <span class="badge badge-soft text-bg-warning">fallback {{ decision.attempt }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge badge-soft text-bg-{% if decision.outcome == "served" %}success{% elif decision.outcome == "exhausted" %}danger{% else %}secondary{% endif %}">
+                    {{ decision.get_outcome_display }}
+                  </span>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4">
+                <div class="ct-empty py-4">
+                  <i class="bi bi-hourglass"></i>
+                  <p class="mb-0">This policy has not been consulted yet.</p>
+                </div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% comment %}
+  A routing rule nobody can see the effect of is a rule nobody will risk
+  changing, so the live plan sits on the policy's own page.
+{% endcomment %}
+<h2 class="h6 mb-2">What this policy would choose right now</h2>
+{% include "routing/_plan.html" %}
+{% endblock %}

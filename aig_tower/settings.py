@@ -66,6 +66,9 @@ LOCAL_APPS = [
     "apps.risks",
     "apps.approvals",
     "apps.policies",
+    "apps.routing",
+    "apps.gateway",
+    "apps.evaluations",
     "apps.notifications",
     "apps.inventory",
     "apps.dashboard",
@@ -262,6 +265,24 @@ CONTROL_TOWER = {
     # captured implicitly -- this only governs how far what engines *do* report
     # is shown. Classified agents are redacted even for holders of prompt.view,
     # so a shared operations screen never becomes an accidental data export.
+    # AI Gateway. These are the numbers that decide how the platform behaves
+    # when it is in the request path and something upstream is broken, so they
+    # are configuration rather than constants buried in the pipeline.
+    "GATEWAY": {
+        # Ceiling on one provider call.
+        "ATTEMPT_TIMEOUT_SECONDS": float(os.environ.get("GATEWAY_ATTEMPT_TIMEOUT", "30")),
+        # Ceiling on the whole request, fallbacks included. A chain that would
+        # start an attempt past this point stops instead: better a clear 502
+        # than a caller waiting on a fourth try nobody budgeted for.
+        "REQUEST_DEADLINE_SECONDS": float(os.environ.get("GATEWAY_DEADLINE", "60")),
+        # Consecutive failures before a provider is taken out of the chain.
+        "CIRCUIT_FAILURE_THRESHOLD": int(os.environ.get("GATEWAY_CIRCUIT_THRESHOLD", "5")),
+        # How long an open breaker waits before letting one probe through.
+        "CIRCUIT_COOL_OFF_SECONDS": int(os.environ.get("GATEWAY_CIRCUIT_COOL_OFF", "30")),
+        # Hard-stop budgets refuse traffic. Set false to make every budget
+        # advisory again without editing each one.
+        "ENFORCE_BUDGETS": env_bool("GATEWAY_ENFORCE_BUDGETS", True),
+    },
     "PROMPT_DISPLAY": {
         "MAX_CHARS": 1200,
         "REDACT_CLASSIFICATIONS": env_list(

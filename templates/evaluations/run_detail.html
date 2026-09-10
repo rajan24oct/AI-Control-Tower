@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}{{ run.suite.name }} vs {{ run.target_label }}{% endblock %}
+
+{% block content %}
+<a href="{% url 'evaluations:suite' run.suite.pk %}" class="small text-decoration-none">
+  <i class="bi bi-arrow-left"></i> {{ run.suite.name }}
+</a>
+
+<div class="row g-3 mt-1 mb-3">
+  <div class="col-12 col-lg-4">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">Result</div>
+      <div class="ct-card-body">
+        <div class="d-flex align-items-baseline gap-2 mb-2">
+          <span class="ct-metric-value">{{ run.score|floatformat:1 }}%</span>
+          {% include "evaluations/_verdict.html" %}
+        </div>
+
+        {% if run.blocked_by_category %}
+          {% comment %}
+            The most important sentence on the page: a high score that still
+            fails must not be mistaken for a pass.
+          {% endcomment %}
+          <p class="small text-danger">
+            <i class="bi bi-exclamation-octagon"></i>
+            Scored {{ run.score|floatformat:1 }}% but failed a
+            <strong>{{ run.blocked_by_category }}</strong> case, which this suite treats as
+            disqualifying whatever the score.
+          </p>
+        {% endif %}
+
+        <dl class="ct-kv mb-0">
+          <dt>Target</dt><dd>{{ run.target_label }}</dd>
+          <dt>Cases</dt><dd>{{ run.passed_cases }} of {{ run.total_cases }} passed</dd>
+          <dt>Pass bar</dt><dd>{{ run.suite.pass_threshold }}%</dd>
+          <dt>Cost</dt><dd>${{ run.total_cost|floatformat:6 }}</dd>
+          <dt>Triggered by</dt>
+          <dd>{{ run.triggered_by.get_full_name|default:run.triggered_by_system|default:"—" }}</dd>
+          <dt>Started</dt><dd>{{ run.started_at|default:"—" }}</dd>
+          <dt>Finished</dt><dd>{{ run.finished_at|default:"—" }}</dd>
+        </dl>
+
+        {% if run.error_message %}
+          <p class="small text-danger mt-2 mb-0">{{ run.error_message }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span>By Category</span>
+        {% if not run.is_finished %}
+          <span class="small text-muted" data-run-progress>
+            {{ run.completed_cases }} of {{ run.total_cases }} done
+          </span>
+        {% endif %}
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <thead>
+            <tr><th>Category</th><th class="text-end">Passed</th><th class="text-end">Failed</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for row in breakdown %}
+              <tr>
+                <td class="small fw-semibold">
+                  {{ row.category }}
+                  {% if row.blocking %}
+                    <span class="badge badge-soft text-bg-danger">blocking</span>
+                  {% endif %}
+                </td>
+                <td class="small text-end">{{ row.passed }}</td>
+                <td class="small text-end {% if row.failed %}text-danger fw-semibold{% endif %}">{{ row.failed }}</td>
+                <td class="small text-muted">{{ row.passed }}/{{ row.total }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4">
+                <div class="ct-empty py-4">
+                  <i class="bi bi-hourglass-split"></i>
+                  <p class="mb-0">No results yet.</p>
+                </div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card">
+  <div class="ct-card-header">
+    <span>Cases</span>
+    <span class="small text-muted">{{ results|length }} recorded</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table mb-0">
+      <thead>
+        <tr><th>Case</th><th>Category</th><th>Outcome</th><th>Why</th>
+            <th class="text-end">Latency</th><th class="text-end">Cost</th></tr>
+      </thead>
+      <tbody>
+        {% for result in results %}
+          <tr>
+            <td class="small fw-semibold">
+              {{ result.case_name }}
+              {% if result.execution %}
+                <a href="{% url 'executions:detail' result.execution.pk %}"
+                   class="ct-attention-detail text-decoration-none">view the call</a>
+              {% endif %}
+            </td>
+            <td class="small">{{ result.get_category_display }}</td>
+            <td>
+              {% if result.passed %}
+                <span class="badge badge-soft text-bg-success">Pass</span>
+              {% else %}
+                <span class="badge badge-soft text-bg-danger">Fail</span>
+              {% endif %}
+            </td>
+            <td class="small">
+              {{ result.detail }}
+              {% if not result.passed and result.output %}
+                {% if may_see_output %}
+                  <details class="mt-1">
+                    <summary class="small text-muted">Show the answer</summary>
+                    <pre class="ct-eval-output">{{ result.output }}</pre>
+                  </details>
+                {% else %}
+                  <div class="ct-attention-detail">
+                    The answer is withheld: reading model output needs the prompt permission.
+                  </div>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td class="small text-end text-nowrap">{{ result.latency_ms|default:"—" }} ms</td>
+            <td class="small text-end">${{ result.cost|floatformat:6 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">
+            <div class="ct-empty py-5">
+              <i class="bi bi-hourglass-split"></i>
+              <p class="mb-0">Waiting for the first case to finish.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if not run.is_finished %}
+<script>
+// A suite is real model calls, so it can take minutes. Poll until it settles,
+// then reload once so the finished page renders normally.
+(function () {
+  const url = "{% url 'evaluations:run_progress' run.pk %}";
+  const label = document.querySelector('[data-run-progress]');
+
+  const timer = setInterval(async function () {
+    if (document.hidden) return;
+    let state;
+    try {
+      state = await (await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})).json();
+    } catch (e) {
+      return;  // a blip should not stop the page watching
+    }
+    if (label) label.textContent = state.completed + ' of ' + state.total + ' done';
+    if (state.finished) {
+      clearInterval(timer);
+      window.location.reload();
+    }
+  }, 3000);
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -43,6 +43,10 @@ class Perm:
     # customer data reliably shows up, so watching operations and reading what
     # was actually said are different privileges.
     PROMPT_VIEW = "prompt.view"
+    # Calling models through the gateway spends real money against real
+    # provider credentials, so it is its own grant rather than a side effect of
+    # being able to report telemetry.
+    GATEWAY_INVOKE = "gateway.invoke"
 
     COST_VIEW = "cost.view"
     COST_MANAGE = "cost.manage"
@@ -90,6 +94,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.TELEMETRY_INGEST,
         Perm.COST_MANAGE,
         Perm.PROMPT_VIEW,
+        Perm.GATEWAY_INVOKE,
     },
     Role.AI_DEVELOPER: _READ_ONLY
     | {
@@ -98,6 +103,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.APPLICATION_MANAGE,
         Perm.TELEMETRY_INGEST,
         Perm.PROMPT_VIEW,
+        Perm.GATEWAY_INVOKE,
     },
     Role.GOVERNANCE_MANAGER: _READ_ONLY
     | {

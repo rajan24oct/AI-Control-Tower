@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}AI Gateway{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+
+  {% comment %}
+    An open breaker means live traffic is being steered away from a provider
+    right now, so it leads rather than sitting in a table further down.
+  {% endcomment %}
+  {% if open_circuits %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-exclamation-octagon me-1"></i> Providers taken out of rotation</span>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for circuit in open_circuits %}
+          <div class="ct-attention-item">
+            <i class="bi bi-plug text-danger"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">{{ circuit.provider.name }}</p>
+              <p class="ct-attention-detail">
+                {{ circuit.consecutive_failures }} consecutive failures &mdash;
+                {{ circuit.last_error|default:"no detail reported" }}.
+                Opened {{ circuit.opened_at|naturaltime }}; a probe is allowed through
+                after the cool-off.
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if providers_without_credentials %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-body d-flex gap-3 align-items-start py-2">
+        <i class="bi bi-key text-warning"></i>
+        <div class="small">
+          <strong>{{ providers_without_credentials|length }} active provider{{ providers_without_credentials|pluralize }}
+          cannot resolve a credential.</strong>
+          The gateway calls providers itself, so these will fail every attempt until their
+          environment variable is set:
+          {% for provider in providers_without_credentials %}
+            <code>{{ provider.credential_ref|default:"(no credential_ref)" }}</code>{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Requests (24h)</span>
+        <div class="ct-metric-value">{{ stats.requests|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Failed</span>
+        <div class="ct-metric-value {% if stats.failed %}text-danger{% endif %}">{{ stats.failed|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Used Fallback</span>
+        <div class="ct-metric-value {% if stats.fell_back %}text-warning{% endif %}">{{ stats.fell_back|intcomma }}</div>
+        <div class="ct-metric-hint">First choice was not usable</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Avg Latency</span>
+        <div class="ct-metric-value">{{ stats.median_latency|floatformat:0 }} ms</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Tokens (24h)</span>
+        <div class="ct-metric-value">{{ stats.tokens|intcomma }}</div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric"><span class="ct-metric-label">Cost (24h)</span>
+        <div class="ct-metric-value">${{ stats.cost|floatformat:4 }}</div></div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-7">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span>Provider Circuits</span>
+          <span class="small text-muted">Breakers protecting in-path traffic</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table ct-table mb-0">
+            <thead>
+              <tr><th>Provider</th><th>State</th><th class="text-end">Consecutive failures</th>
+                  <th class="text-end">Trips</th><th>Last failure</th></tr>
+            </thead>
+            <tbody>
+              {% for circuit in circuits %}
+                <tr>
+                  <td class="small fw-semibold">{{ circuit.provider.name }}</td>
+                  <td>
+                    <span class="badge badge-soft text-bg-{% if circuit.state == 'open' %}danger{% elif circuit.state == 'half_open' %}warning{% else %}success{% endif %}">
+                      {{ circuit.get_state_display }}
+                    </span>
+                  </td>
+                  <td class="small text-end">{{ circuit.consecutive_failures }}</td>
+                  <td class="small text-end">{{ circuit.trips }}</td>
+                  <td class="small">{{ circuit.last_failure_at|naturaltime|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="5">
+                  <div class="ct-empty py-4">
+                    <i class="bi bi-shield-check"></i>
+                    <p class="mb-0">No provider has failed yet.</p>
+                  </div>
+                </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span>Routing</span>
+          <a href="{% url 'routing:list' %}" class="small text-decoration-none">Policies</a>
+        </div>
+        <div class="ct-card-body">
+          <dl class="ct-kv mb-0">
+            <dt>Decisions (7d)</dt><dd>{{ routing.total|intcomma }}</dd>
+            <dt>Served</dt><dd>{{ routing.served|intcomma }}</dd>
+            <dt>Fell back</dt>
+            <dd>
+              {{ routing.fell_back|intcomma }}
+              <span class="text-muted">({{ routing.fallback_rate|percentage }})</span>
+            </dd>
+            <dt>No route found</dt>
+            <dd class="{% if routing.no_route %}text-danger{% endif %}">{{ routing.no_route|intcomma }}</dd>
+          </dl>
+
+          {% if routing.top_models %}
+            <hr class="my-3">
+            <p class="ct-metric-label mb-2">Most served</p>
+            {% for row in routing.top_models %}
+              <div class="d-flex justify-content-between small">
+                <span>{{ row.model }} <span class="text-muted">{{ row.provider }}</span></span>
+                <span class="fw-semibold">{{ row.count|intcomma }}</span>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ct-card">
+    <div class="ct-card-header">
+      <span>Recent Gateway Traffic</span>
+      <a href="{% url 'executions:list' %}?source=gateway" class="small text-decoration-none">All executions</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>Request</th><th>Agent</th><th>Model</th><th class="text-end">Tokens</th>
+              <th class="text-end">Cost</th><th class="text-end">Latency</th><th>Fallback</th></tr>
+        </thead>
+        <tbody>
+          {% for execution in recent %}
+            <tr>
+              <td>
+                <a href="{% url 'executions:detail' execution.pk %}"
+                   class="text-decoration-none font-monospace small">{{ execution.external_id }}</a>
+              </td>
+              <td class="small">{{ execution.agent.name|default:"—" }}</td>
+              <td class="small">{{ execution.model.model_name|default:"—" }}</td>
+              <td class="small text-end">{{ execution.total_tokens|intcomma }}</td>
+              <td class="small text-end">${{ execution.cost|floatformat:4 }}</td>
+              <td class="small text-end">{{ execution.latency_ms|default:0 }} ms</td>
+              <td>
+                {% if execution.metadata.used_fallback %}
+                  <span class="badge badge-soft text-bg-warning">Fell back</span>
+                {% else %}<span class="text-muted small">—</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7">
+              <div class="ct-empty py-4">
+                <i class="bi bi-router"></i>
+                <p class="mb-0">No gateway traffic in the last 24 hours.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

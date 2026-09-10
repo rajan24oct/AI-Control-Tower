@@ -171,6 +171,20 @@ def event_style(value: str) -> str:
     return _EVENT_PRESENTATION.get(value, ("bi-dot", "secondary"))[1]
 
 
+@register.filter
+def percentage(value, places: int = 1) -> str:
+    """Render a 0..1 ratio as a percentage.
+
+    Ratios are stored as fractions so they stay comparable in aggregates; the
+    conversion belongs at the point of display, not in the service that
+    computed them.
+    """
+    try:
+        return f"{float(value) * 100:.{int(places)}f}%"
+    except (TypeError, ValueError):
+        return "—"
+
+
 @register.simple_tag(takes_context=True)
 def query_replace(context, **kwargs):
     """Rebuild the query string with some parameters replaced.

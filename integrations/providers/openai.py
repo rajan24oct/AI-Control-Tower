@@ -55,7 +55,13 @@ class OpenAIProviderAdapter(BaseAIProviderAdapter):
                 "Install it with: pip install openai"
             ) from exc
 
-        kwargs = {"api_key": self.config.resolve_credential()}
+        kwargs = {
+            "api_key": self.config.resolve_credential(),
+            # The gateway calls this synchronously while a caller waits, so an
+            # upstream that never answers must not become our hang too.
+            "timeout": self.config.timeout,
+            "max_retries": 0,  # retries are the gateway's decision, not the SDK's
+        }
         if self.config.endpoint:
             kwargs["base_url"] = self.config.endpoint
         return OpenAI(**kwargs)
@@ -149,14 +155,25 @@ class OpenAIProviderAdapter(BaseAIProviderAdapter):
             "model": request.model_id,
             "messages": self._messages(request),
             "stream": True,
+            # Without this the stream ends with no token counts at all, and a
+            # streamed call would silently cost nothing as far as the platform
+            # is concerned.
+            "stream_options": {"include_usage": True},
         }
         if request.max_tokens is not None:
             payload["max_tokens"] = request.max_tokens
 
+        usage = TokenUsage()
         for chunk in self._client().chat.completions.create(**payload):
+            # The usage-bearing chunk arrives last and carries no choices.
+            if getattr(chunk, "usage", None):
+                usage = TokenUsage(
+                    input_tokens=chunk.usage.prompt_tokens or 0,
+                    output_tokens=chunk.usage.completion_tokens or 0,
+                )
             if not chunk.choices:
                 continue
             text = chunk.choices[0].delta.content
             if text:
                 yield StreamChunk(text=text)
-        yield StreamChunk(text="", is_final=True)
+        yield StreamChunk(text="", is_final=True, usage=usage)

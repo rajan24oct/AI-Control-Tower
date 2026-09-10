@@ -204,12 +204,17 @@ class ModuleStatusTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_the_three_modules_are_reported(self):
+    def test_every_module_is_reported(self):
         modules = DashboardService(self.organization).build().modules
         self.assertEqual(
             [m.name for m in modules],
-            ["Policy engine", "Model routing", "Evaluation centre"],
+            ["Policy engine", "Model routing", "AI gateway", "Evaluation centre"],
         )
+
+    def test_nothing_is_still_marked_planned(self):
+        """Kept as a check that this list stays honest, not as a milestone."""
+        modules = DashboardService(self.organization).build().modules
+        self.assertEqual([m.name for m in modules if m.state == "planned"], [])
 
     def test_the_policy_engine_is_live_and_linked(self):
         modules = {m.name: m for m in DashboardService(self.organization).build().modules}
@@ -218,13 +223,14 @@ class ModuleStatusTests(TestCase):
         self.assertEqual(policy_engine.state, "live")
         self.assertEqual(policy_engine.url, reverse("policies:list"))
 
-    def test_unbuilt_modules_are_marked_planned_and_unlinked(self):
+    def test_built_modules_are_live_and_linked(self):
         """Never imply a control is enforcing something when it does not exist."""
         modules = {m.name: m for m in DashboardService(self.organization).build().modules}
 
-        for name in ("Model routing", "Evaluation centre"):
-            self.assertEqual(modules[name].state, "planned")
-            self.assertEqual(modules[name].url, "")
+        for name in ("Policy engine", "Model routing", "AI gateway", "Evaluation centre"):
+            with self.subTest(module=name):
+                self.assertEqual(modules[name].state, "live")
+                self.assertTrue(modules[name].url)
 
     def test_the_policy_engine_reports_its_active_policy_count(self):
         Policy.objects.create(

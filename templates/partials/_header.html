@@ -60,6 +60,24 @@
           </li>
 
           <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'gateway routing' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Gateway</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'gateway:overview' %}">
+                <i class="bi bi-router"></i> Gateway Overview</a></li>
+              <li><a class="dropdown-item" href="{% url 'gateway:messages' %}">
+                <i class="bi bi-chat-dots"></i> Agent Messages</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{% url 'routing:list' %}">
+                <i class="bi bi-signpost-split"></i> Model Routing</a></li>
+              <li><a class="dropdown-item" href="{% url 'routing:simulator' %}">
+                <i class="bi bi-play-circle"></i> Routing Simulator</a></li>
+              <li><a class="dropdown-item" href="{% url 'routing:decisions' %}">
+                <i class="bi bi-list-check"></i> Routing Decisions</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'costs' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI FinOps</a>
             <ul class="dropdown-menu">
@@ -71,7 +89,7 @@
           </li>
 
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'risks approvals policies' %}active{% endif %}"
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'risks approvals policies evaluations' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Governance</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="{% url 'risks:list' %}">
@@ -82,6 +100,11 @@
                 <i class="bi bi-person-check"></i> Approvals</a></li>
               <li><a class="dropdown-item" href="{% url 'policies:list' %}">
                 <i class="bi bi-file-earmark-ruled"></i> Policies</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{% url 'evaluations:home' %}">
+                <i class="bi bi-clipboard-check"></i> Evaluation Centre</a></li>
+              <li><a class="dropdown-item" href="{% url 'evaluations:runs' %}">
+                <i class="bi bi-list-check"></i> Evaluation Runs</a></li>
             </ul>
           </li>
 

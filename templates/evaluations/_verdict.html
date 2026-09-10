@@ -1,0 +1,17 @@
+{% comment %}
+  A run has three outcomes, not two. "Blocked" is deliberately distinct from
+  "failed": it means the suite cleared its score bar but failed something that
+  must never fail, and reading that as an ordinary low score is exactly the
+  mistake this badge exists to prevent.
+{% endcomment %}
+{% if run.verdict == "passed" %}
+  <span class="badge badge-soft text-bg-success">Passed</span>
+{% elif run.verdict == "blocked" %}
+  <span class="badge badge-soft text-bg-danger" title="Failed a blocking category">
+    Blocked &mdash; {{ run.blocked_by_category }}
+  </span>
+{% elif run.verdict == "failed" %}
+  <span class="badge badge-soft text-bg-danger">Failed</span>
+{% else %}
+  <span class="badge badge-soft text-bg-secondary">{{ run.get_status_display }}</span>
+{% endif %}

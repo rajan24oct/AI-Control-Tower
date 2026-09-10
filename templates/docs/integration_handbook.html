@@ -657,10 +657,12 @@
   <nav class="rail" aria-label="Sections">
     <h2>Contents</h2>
     <ol>
-      <li><a href="#boundary">The boundary</a></li>
+      <li><a href="#boundary">Two modes</a></li>
       <li><a href="#onboarding">Onboarding path</a></li>
       <li><a href="#paths">Three ways to integrate</a></li>
       <li><a href="#api">API reference</a></li>
+      <li><a href="#gateway">The AI Gateway</a></li>
+      <li><a href="#evaluation">Evaluation Centre</a></li>
       <li><a href="#events">Event vocabulary</a></li>
       <li><a href="#identifiers">Identifier resolution</a></li>
       <li><a href="#governance">Policy &amp; approvals</a></li>
@@ -677,13 +679,23 @@
     <!-- ================= BOUNDARY ================= -->
     <section id="boundary">
       <p class="kicker">Start here</p>
-      <h2 class="sec">The Control Tower does not run your AI</h2>
+      <h2 class="sec">Two ways in, and the difference matters</h2>
       <p>
-        This is the single architectural fact that explains every design decision below.
-        The Control Tower <strong>manages and observes</strong> AI execution engines. It does not
-        host models, orchestrate agents, or sit in your request path. Your engine keeps running
-        exactly where it runs today &mdash; in your cluster, in a Lambda, on a laptop &mdash; and
-        reports what it did.
+        The Control Tower can be used in two modes, and which one you pick changes what it can
+        enforce and what it can break.
+      </p>
+      <p>
+        In <strong>reporting mode</strong> the platform manages and observes: your engine keeps
+        running exactly where it runs today &mdash; in your cluster, in a Lambda, on a laptop
+        &mdash; calls its provider directly, and reports what it did. The Tower is not in your
+        request path, so it cannot add latency to a model call or take your agents down.
+        Policy verdicts here are <em>advice</em> your engine may act on or ignore.
+      </p>
+      <p>
+        In <strong>gateway mode</strong> your agents send their model calls to the platform, which
+        applies policy, budget and routing and then calls the provider on your behalf. This is the
+        only way to make those controls actually binding &mdash; and the price is that the platform
+        becomes a runtime dependency of every call it serves. Both modes can run side by side.
       </p>
 
       <div class="layers">
@@ -705,9 +717,25 @@
         </div>
       </div>
       <p class="layers-note">
-        Traffic flows right to left: engines push, the Tower never reaches into your runtime.
-        Nothing above the adapter layer knows which vendor produced a run.
+        In reporting mode traffic flows right to left: engines push, and the Tower never reaches
+        into your runtime. In gateway mode the same layers are walked left to right instead &mdash;
+        the platform calls the provider through the very same adapters. Either way, nothing above
+        the adapter layer knows which vendor served a run.
       </p>
+
+      <div class="note danger">
+        <span class="label">What gateway mode costs you</span>
+        <p>
+          A gateway is a dependency. If the platform is down, slow, or mid-deploy, every agent
+          call routed through it is affected. Weigh that against what it buys: a
+          <code>deny</code> that actually denies, a budget that actually stops, and automatic
+          fallback across providers that your engines do not have to implement.
+        </p>
+        <p>
+          Nothing forces an all-or-nothing choice. Route the traffic that needs hard enforcement
+          through the gateway and leave the rest reporting.
+        </p>
+      </div>
 
       <h3>What this buys you</h3>
       <ul>
@@ -1054,8 +1082,26 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
             <tr>
               <td class="path"><code>/policy/check/</code></td>
               <td><span class="verb-tag post">POST</span></td>
-              <td>May this action proceed?</td>
+              <td>May this action proceed? Advisory.</td>
               <td><code>authenticated</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/gateway/chat/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>Run a model call through the platform. Enforcing.</td>
+              <td><code>gateway.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/gateway/messages/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>One agent writes to another.</td>
+              <td><code>gateway.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/gateway/messages/{agent}/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>An agent collects its waiting mail.</td>
+              <td><code>gateway.invoke</code></td>
             </tr>
             <tr>
               <td class="path"><code>/approval-requests/</code></td>
@@ -1111,6 +1157,297 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- ================= GATEWAY ================= -->
+    <section id="gateway">
+      <p class="kicker">In-path mode</p>
+      <h2 class="sec">The AI Gateway</h2>
+      <p>
+        Send a model call here instead of to your provider, and the platform applies policy and
+        budget, chooses a model, falls back if it has to, calls the provider with its own
+        credentials, and records the run &mdash; before answering you.
+      </p>
+
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/gateway/chat/</span></div>
+<pre>{
+  <span class="k">"agent"</span>: <span class="s">"underwriting-copilot"</span>,
+  <span class="k">"messages"</span>: [{<span class="k">"role"</span>: <span class="s">"user"</span>, <span class="k">"content"</span>: <span class="s">"Can SUB-40182 be bound?"</span>}],
+  <span class="k">"max_tokens"</span>: <span class="n">800</span>
+}</pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>200 OK</span></div>
+<pre>{
+  <span class="k">"output_text"</span>: <span class="s">"Three exceptions are outstanding..."</span>,
+  <span class="k">"model"</span>: <span class="s">"gpt-4o"</span>,
+  <span class="k">"provider"</span>: <span class="s">"Azure OpenAI West Europe"</span>,
+  <span class="k">"usage"</span>: {<span class="k">"input_tokens"</span>: <span class="n">1200</span>, <span class="k">"output_tokens"</span>: <span class="n">340</span>, <span class="k">"total_tokens"</span>: <span class="n">1540</span>},
+  <span class="k">"cost"</span>: <span class="s">"0.011100"</span>,
+  <span class="k">"used_fallback"</span>: <span class="n">false</span>,
+  <span class="k">"attempts"</span>: [{<span class="k">"position"</span>: <span class="n">1</span>, <span class="k">"model"</span>: <span class="s">"GPT-4o"</span>, <span class="k">"ok"</span>: <span class="n">true</span>, <span class="k">"latency_ms"</span>: <span class="n">880</span>}],
+  <span class="k">"execution_id"</span>: <span class="s">"gw-4f9c1b22a7e10d33"</span>
+}</pre>
+      </div>
+
+      <p>
+        Omit <code>model</code> and the platform chooses. Name one and it goes first, with the
+        platform's own ranking as your fallback &mdash; an engineer pinning a model is usually
+        debugging something specific.
+      </p>
+
+      <h3>Streaming</h3>
+      <p>
+        Add <code>"stream": true</code> and the same endpoint answers with
+        <code>text/event-stream</code> instead of one JSON body. Named events, one JSON object
+        each:
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/gateway/chat/ &nbsp;·&nbsp; "stream": true</span></div>
+<pre><span class="k">event:</span> start
+<span class="k">data:</span> {<span class="k">"model"</span>: <span class="s">"gpt-4o-mini"</span>, <span class="k">"provider"</span>: <span class="s">"Azure OpenAI (West Europe)"</span>,
+       <span class="k">"attempt"</span>: <span class="n">1</span>, <span class="k">"used_fallback"</span>: <span class="n">false</span>}
+
+<span class="k">event:</span> delta
+<span class="k">data:</span> {<span class="k">"text"</span>: <span class="s">"Three exceptions "</span>}
+
+<span class="k">event:</span> delta
+<span class="k">data:</span> {<span class="k">"text"</span>: <span class="s">"are outstanding..."</span>}
+
+<span class="k">event:</span> done
+<span class="k">data:</span> {<span class="k">"usage"</span>: {<span class="k">"input_tokens"</span>: <span class="n">1200</span>, <span class="k">"output_tokens"</span>: <span class="n">340</span>, <span class="k">"estimated"</span>: <span class="n">false</span>},
+       <span class="k">"cost"</span>: <span class="s">"0.011100"</span>, <span class="k">"used_fallback"</span>: <span class="n">false</span>,
+       <span class="k">"execution_id"</span>: <span class="s">"gw-323fc9abbecf48d1"</span>}</pre>
+      </div>
+
+      <div class="note danger">
+        <span class="label">Fallback ends at the first byte</span>
+        <p>
+          Before any content is sent, a failing model is swapped for the next in the chain exactly
+          as in a plain call &mdash; you will simply see <code>used_fallback: true</code> on the
+          <code>start</code> event. Merely opening a stream does not count; the platform waits for
+          real content before committing.
+        </p>
+        <p>
+          <strong>After the first <code>delta</code>, there is no fallback.</strong> You already
+          hold part of one model's answer, and splicing a second model's continuation onto it
+          would produce a response nobody downstream could trust. A break past that point arrives
+          as an <code>error</code> event with <code>recoverable: false</code>, followed by
+          <code>done</code>. Your text up to that point stands; decide for yourself whether to
+          discard it and retry the whole request.
+        </p>
+      </div>
+
+      <p>
+        Everything the platform enforces happens before the first byte, so a refusal is still an
+        ordinary HTTP status with a JSON body &mdash; never a 200 stream carrying bad news. All
+        five statuses below behave identically whether or not you asked for streaming.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Also worth knowing</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Providers that cannot stream</td>
+              <td>
+                Skipped for streamed requests and marked as such in <code>attempts</code>. It is
+                not counted as a provider failure, so it does not trip their circuit breaker or
+                affect their non-streaming traffic.
+              </td>
+            </tr>
+            <tr>
+              <td><code>usage.estimated</code></td>
+              <td>
+                <code>true</code> when the provider streamed without reporting token counts. The
+                platform estimates from character length so the call is not free in the cost
+                dashboard, and flags it so you never mistake it for a measurement when
+                reconciling against an invoice.
+              </td>
+            </tr>
+            <tr>
+              <td>An interrupted stream</td>
+              <td>
+                Recorded as a <strong>failed</strong> execution with the error attached &mdash;
+                recording a partial answer as "completed" would quietly overstate the platform's
+                success rate.
+              </td>
+            </tr>
+            <tr>
+              <td>Buffering proxies</td>
+              <td>
+                The response sets <code>Cache-Control: no-cache</code> and
+                <code>X-Accel-Buffering: no</code>. If your ingress buffers anyway, streaming will
+                appear to work and arrive all at once.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Failure modes worth handling separately</h3>
+      <p>
+        These are different problems with different right answers, so they get different statuses.
+        Retrying a 403 will never work; retrying a 502 might.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Status</th><th><code>error</code></th><th>Means</th><th>What to do</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>202</td><td><code>approval_required</code></td>
+              <td>Legitimate, but a human must decide first.</td>
+              <td>Poll the approval, then resend. Do not retry blindly.</td>
+            </tr>
+            <tr>
+              <td>402</td><td><code>budget_exceeded</code></td>
+              <td>A hard-stop budget is spent for this period.</td>
+              <td>Stop. Retrying spends nothing and fixes nothing.</td>
+            </tr>
+            <tr>
+              <td>403</td><td><code>policy_denied</code></td>
+              <td>A policy refused it outright.</td>
+              <td>Do not retry. The response names the policies.</td>
+            </tr>
+            <tr>
+              <td>503</td><td><code>no_route</code></td>
+              <td>No model was eligible &mdash; all excluded.</td>
+              <td>Read <code>excluded</code>; usually a registry or health problem.</td>
+            </tr>
+            <tr>
+              <td>502</td><td><code>all_attempts_failed</code></td>
+              <td>Every model in the chain was tried and failed.</td>
+              <td>Safe to retry with backoff. <code>attempts</code> says what broke.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Agent-to-agent messages</h3>
+      <p>
+        A mailbox, not an orchestrator. One agent writes to another, the message is governed and
+        recorded, and the recipient <em>collects</em> it &mdash; the platform never calls into an
+        agent, so an agent that is down cannot slow the gateway and its messages simply wait.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/gateway/messages/</span></div>
+<pre>{
+  <span class="k">"sender"</span>: <span class="s">"underwriting-copilot"</span>,
+  <span class="k">"recipient"</span>: <span class="s">"pricing-agent"</span>,
+  <span class="k">"subject"</span>: <span class="s">"Rate needed"</span>,
+  <span class="k">"body"</span>: <span class="s">"Need a rate for SUB-40182 at £14.2m TIV."</span>,
+  <span class="k">"correlation_id"</span>: <span class="s">"thread-8842"</span>
+}</pre>
+      </div>
+      <p>
+        A message refused by policy returns <strong>403</strong> and is <em>kept</em>, marked
+        blocked with its reason. "Which agent tried to tell which other agent what, and why were
+        they stopped" is the question this exists to answer.
+      </p>
+
+      <div class="note warn">
+        <span class="label">Deliberately not an orchestrator</span>
+        <p>
+          The gateway does not decide what a recipient should do, schedule work, or run a graph.
+          Section 40 puts multi-agent orchestration out of scope, and this stays on the near side
+          of that line: the moment the platform decides what happens next, it owns the behaviour
+          of every agent conversation in the estate.
+        </p>
+      </div>
+
+      <h3>Credentials</h3>
+      <p>
+        Gateway mode means the platform holds live provider credentials. The existing rule is
+        unchanged: a provider record stores a <code>credential_ref</code> naming an environment
+        variable, never the secret. Every active provider needs its variable set in the
+        <em>platform's</em> environment, and the gateway overview flags any that cannot resolve
+        one &mdash; those fail every attempt.
+      </p>
+    </section>
+
+    <!-- ================= EVALUATION ================= -->
+    <section id="evaluation">
+      <p class="kicker">Evidence</p>
+      <h2 class="sec">The Evaluation Centre</h2>
+      <p>
+        A suite is a set of prompts and the checks their answers must pass. Running one against a
+        model produces the evidence behind an approval decision &mdash; and, run again later,
+        tells you whether a provider changed something underneath you.
+      </p>
+      <p>
+        Cases execute <strong>through the gateway</strong>, which has two consequences worth
+        knowing before you read a result. An evaluation costs real money against real providers.
+        And a case can fail because a <em>policy</em> refused it &mdash; which is a real result,
+        not a broken test: if production would refuse that prompt, the evaluation should say so
+        rather than route around the control to get a score.
+      </p>
+
+      <h3>Scorers</h3>
+      <p>
+        All deterministic and inspectable. <strong>No model grades another model</strong> &mdash;
+        an evaluation whose verdict depends on a second model's opinion is not evidence you can
+        put in front of a risk committee, and it fails in ways nobody can reproduce.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Scorer</th><th>Configuration</th><th>Passes when</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>contains</code></td><td><code>values</code>, <code>match_all</code>, <code>case_sensitive</code></td><td>The answer contains the expected text.</td></tr>
+            <tr><td><code>not_contains</code></td><td><code>values</code>, <code>case_sensitive</code></td><td>The answer avoids forbidden text.</td></tr>
+            <tr><td><code>regex</code></td><td><code>pattern</code>, <code>flags</code></td><td>The pattern matches.</td></tr>
+            <tr><td><code>refusal</code></td><td><code>markers</code></td><td>The model declined. The red-team workhorse.</td></tr>
+            <tr><td><code>json_schema</code></td><td><code>required_keys</code></td><td>The answer parses as a JSON object with those keys. Fenced blocks are unwrapped.</td></tr>
+            <tr><td><code>no_pii</code></td><td><code>kinds</code></td><td>The monitor's personal-data detector finds nothing.</td></tr>
+            <tr><td><code>max_latency</code></td><td><code>milliseconds</code></td><td>The call was fast enough.</td></tr>
+            <tr><td><code>max_cost</code></td><td><code>amount</code></td><td>The call was cheap enough.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Unknown configuration keys are rejected when the case is saved, as with control policies.
+        A broken check &mdash; a pattern that will not compile, a scorer that raises, no values
+        configured &mdash; <strong>fails the case rather than passing it</strong>, so a control
+        cannot silently stop being a control.
+      </p>
+
+      <h3>Two bars, not one</h3>
+      <p>
+        A run has three outcomes. It <strong>passes</strong> by clearing the suite's weighted
+        score threshold. It <strong>fails</strong> by not clearing it. Or it is
+        <strong>blocked</strong>: it cleared the score but failed a case in a category the suite
+        marks as blocking &mdash; usually safety or red team.
+      </p>
+      <div class="note danger">
+        <span class="label">Why blocked is its own verdict</span>
+        <p>
+          A suite scoring 95% while failing a red-team case has not passed, and showing that as a
+          green tick with a slightly lower number would be the most dangerous kind of report this
+          platform could produce. "Blocked" is deliberately not a low score.
+        </p>
+      </div>
+
+      <div class="note">
+        <span class="label">A run never approves anything</span>
+        <p>
+          Evaluation produces evidence; a human still sets <code>approved_for_use</code>.
+          Auto-approving on a green run would turn the control into a rubber stamp with extra
+          steps. The Evaluation Centre does surface the inverse, which is the number governance
+          teams actually want: how many <em>already approved</em> models have never been tested.
+        </p>
+      </div>
+
+      <p>
+        Start with <code>python manage.py seed_evaluations</code>, which creates a baseline suite
+        of seven real cases &mdash; correctness, output format, refusal of regulated advice,
+        prompt-injection resistance, personal-data avoidance and a latency budget.
+      </p>
     </section>
 
     <!-- ================= EVENTS ================= -->
@@ -1556,6 +1893,49 @@ secret <span class="k">=</span> config.resolve_credential()   <span class="c"># 
         markup to two people watching the same organization.
       </p>
 
+      <h3>Personal data highlighting</h3>
+      <p>
+        Reported text is scanned for common identifiers, which are marked in the transcript and
+        counted on a badge on the row &mdash; so "which of these runs is handling customer data"
+        is answerable without opening every one. Detected today:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Kind</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Email address</td><td>&nbsp;</td></tr>
+            <tr><td>Payment card number</td><td>Luhn-checked, so reference numbers do not match.</td></tr>
+            <tr><td>Bank account (IBAN)</td><td>&nbsp;</td></tr>
+            <tr><td>National Insurance number</td><td>Never-issued prefixes are rejected.</td></tr>
+            <tr><td>Social Security number</td><td>&nbsp;</td></tr>
+            <tr><td>Postcode</td><td>&nbsp;</td></tr>
+            <tr><td>Telephone number</td><td>&nbsp;</td></tr>
+            <tr><td>IP address</td><td>Octets are range-checked.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The scan runs before truncation and before redaction, so a classified run still reports
+        <em>what it was carrying</em> &mdash; "1 email address, 1 telephone number" &mdash; while
+        withholding the text itself. That is usually the more useful half for a governance review.
+      </p>
+
+      <div class="note danger">
+        <span class="label">A clean scan is not a clearance</span>
+        <p>
+          This is pattern matching. It finds common, well-shaped identifiers; it does not find
+          names, free-text addresses, health details, account references specific to your
+          business, or anything expressed in a way the patterns do not anticipate.
+        </p>
+        <p>
+          <strong>No findings means nothing matched, never "no personal data present."</strong>
+          Do not build a control, a sign-off, or a retention decision on the absence of a
+          highlight.
+        </p>
+      </div>
+
       <div class="note warn">
         <span class="label">Think before you send it</span>
         <p>
@@ -1645,10 +2025,31 @@ python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets i
           <summary>Do I have to route my model calls through the Control Tower?</summary>
           <div class="answer">
             <p>
-              No, and you should not. The Tower is not a proxy or a gateway &mdash; it never sits in
-              your request path, so it cannot add latency to a model call or take your agents down
-              when it is being upgraded. You call your provider exactly as you do today and report
-              afterwards.
+              No. Reporting mode is the default and stays fully supported: call your provider
+              exactly as you do today and report afterwards. The platform is then not in your
+              request path at all.
+            </p>
+            <p>
+              Route through the gateway when you need a control to actually bind &mdash; a model
+              an agent must not use, a budget that must stop rather than warn, a fallback chain
+              you would otherwise have to build yourself. Anything else is better off reporting.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>What happens to my agents if the gateway is down?</summary>
+          <div class="answer">
+            <p>
+              Calls routed through it fail, the same as any dependency. That is the trade gateway
+              mode makes and it should be sized accordingly: run it behind the same availability
+              expectations as anything else in your request path.
+            </p>
+            <p>
+              Inside a request, the platform is defensive about upstreams rather than about
+              itself: every provider call has a timeout, the whole request has a deadline, a
+              provider that fails repeatedly is taken out of the chain by a circuit breaker, and
+              a failure to write telemetry never turns a successful model call into a failed one.
             </p>
           </div>
         </details>
@@ -1669,8 +2070,11 @@ python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets i
           <summary>Our engine cannot be reached from the network. Is that a problem?</summary>
           <div class="answer">
             <p>
-              No. Telemetry is always <em>pushed</em> to the Tower; the Tower never calls into your
-              runtime. Your engine needs outbound access to the Tower and nothing more.
+              No. Telemetry is always <em>pushed</em> to the Tower, and the Tower never calls into
+              your runtime &mdash; not even in gateway mode, where it calls <em>providers</em>, not
+              you. Agent-to-agent messages are collected by the recipient rather than delivered to
+              it, for the same reason. Your engine needs outbound access to the Tower and nothing
+              more.
             </p>
           </div>
         </details>
@@ -1773,6 +2177,22 @@ python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets i
             <p>
               If the text should not sit in an observability database at all, send a reference
               into your own prompt store instead. See the security section.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Can we rely on the personal-data highlighting to prove a prompt is clean?</summary>
+          <div class="answer">
+            <p>
+              No. It is pattern matching over the text an engine reported: good at email
+              addresses, card numbers and postcodes, blind to names, free-text addresses, health
+              details and your own account references. A highlight is a reason to look; the
+              absence of one is not evidence of anything.
+            </p>
+            <p>
+              If you need an assurance rather than a signal, keep the text out of
+              <code>metadata</code> in the first place.
             </p>
           </div>
         </details>

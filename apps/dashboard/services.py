@@ -122,6 +122,18 @@ class DashboardService:
         return Policy.objects.for_organization(self.organization)
 
     @property
+    def evaluation_suites(self):
+        from apps.evaluations.models import EvaluationSuite
+
+        return EvaluationSuite.objects.for_organization(self.organization)
+
+    @property
+    def routing_policies(self):
+        from apps.routing.models import RoutingPolicy
+
+        return RoutingPolicy.objects.for_organization(self.organization)
+
+    @property
     def policy_denials_in_range(self):
         return PolicyViolation.objects.for_organization(self.organization).filter(
             effect=PolicyEffect.DENY,
@@ -169,12 +181,22 @@ class DashboardService:
                 reverse("policies:list"),
             ),
             ModuleStatus(
-                "Model routing", "planned",
-                "Automatic fallback and smart model selection across providers.",
+                "Model routing", "live",
+                f"{self.routing_policies.filter(status=LifecycleStatus.ACTIVE).count()} active "
+                "routing policies selecting models and ordering fallbacks.",
+                reverse("routing:list"),
             ),
             ModuleStatus(
-                "Evaluation centre", "planned",
-                "Scored evaluation runs and red-team testing for agents and prompts.",
+                "AI gateway", "live",
+                "Agent traffic served in-path, with policy and budget enforced "
+                "before a provider is called.",
+                reverse("gateway:overview"),
+            ),
+            ModuleStatus(
+                "Evaluation centre", "live",
+                f"{self.evaluation_suites.filter(status=LifecycleStatus.ACTIVE).count()} active "
+                "suites scoring models and agents against deterministic checks.",
+                reverse("evaluations:home"),
             ),
         ]
 

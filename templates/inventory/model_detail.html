@@ -24,6 +24,59 @@
   </a>
 </div>
 
+{% comment %}
+  The evidence behind the approval badge, next to the badge. An approval with
+  nothing behind it should look like one -- especially where a policy is
+  actively gating on it.
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-clipboard-check me-1"></i> Evaluation</span>
+    {% if latest_evaluation %}
+      <a href="{% url 'evaluations:run' latest_evaluation.pk %}" class="small text-decoration-none">
+        Latest run
+      </a>
+    {% else %}
+      <a href="{% url 'evaluations:home' %}" class="small text-decoration-none">Evaluation Centre</a>
+    {% endif %}
+  </div>
+  <div class="ct-card-body py-2">
+    {% if latest_evaluation %}
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        {% with run=latest_evaluation %}{% include "evaluations/_verdict.html" %}{% endwith %}
+        <span class="small">
+          <strong>{{ latest_evaluation.score|floatformat:1 }}%</strong>
+          on {{ latest_evaluation.suite.name }}
+          <span class="text-muted">&middot; {{ latest_evaluation.finished_at|timesince }} ago</span>
+        </span>
+      </div>
+      {% if not latest_evaluation.passed and ai_model.approved_for_use %}
+        <p class="small text-danger mb-0 mt-2">
+          <i class="bi bi-exclamation-triangle"></i>
+          This model is marked approved but its most recent evaluation did not pass.
+          {% if evaluation_gates %}
+            {{ evaluation_gates|length }} active polic{{ evaluation_gates|length|pluralize:"y,ies" }}
+            gate on evaluation evidence, so calls through the gateway will be refused.
+          {% endif %}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="small text-muted mb-0">
+        Never evaluated.
+        {% if ai_model.approved_for_use and evaluation_gates %}
+          <span class="text-danger">
+            This model is approved, but {{ evaluation_gates|length }} active
+            polic{{ evaluation_gates|length|pluralize:"y,ies" }} require evaluation evidence
+            &mdash; calls through the gateway will be refused until it passes a suite.
+          </span>
+        {% elif ai_model.approved_for_use %}
+          Approval is a human decision, but it reads better with evidence behind it.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-12 col-lg-5">
     <div class="ct-card mb-3">

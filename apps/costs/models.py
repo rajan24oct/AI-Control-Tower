@@ -182,6 +182,19 @@ class BudgetScope(models.TextChoices):
     MODEL = "model", "Model"
 
 
+class BudgetEnforcement(models.TextChoices):
+    """What a budget does when it runs out.
+
+    Advisory is the default and the pre-existing behaviour: alert, and let the
+    spend happen. Hard stop is only meaningful where the platform is actually
+    holding the request -- that is, gateway traffic -- and must be chosen
+    deliberately, because it turns a finance control into an outage.
+    """
+
+    ADVISORY = "advisory", "Alert only"
+    HARD_STOP = "hard_stop", "Refuse gateway requests"
+
+
 class BudgetPeriod(models.TextChoices):
     DAILY = "daily", "Daily"
     WEEKLY = "weekly", "Weekly"
@@ -235,6 +248,12 @@ class Budget(OrganizationScopedModel):
     alert_thresholds = models.JSONField(
         default=list, blank=True, help_text="Percentages that raise an alert, e.g. [50, 75, 90, 100]."
     )
+    enforcement = models.CharField(
+        max_length=20,
+        choices=BudgetEnforcement.choices,
+        default=BudgetEnforcement.ADVISORY,
+        help_text="Hard stop refuses gateway traffic once the budget is spent.",
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="owned_budgets",
@@ -274,6 +293,38 @@ class Budget(OrganizationScopedModel):
     def scope_label(self) -> str:
         target = self.scope_target
         return str(target) if target else self.organization.name
+
+    @property
+    def is_enforcing(self) -> bool:
+        return self.enforcement == BudgetEnforcement.HARD_STOP
+
+    def applies_to_agent(self, agent) -> bool:
+        """Whether a request from `agent` is covered by this budget.
+
+        Organization-wide budgets cover everything. Narrower scopes only bite
+        when the request can be attributed to the thing they are scoped to; an
+        unattributable request is not held against someone else's budget.
+        """
+        if self.scope == BudgetScope.ORGANIZATION:
+            return True
+        if agent is None:
+            return False
+        if self.scope == BudgetScope.AGENT:
+            return self.agent_id == agent.pk
+        if self.scope == BudgetScope.TEAM:
+            return bool(self.team_id) and self.team_id == agent.team_id
+        if self.scope == BudgetScope.PROVIDER:
+            return bool(self.provider_id) and self.provider_id == agent.provider_id
+        if self.scope == BudgetScope.MODEL:
+            return bool(self.model_id) and self.model_id == agent.primary_model_id
+        if self.scope == BudgetScope.APPLICATION:
+            return agent.applications.filter(pk=self.application_id).exists()
+        return False
+
+    def is_exhausted(self) -> bool:
+        from apps.costs.services import BudgetService
+
+        return bool(BudgetService.status_for(self)["is_over"])
 
 
 class BudgetAlert(OrganizationOwnedModel):

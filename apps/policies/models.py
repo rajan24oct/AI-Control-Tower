@@ -48,7 +48,14 @@ class PolicyEffect(models.TextChoices):
 #: Configuration keys each policy type understands. Anything else is rejected
 #: at save time, so a typo cannot silently disable a control.
 POLICY_SCHEMA: dict[str, set[str]] = {
-    PolicyType.MODEL_APPROVAL: {"blocked_risk_classifications"},
+    PolicyType.MODEL_APPROVAL: {
+        "blocked_risk_classifications",
+        # Evaluation gating. Off unless configured, so an existing model
+        # approval policy does not start blocking traffic on upgrade.
+        "require_evaluation",
+        "evaluation_max_age_days",
+        "required_suites",
+    },
     PolicyType.PROVIDER: {
         "allowed_providers",
         "blocked_providers",

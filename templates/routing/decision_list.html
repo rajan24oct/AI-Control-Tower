@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Routing Decisions{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="results" data-ajax-region>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="{% url 'routing:list' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> Model routing
+    </a>
+    <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#results">
+      <select name="outcome" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any outcome</option>
+        <option value="served" {% if request.GET.outcome == "served" %}selected{% endif %}>Served</option>
+        <option value="exhausted" {% if request.GET.outcome == "exhausted" %}selected{% endif %}>Chain exhausted</option>
+        <option value="pending" {% if request.GET.outcome == "pending" %}selected{% endif %}>Awaiting outcome</option>
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+  </div>
+
+  <div class="ct-card mb-3">
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>When</th><th>Agent</th><th>Strategy</th><th>Primary</th><th>Fallbacks</th>
+              <th>Served</th><th>Outcome</th></tr>
+        </thead>
+        <tbody>
+          {% for decision in decisions %}
+            <tr>
+              <td class="small text-nowrap">{{ decision.created_at|naturaltime }}</td>
+              <td class="small">{{ decision.agent.name|default:"—" }}</td>
+              <td class="small">{{ decision.get_strategy_display }}</td>
+              <td class="small">{{ decision.selected_model.model_name|default:"—" }}</td>
+              <td class="small text-muted">{{ decision.fallback_names|join:" → "|default:"—" }}</td>
+              <td class="small">
+                {{ decision.served_model.model_name|default:"—" }}
+                {% if decision.used_fallback %}
+                  <span class="badge badge-soft text-bg-warning">attempt {{ decision.attempt }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-soft text-bg-{% if decision.outcome == "served" %}success{% elif decision.outcome == "exhausted" %}danger{% else %}secondary{% endif %}">
+                  {{ decision.get_outcome_display }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7">
+              <div class="ct-empty py-5">
+                <i class="bi bi-signpost"></i>
+                <p class="mb-0">No routing decisions recorded yet.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endif %}
+{% endblock %}
