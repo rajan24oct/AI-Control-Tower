@@ -97,7 +97,9 @@ Chart.js · WhiteNoise.
 
 ## Quick start (local)
 
-This runs the whole platform on your machine with SQLite, no Docker and no Redis.
+This runs the whole platform on your machine with SQLite, no Docker and no Redis. For every other
+setup — PostgreSQL and Redis without Docker, a clean install without demo data, connecting real
+providers and MCP servers, and production deployment — see **[SETUP.md](SETUP.md)**.
 
 **Prerequisites:** Python 3.12 and Git.
 
