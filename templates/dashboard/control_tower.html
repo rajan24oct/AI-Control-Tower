@@ -111,6 +111,17 @@
         </div>
         <div class="ct-card-body">
 
+          {% comment %}
+            A card takes the colour of the worse of its risk rating and its
+            availability, so an asset that is down never looks calm.
+          {% endcomment %}
+          <div class="ct-tone-legend" aria-label="Card colours">
+            <span><i class="ct-tone-swatch tone-low"></i> Low risk, available</span>
+            <span><i class="ct-tone-swatch tone-moderate"></i> Moderate risk or degraded</span>
+            <span><i class="ct-tone-swatch tone-high"></i> High risk</span>
+            <span><i class="ct-tone-swatch tone-critical"></i> Critical risk or unavailable</span>
+          </div>
+
           <div class="ct-consumer-band">
             <i class="bi bi-people-fill"></i> Business Users
           </div>
@@ -127,7 +138,7 @@
               <div class="row g-2">
                 {% for node in layer.nodes %}
                   <div class="col-12 col-md-6 col-xl-4">
-                    <a class="ct-node ct-node-rich {% if node.needs_attention %}is-flagged{% endif %}"
+                    <a class="ct-node ct-node-rich tone-{{ node.tone }} {% if node.needs_attention %}is-flagged{% endif %}"
                        href="{{ node.url }}">
                       <div class="d-flex align-items-start justify-content-between gap-2">
                         <div class="flex-grow-1 min-w-0">

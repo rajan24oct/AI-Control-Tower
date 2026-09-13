@@ -504,18 +504,67 @@ a:hover > .ct-metric { border-color: var(--ct-rule-strong); }
    edge -- risk is carried by the badge on the card. They lift a little on
    hover to read as the links they are. */
 .ct-node.ct-node-rich {
-  border: 1px solid var(--ct-rule);
+  background: var(--tone-bg, var(--ct-surface));
+  border: 1px solid var(--tone-border, var(--ct-rule));
   border-radius: 6px;
   padding: .85rem 1rem .8rem;
   box-shadow: 0 1px 2px rgba(16, 24, 20, .04);
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 .ct-node.ct-node-rich:hover {
-  border-color: var(--ct-celadon);
+  border-color: var(--tone-border-strong, var(--ct-celadon));
   box-shadow: 0 6px 18px rgba(0, 63, 45, .08);
   transform: translateY(-1px);
 }
-.ct-node-rich .ct-node-stats { padding-top: .5rem; border-top: 1px solid var(--ct-rule); }
+.ct-node-rich .ct-node-stats {
+  padding-top: .5rem;
+  border-top: 1px solid var(--tone-border, var(--ct-rule));
+}
+
+/* Card tints, from the worse of risk and availability (Node.tone). Soft enough
+   to keep the badges and figures on them readable; the hue carries the signal. */
+.ct-node-rich.tone-low,
+.ct-tone-swatch.tone-low {
+  --tone-bg: #f2f8f5;
+  --tone-border: #d3e6dc;
+  --tone-border-strong: #9fc7b5;
+}
+.ct-node-rich.tone-moderate,
+.ct-tone-swatch.tone-moderate {
+  --tone-bg: #fdf7ea;
+  --tone-border: #efdcb2;
+  --tone-border-strong: #d9b870;
+}
+.ct-node-rich.tone-high,
+.ct-tone-swatch.tone-high {
+  --tone-bg: #fcf0ee;
+  --tone-border: #eecdc7;
+  --tone-border-strong: #d9978c;
+}
+.ct-node-rich.tone-critical,
+.ct-tone-swatch.tone-critical {
+  --tone-bg: #f8e3e1;
+  --tone-border: #e3aaa3;
+  --tone-border-strong: #c46b60;
+}
+
+.ct-tone-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1.1rem;
+  margin-bottom: .9rem;
+  font-size: .7rem;
+  color: var(--ct-muted);
+}
+.ct-tone-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.ct-tone-swatch {
+  display: inline-block;
+  width: .8rem;
+  height: .8rem;
+  border-radius: 3px;
+  background: var(--tone-bg);
+  border: 1px solid var(--tone-border-strong);
+}
 .min-w-0 { min-width: 0; }
 
 .ct-health-dot {

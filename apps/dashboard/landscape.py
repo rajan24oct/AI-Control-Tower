@@ -71,6 +71,16 @@ def health_from_failure_rate(runs: int, failed: int) -> str:
     return HealthStatus.HEALTHY
 
 
+#: Card colours run from calm to alarming, in this order.
+TONE_ORDER = [RiskLevel.LOW, RiskLevel.MODERATE, RiskLevel.HIGH, RiskLevel.CRITICAL]
+
+#: What availability alone says about a card's colour.
+HEALTH_TONE = {
+    HealthStatus.UNHEALTHY: RiskLevel.CRITICAL,
+    HealthStatus.DEGRADED: RiskLevel.MODERATE,
+}
+
+
 @dataclass
 class Node:
     """One asset on the landscape, with everything an executive needs at a glance."""
@@ -107,6 +117,17 @@ class Node:
             or self.health in {HealthStatus.DEGRADED, HealthStatus.UNHEALTHY}
             or self.risk_level == RiskLevel.CRITICAL
         )
+
+    @property
+    def tone(self) -> str:
+        """The card's colour: the worse of its risk rating and its availability.
+
+        An asset that is down reads as critical whatever its rating, and a
+        degraded one at least moderate -- nothing that is failing looks calm.
+        """
+        risk = self.risk_level if self.risk_level in TONE_ORDER else RiskLevel.LOW
+        from_health = HEALTH_TONE.get(self.health, RiskLevel.LOW)
+        return max(risk, from_health, key=TONE_ORDER.index)
 
 
 @dataclass
