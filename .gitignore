@@ -5,6 +5,8 @@ __pycache__/
 *.pyo
 db.sqlite3
 staticfiles/
+staticfiles/
 .env
 *.log
 .claude/
+/.claude/
