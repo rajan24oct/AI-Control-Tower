@@ -218,12 +218,6 @@ class DashboardService:
             status__in=[ExecutionStatusChoices.FAILED, ExecutionStatusChoices.TIMED_OUT]
         ).count()
 
-        # Deliberately absolute: a billing period is a calendar month whatever
-        # window the viewer has selected.
-        month_cost = self.executions.filter(
-            started_at__year=self.today.year, started_at__month=self.today.month
-        ).aggregate(total=Sum("cost"))["total"] or Decimal("0")
-
         unapproved_models = self.ai_models.filter(approved_for_use=False).count()
         degraded_providers = self.providers.filter(
             health_status__in=[HealthStatus.DEGRADED, HealthStatus.UNHEALTHY]
@@ -267,8 +261,6 @@ class DashboardService:
 
             Metric("Cost", f"${totals['cost'] or 0:,.2f}", icon="bi-currency-dollar",
                    hint=period, url=reverse("costs:dashboard")),
-            Metric("Cost This Month", f"${month_cost:,.2f}", icon="bi-calendar-month",
-                   hint="calendar month", url=reverse("costs:dashboard")),
             Metric("Avg Latency",
                    f"{int(totals['latency']):,} ms" if totals["latency"] else "—",
                    icon="bi-stopwatch", hint=period, url=executions_url),

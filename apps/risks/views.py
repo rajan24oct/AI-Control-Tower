@@ -18,6 +18,17 @@ class RiskListView(OrganizationScopedMixin, ListView):
     context_object_name = "risks"
     paginate_by = 50
     ordering = ["-inherent_risk_score", "risk_id"]
+    sort_fields = {
+        "risk": "title",
+        "category": "risk_category",
+        "likelihood": "likelihood",
+        "impact": "impact",
+        "inherent": "inherent_risk_score",
+        "residual": "residual_risk_score",
+        "owner": ["owner__first_name", "owner__last_name"],
+        "review": "review_date",
+        "status": "status",
+    }
     extra_context = {
         "page_title": "Risk Register",
         "page_subtitle": "Identified AI risks, scored before and after mitigation",

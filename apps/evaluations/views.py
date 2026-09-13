@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -28,6 +29,13 @@ class EvaluationHomeView(OrganizationScopedMixin, ListView):
     }
     search_fields = ["name", "description"]
     filter_fields = {"target_kind": "target_kind", "status": "status"}
+    sort_fields = {
+        "suite": "name",
+        "target": "target_kind",
+        "cases": Count("cases"),
+        "pass_bar": "pass_threshold",
+        "status": "status",
+    }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -154,6 +162,15 @@ class RunListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Every run, and what it showed",
     }
     search_fields = ["suite__name", "model__model_name", "agent__name"]
+    sort_fields = {
+        "when": "created_at",
+        "suite": "suite__name",
+        "target": ["model__model_name", "agent__name"],
+        "cases": "total_cases",
+        "score": "score",
+        "verdict": ["passed", "blocked_by_category"],
+        "cost": "total_cost",
+    }
     filter_fields = {"status": "status", "suite": "suite_id"}
 
     def get_queryset(self):

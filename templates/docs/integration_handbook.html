@@ -474,10 +474,10 @@
   }
   tr:last-child td { border-bottom: none; }
 
-  tbody tr:nth-child(even) { background: var(--row-stripe); }
+  tbody tr:nth-child(odd) { background: var(--row-stripe); }
 
   /* Must follow the stripe: same specificity, so source order decides which of
-     the two paints a hovered even-numbered row. */
+     the two paints a hovered odd-numbered row. */
   tbody tr:hover { background: var(--row-hover); }
 
   td code { background: none; border: none; padding: 0; font-size: 0.84rem; }

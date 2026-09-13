@@ -87,14 +87,16 @@
     </form>
   </div>
 
+  {% include "partials/_pagination.html" with position="top" %}
+
   <div class="table-responsive">
     <table class="table ct-table align-middle">
       <thead>
         <tr>
-          <th>Risk</th><th>Category</th><th>Affected</th>
-          <th class="text-center">L</th><th class="text-center">I</th>
-          <th class="text-center">Inherent</th><th class="text-center">Residual</th>
-          <th>Owner</th><th>Review</th><th>Status</th>
+          {% sort_th "Risk" "risk" %}{% sort_th "Category" "category" %}<th>Affected</th>
+          {% sort_th "L" "likelihood" css="text-center" first="desc" %}{% sort_th "I" "impact" css="text-center" first="desc" %}
+          {% sort_th "Inherent" "inherent" css="text-center" first="desc" %}{% sort_th "Residual" "residual" css="text-center" first="desc" %}
+          {% sort_th "Owner" "owner" %}{% sort_th "Review" "review" %}{% sort_th "Status" "status" %}
         </tr>
       </thead>
       <tbody>

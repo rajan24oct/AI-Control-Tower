@@ -89,6 +89,13 @@ class GatewayMessageListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Agent-to-agent traffic brokered by the gateway",
     }
     search_fields = ["subject", "body", "correlation_id"]
+    sort_fields = {
+        "when": "created_at",
+        "from": "sender__name",
+        "to": "recipient__name",
+        "subject": "subject",
+        "status": "status",
+    }
     filter_fields = {"status": "status", "sender": "sender_id", "recipient": "recipient_id"}
 
     def get_queryset(self):

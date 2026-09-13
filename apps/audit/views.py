@@ -15,6 +15,7 @@ from django.views.generic import DetailView, ListView, View
 from apps.accounts.roles import Perm
 from apps.audit.models import AuditLog, AuditSource
 from apps.audit.services import diff
+from apps.core.views import SortableListMixin
 
 EXPORT_LIMIT = 10_000
 
@@ -72,8 +73,16 @@ class AuditFilterMixin:
         return queryset.order_by("-created_at")
 
 
-class AuditLogListView(AuditAccessMixin, AuditFilterMixin, ListView):
+class AuditLogListView(AuditAccessMixin, AuditFilterMixin, SortableListMixin, ListView):
     model = AuditLog
+    sort_fields = {
+        "when": "created_at",
+        "actor": "actor_label",
+        "action": "action",
+        "resource": ["resource_label", "resource_type"],
+        "source": "source",
+        "ip": "ip_address",
+    }
     template_name = "audit/list.html"
     context_object_name = "entries"
     paginate_by = 50

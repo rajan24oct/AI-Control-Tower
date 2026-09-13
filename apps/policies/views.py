@@ -27,13 +27,28 @@ class PolicyListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "What the organization permits, gates and forbids",
     }
     search_fields = ["name", "description", "reference"]
+    sort_fields = {
+        "policy": "name",
+        "type": "policy_type",
+        "effect": "effect",
+        "severity": ("severity", RiskLevel.values),
+        "priority": "priority",
+        "open": "violation_count",
+        "status": "status",
+    }
     filter_fields = {"type": "policy_type", "effect": "effect", "status": "status"}
 
     def get_base_queryset(self):
-        return super().get_base_queryset().annotate(
-            violation_count=Count(
-                "violations", filter=Q(violations__acknowledged_at__isnull=True)
+        return (
+            super()
+            .get_base_queryset()
+            .annotate(
+                violation_count=Count(
+                    "violations", filter=Q(violations__acknowledged_at__isnull=True)
+                )
             )
+            # Meta.ordering does not survive an aggregate, so pages would shuffle.
+            .order_by("priority", "name")
         )
 
     def get_context_data(self, **kwargs):

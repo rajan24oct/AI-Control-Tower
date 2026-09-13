@@ -120,13 +120,17 @@
     </form>
   </div>
 
+  {% include "partials/_pagination.html" with position="top" %}
+
   <div class="table-responsive">
     <table class="table ct-table align-middle">
       <thead>
         <tr>
-          <th>Execution</th><th>Agent</th><th>Application</th><th>Model</th><th>Provider</th>
-          <th>Started</th><th class="text-end">Duration</th><th class="text-end">Tokens</th>
-          <th class="text-end">Cost</th><th>Status</th><th>Approval</th>
+          {% sort_th "Execution" "execution" %}{% sort_th "Agent" "agent" %}{% sort_th "Application" "application" %}
+          {% sort_th "Model" "model" %}{% sort_th "Provider" "provider" %}
+          {% sort_th "Started" "started" first="desc" %}{% sort_th "Duration" "duration" css="text-end" first="desc" %}
+          {% sort_th "Tokens" "tokens" css="text-end" first="desc" %}{% sort_th "Cost" "cost" css="text-end" first="desc" %}
+          {% sort_th "Status" "status" %}{% sort_th "Approval" "approval" %}
         </tr>
       </thead>
       <tbody>

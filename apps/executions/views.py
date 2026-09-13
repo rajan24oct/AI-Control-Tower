@@ -36,6 +36,19 @@ class ExecutionListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Every AI run reported into the Control Tower",
     }
     search_fields = ["external_id", "trace__trace_id", "error_message"]
+    sort_fields = {
+        "execution": "external_id",
+        "agent": "agent__name",
+        "application": "application__name",
+        "model": "model__model_name",
+        "provider": "provider__name",
+        "started": "started_at",
+        "duration": "latency_ms",
+        "tokens": "total_tokens",
+        "cost": "cost",
+        "status": "status",
+        "approval": "approval_status",
+    }
     filter_fields = {
         "status": "status",
         "agent": "agent_id",

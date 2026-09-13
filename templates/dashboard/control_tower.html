@@ -127,7 +127,7 @@
               <div class="row g-2">
                 {% for node in layer.nodes %}
                   <div class="col-12 col-md-6 col-xl-4">
-                    <a class="ct-node ct-node-rich border-risk-{{ node.risk_level }} {% if node.needs_attention %}is-flagged{% endif %}"
+                    <a class="ct-node ct-node-rich {% if node.needs_attention %}is-flagged{% endif %}"
                        href="{{ node.url }}">
                       <div class="d-flex align-items-start justify-content-between gap-2">
                         <div class="flex-grow-1 min-w-0">

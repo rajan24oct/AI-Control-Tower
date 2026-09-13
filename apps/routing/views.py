@@ -23,6 +23,15 @@ class RoutingPolicyListView(OrganizationScopedMixin, ListView):
     }
     search_fields = ["name", "description"]
     filter_fields = {"strategy": "strategy", "model_type": "model_type", "status": "status"}
+    sort_fields = {
+        "policy": "name",
+        "applies": "model_type",
+        "strategy": "strategy",
+        # The chain shown is fallback_depth + 1, so this orders it exactly.
+        "chain": "fallback_depth",
+        "priority": "priority",
+        "status": "status",
+    }
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related("agents", "allowed_providers")
@@ -117,6 +126,14 @@ class RoutingDecisionListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Every plan issued, and what actually served",
     }
     search_fields = ["reason", "selected_model__model_name"]
+    sort_fields = {
+        "when": "created_at",
+        "agent": "agent__name",
+        "strategy": "strategy",
+        "primary": "selected_model__model_name",
+        "served": "served_model__model_name",
+        "outcome": "outcome",
+    }
     filter_fields = {"outcome": "outcome", "strategy": "strategy", "policy": "policy_id"}
 
     def get_queryset(self):

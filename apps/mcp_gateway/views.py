@@ -122,6 +122,17 @@ class MCPServerListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Every MCP server the organization's agents may reach",
     }
     search_fields = ["name", "slug", "description", "publisher", "category", "endpoint"]
+    # Credential status is resolved from the environment at request time, so
+    # it is shown but not offered as a sort key.
+    sort_fields = {
+        "server": "name",
+        "transport": "transport",
+        "tools": "enabled_tools",
+        "access": "access_mode",
+        "health": ("health_status", HealthStatus.values),
+        "approved": "is_approved",
+        "status": "status",
+    }
     filter_fields = {
         "transport": "transport",
         "approved": "is_approved",
@@ -200,6 +211,13 @@ class MCPToolListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Every tool every server offers, and what governance decided about it",
     }
     search_fields = ["name", "title", "description", "server__name"]
+    sort_fields = {
+        "tool": "name",
+        "server": "server__name",
+        "risk": ("risk_level", RiskLevel.values),
+        "status": "status",
+        "seen": "last_seen_at",
+    }
     filter_fields = {"status": "status", "server": "server_id", "risk": "risk_level"}
 
     def get_base_queryset(self):
@@ -238,6 +256,13 @@ class MCPToolCallListView(OrganizationScopedMixin, ListView):
         "page_subtitle": "Every call the gateway brokered, and every one it refused",
     }
     search_fields = ["tool_name", "reason"]
+    sort_fields = {
+        "when": "created_at",
+        "tool": "tool_name",
+        "caller": ["agent__name", "service_account__name"],
+        "status": "status",
+        "latency": "latency_ms",
+    }
     filter_fields = {"status": "status", "server": "server_id", "agent": "agent_id"}
 
     def get_base_queryset(self):

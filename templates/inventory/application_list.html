@@ -51,12 +51,16 @@
     </form>
   </div>
 
+  {% include "partials/_pagination.html" with position="top" %}
+
   <div class="table-responsive">
     <table class="table ct-table align-middle">
       <thead>
         <tr>
-          <th>Application</th><th>Team</th><th>Environment</th><th>Criticality</th>
-          <th>Risk</th><th>Agents</th><th>Business Owner</th><th>Status</th>
+          {% sort_th "Application" "application" %}{% sort_th "Team" "team" %}
+          {% sort_th "Environment" "environment" %}{% sort_th "Criticality" "criticality" first="desc" %}
+          {% sort_th "Risk" "risk" first="desc" %}{% sort_th "Agents" "agents" first="desc" %}
+          {% sort_th "Business Owner" "owner" %}{% sort_th "Status" "status" %}
         </tr>
       </thead>
       <tbody>

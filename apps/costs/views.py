@@ -74,6 +74,16 @@ class BudgetListView(OrganizationScopedMixin, ListView):
     extra_context = {"page_title": "Budgets", "page_subtitle": "Spend limits and threshold alerts"}
     search_fields = ["name"]
     filter_fields = {"scope": "scope", "period": "period", "status": "status"}
+    # Spend and utilisation are computed per budget, not stored, so they are
+    # shown but not offered as sort keys.
+    sort_fields = {
+        "budget": "name",
+        "scope": "scope",
+        "period": "period",
+        "limit": "amount",
+        "owner": ["owner__first_name", "owner__last_name"],
+        "status": "status",
+    }
 
     def get_base_queryset(self):
         return (

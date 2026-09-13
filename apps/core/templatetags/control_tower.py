@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django import template
+from django.utils.html import format_html
 
 from apps.core.constants import HEALTH_STATUS_STYLES, RISK_LEVEL_STYLES
 
@@ -200,3 +201,51 @@ def query_replace(context, **kwargs):
             params[key] = value
     encoded = params.urlencode()
     return f"?{encoded}" if encoded else ""
+
+
+@register.simple_tag
+def page_window(page_obj, on_each_side=2, on_ends=1):
+    """Page numbers around the current page, with the gaps elided.
+
+    For page 7 of 20: 1 … 5 6 7 8 9 … 20. A gap comes back as None, so the
+    template can tell it from a number without comparing translated text.
+    """
+    ellipsis = page_obj.paginator.ELLIPSIS
+    return [
+        None if page == ellipsis else page
+        for page in page_obj.paginator.get_elided_page_range(
+            page_obj.number, on_each_side=on_each_side, on_ends=on_ends
+        )
+    ]
+
+
+@register.simple_tag(takes_context=True)
+def sort_th(context, label, key, css="", first="asc"):
+    """A column header that sorts the whole list, not just the rows on screen.
+
+    Clicking toggles ascending and descending. The first click goes `first`:
+    "desc" suits dates, money and counts, where the largest is what matters.
+    Filters are kept and the page resets -- page 4 of a new order means nothing.
+    """
+    request = context["request"]
+    current = request.GET.get("sort", "")
+    active = current.lstrip("-") == key
+    descending = active and current.startswith("-")
+    if active:
+        target = key if descending else f"-{key}"
+    else:
+        target = f"-{key}" if first == "desc" else key
+
+    params = request.GET.copy()
+    params["sort"] = target
+    params.pop("page", None)
+
+    if active:
+        icon, state = ("bi-caret-down-fill", "descending") if descending else ("bi-caret-up-fill", "ascending")
+    else:
+        icon, state = "bi-chevron-expand", "none"
+    return format_html(
+        '<th class="{}" aria-sort="{}"><a class="ct-sort{}" href="?{}">{}'
+        '<i class="bi {}" aria-hidden="true"></i></a></th>',
+        css, state, " is-active" if active else "", params.urlencode(), label, icon,
+    )

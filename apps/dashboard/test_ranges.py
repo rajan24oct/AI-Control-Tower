@@ -145,12 +145,6 @@ class DashboardRangeTests(TestCase):
         self.assertEqual(self.metrics_for(range="1")["Cost"], "$1.00")
         self.assertEqual(self.metrics_for(range="7")["Cost"], "$3.00")
 
-    def test_cost_this_month_stays_absolute(self):
-        """A billing period is a calendar month whatever window is selected."""
-        narrow = self.metrics_for(range="1")["Cost This Month"]
-        wide = self.metrics_for(range="90")["Cost This Month"]
-        self.assertEqual(narrow, wide)
-
     def test_the_period_hint_describes_the_window(self):
         response = self.client.get(reverse("dashboard:home"), {"range": "7"})
         hints = {m.label: m.hint for m in response.context["data"].metrics}

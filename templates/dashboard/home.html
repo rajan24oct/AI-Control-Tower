@@ -56,12 +56,11 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-4">
+  <div class="ct-metric-grid mb-4">
     {% for metric in data.metrics %}
-      <div class="col-4 col-md-3 col-xl-2">
-        {% if metric.url and metric.available %}<a href="{{ metric.url }}" class="text-decoration-none text-reset">{% endif %}
-        <div class="ct-metric">
-          <div class="d-flex justify-content-between align-items-start">
+      {% if metric.url and metric.available %}<a href="{{ metric.url }}" class="text-decoration-none text-reset">{% else %}<div>{% endif %}
+        <div class="ct-metric ct-metric-compact">
+          <div class="d-flex justify-content-between align-items-start gap-1">
             <span class="ct-metric-label">{{ metric.label }}</span>
             <i class="bi {{ metric.icon }} ct-metric-icon text-{{ metric.tone }}"></i>
           </div>
@@ -70,8 +69,7 @@
           </div>
           {% if metric.hint %}<div class="ct-metric-hint">{{ metric.hint }}</div>{% endif %}
         </div>
-        {% if metric.url and metric.available %}</a>{% endif %}
-      </div>
+      {% if metric.url and metric.available %}</a>{% else %}</div>{% endif %}
     {% endfor %}
   </div>
 

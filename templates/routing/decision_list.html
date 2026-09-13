@@ -26,11 +26,13 @@
   </div>
 
   <div class="ct-card mb-3">
+    {% include "partials/_pagination.html" with position="top" %}
     <div class="table-responsive">
       <table class="table ct-table mb-0">
         <thead>
-          <tr><th>When</th><th>Agent</th><th>Strategy</th><th>Primary</th><th>Fallbacks</th>
-              <th>Served</th><th>Outcome</th></tr>
+          <tr>{% sort_th "When" "when" first="desc" %}{% sort_th "Agent" "agent" %}{% sort_th "Strategy" "strategy" %}
+              {% sort_th "Primary" "primary" %}<th>Fallbacks</th>{% sort_th "Served" "served" %}
+              {% sort_th "Outcome" "outcome" %}</tr>
         </thead>
         <tbody>
           {% for decision in decisions %}

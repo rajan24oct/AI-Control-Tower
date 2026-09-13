@@ -50,6 +50,8 @@
     </form>
   </div>
 
+  {% include "partials/_pagination.html" with position="top" %}
+
   <div class="ct-card-body py-0">
     {% for notification in notifications %}
       <div class="ct-notification {% if not notification.is_read %}is-unread{% endif %}" data-ajax-row>

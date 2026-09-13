@@ -1,27 +1,47 @@
 {% load control_tower %}
+{% comment %}
+  Shown above and below every paginated list. Include it with position="top"
+  for the copy above the table; the copy below is the default.
+{% endcomment %}
 {% if is_paginated %}
-  <nav class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+  <nav class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 {% if position == 'top' %}border-bottom{% else %}border-top{% endif %}"
+       aria-label="{% if position == 'top' %}Pages, above the list{% else %}Pages{% endif %}">
     <span class="small text-muted">
-      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} &middot;
-      {{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}
+      Showing {{ page_obj.start_index }}&ndash;{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+      record{{ page_obj.paginator.count|pluralize }}
+      &middot; page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
     </span>
-    <ul class="pagination pagination-sm mb-0">
+    <ul class="pagination pagination-sm flex-wrap mb-0">
       {% if page_obj.has_previous %}
         <li class="page-item">
-          <a class="page-link" data-ajax-link="#results"
-             href="{% query_replace page=page_obj.previous_page_number %}">Previous</a>
+          <a class="page-link" data-ajax-link="#results" aria-label="Previous page"
+             href="{% query_replace page=page_obj.previous_page_number %}">&lsaquo; Previous</a>
         </li>
       {% else %}
-        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        <li class="page-item disabled"><span class="page-link">&lsaquo; Previous</span></li>
       {% endif %}
+
+      {% page_window page_obj as pages %}
+      {% for page in pages %}
+        {% if page is None %}
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        {% elif page == page_obj.number %}
+          <li class="page-item active" aria-current="page"><span class="page-link">{{ page }}</span></li>
+        {% else %}
+          <li class="page-item">
+            <a class="page-link" data-ajax-link="#results" aria-label="Page {{ page }}"
+               href="{% query_replace page=page %}">{{ page }}</a>
+          </li>
+        {% endif %}
+      {% endfor %}
 
       {% if page_obj.has_next %}
         <li class="page-item">
-          <a class="page-link" data-ajax-link="#results"
-             href="{% query_replace page=page_obj.next_page_number %}">Next</a>
+          <a class="page-link" data-ajax-link="#results" aria-label="Next page"
+             href="{% query_replace page=page_obj.next_page_number %}">Next &rsaquo;</a>
         </li>
       {% else %}
-        <li class="page-item disabled"><span class="page-link">Next</span></li>
+        <li class="page-item disabled"><span class="page-link">Next &rsaquo;</span></li>
       {% endif %}
     </ul>
   </nav>

@@ -41,10 +41,11 @@
   {% endif %}
 
   <div class="ct-card mb-3">
+    {% include "partials/_pagination.html" with position="top" %}
     <div class="table-responsive">
       <table class="table ct-table mb-0">
         <thead>
-          <tr><th>When</th><th>Tool</th><th>Caller</th><th>Status</th><th class="text-end">Latency</th><th>Detail</th></tr>
+          <tr>{% sort_th "When" "when" first="desc" %}{% sort_th "Tool" "tool" %}{% sort_th "Caller" "caller" %}{% sort_th "Status" "status" %}{% sort_th "Latency" "latency" css="text-end" first="desc" %}<th>Detail</th></tr>
         </thead>
         <tbody>
           {% for call in calls %}

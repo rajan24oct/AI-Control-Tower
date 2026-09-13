@@ -55,10 +55,12 @@
     </form>
   </div>
 
+  {% include "partials/_pagination.html" with position="top" %}
+
   <div class="table-responsive">
     <table class="table ct-table align-middle">
       <thead>
-        <tr><th>Tool</th><th>Server</th><th>Risk</th><th>Status</th><th>Last seen</th><th class="text-end">Review</th></tr>
+        <tr>{% sort_th "Tool" "tool" %}{% sort_th "Server" "server" %}{% sort_th "Risk" "risk" first="desc" %}{% sort_th "Status" "status" %}{% sort_th "Last seen" "seen" first="desc" %}<th class="text-end">Review</th></tr>
       </thead>
       <tbody>
         {% for tool in tools %}

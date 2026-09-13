@@ -38,13 +38,15 @@
     <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
   </div>
 
+  {% include "partials/_pagination.html" with position="top" %}
+
   <div class="table-responsive">
     <table class="table ct-table align-middle">
       <thead>
         <tr>
-          <th>Budget</th><th>Scope</th><th>Period</th>
-          <th class="text-end">Limit</th><th class="text-end">Spend</th>
-          <th style="min-width:180px">Utilisation</th><th>Owner</th><th>Status</th>
+          {% sort_th "Budget" "budget" %}{% sort_th "Scope" "scope" %}{% sort_th "Period" "period" %}
+          {% sort_th "Limit" "limit" css="text-end" first="desc" %}<th class="text-end">Spend</th>
+          <th style="min-width:180px">Utilisation</th>{% sort_th "Owner" "owner" %}{% sort_th "Status" "status" %}
         </tr>
       </thead>
       <tbody>

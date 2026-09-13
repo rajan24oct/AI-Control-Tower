@@ -29,6 +29,15 @@ class ApprovalCentreView(OrganizationScopedMixin, ListView):
         "page_subtitle": "AI actions waiting on a human decision",
     }
     search_fields = ["request_id", "requested_action", "reason"]
+    sort_fields = {
+        "request": "request_id",
+        "action": "requested_action",
+        "agent": "agent__name",
+        "application": "application__name",
+        "risk": ("risk_level", RiskLevel.values),
+        "requested": "requested_at",
+        "status": "status",
+    }
     filter_fields = {"status": "status", "risk": "risk_level", "agent": "agent_id"}
 
     def get_base_queryset(self):

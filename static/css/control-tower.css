@@ -30,7 +30,7 @@
   /* Table rows. The stripe is a hair of tint -- enough to track a long row
      across the page, not enough to read as a highlight. Hover is deliberately
      several steps stronger so the row under the cursor is unmistakable. */
-  --ct-row-stripe: #f7f9f8;
+  --ct-row-stripe: #f4f6f5;
   --ct-row-hover: #e9f1ed;
 
   /* Semantic */
@@ -284,6 +284,32 @@ a:hover > .ct-metric { border-color: var(--ct-rule-strong); }
 .ct-metric-hint { font-size: .7rem; color: var(--ct-muted); margin-top: .3rem; }
 .ct-metric-icon { font-size: 1rem; opacity: .35; }
 
+/* A dense summary grid: the dashboard's twenty tiles in two rows of ten on a
+   desktop, stepping down to fewer columns as the screen narrows. */
+.ct-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+}
+.ct-metric-grid > * { display: block; min-width: 0; }
+@media (min-width: 576px) { .ct-metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 768px) { .ct-metric-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .ct-metric-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
+
+.ct-metric-compact { padding: .6rem .65rem; }
+.ct-metric-compact .ct-metric-label { font-size: .55rem; letter-spacing: .08em; line-height: 1.3; }
+.ct-metric-compact .ct-metric-icon { font-size: .8rem; }
+.ct-metric-compact .ct-metric-value {
+  margin-top: .3rem;
+  font-size: 1.15rem;
+  /* A long number wraps inside its tile rather than spilling out of it. */
+  overflow-wrap: anywhere;
+}
+.ct-metric-compact .ct-metric-hint { margin-top: .15rem; font-size: .6rem; line-height: 1.3; }
+@media (min-width: 1400px) {
+  .ct-metric-compact .ct-metric-value { font-size: 1.3rem; }
+}
+
 /* -- Badges --------------------------------------------------------------- */
 
 .badge-soft {
@@ -362,18 +388,40 @@ a:hover > .ct-metric { border-color: var(--ct-rule-strong); }
   background: var(--ct-surface);
 }
 
+/* Sortable column headers: the header text itself is the control. */
+.ct-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ct-sort:hover,
+.ct-sort:focus-visible { color: var(--ct-ink); text-decoration: none; }
+.ct-sort i { font-size: .7rem; opacity: .35; }
+.ct-sort.is-active { color: var(--ct-ink); }
+.ct-sort.is-active i { opacity: 1; color: var(--ct-green-700); }
+
 .ct-table tbody td { vertical-align: middle; padding: .7rem .75rem; border-color: var(--ct-rule); }
 .ct-table tbody tr:last-child td { border-bottom: none; }
 
-.ct-table tbody tr:nth-child(even) { background: var(--ct-row-stripe); }
+/* Bootstrap gives every cell its own background, which hides anything painted
+   on the row. Keep the cells clear so the row's stripe and hover show through. */
+.ct-table { --bs-table-bg: transparent; }
 
-/* Must follow the stripe: same specificity, so source order decides which of
-   the two paints a hovered even-numbered row. */
-.ct-table tbody tr:hover { background: var(--ct-row-hover); }
+/* Odd rows carry the tint. A live-monitor detail row belongs to the row above
+   it, so it is left out of the count rather than shifting every stripe. */
+.ct-table tbody tr:nth-child(odd of :not(.ct-live-detail)) { background: var(--ct-row-stripe); }
+
+/* Must follow the stripe at the same specificity, so source order decides
+   which of the two paints a hovered odd row. */
+.ct-table tbody tr:not(.ct-live-detail):hover { background: var(--ct-row-hover); }
 
 /* An empty state is one full-width cell pretending to be a row -- striping and
-   hovering it makes the table look like it holds a record it does not. */
-.ct-table tbody tr:has(> td[colspan]) { background: transparent; }
+   hovering it makes the table look like it holds a record it does not. One
+   notch more specific than the two rules above, so it wins over both. */
+.ct-table tbody tr:has(> td[colspan]):not(.ct-live-detail) { background: transparent; }
 
 .ct-empty { text-align: center; padding: 3rem 1rem; color: var(--ct-muted); }
 .ct-empty i { font-size: 1.6rem; opacity: .3; display: block; margin-bottom: .6rem; }
@@ -451,7 +499,23 @@ a:hover > .ct-metric { border-color: var(--ct-rule-strong); }
 .ct-node.border-risk-low { border-left-color: var(--ct-celadon); }
 
 .ct-node-rich { display: flex; flex-direction: column; gap: .45rem; }
-.ct-node-rich.is-flagged { box-shadow: inset 2px 0 0 rgba(163, 43, 38, .25); }
+
+/* Control Tower landscape cards: an even border all round, with no coloured
+   edge -- risk is carried by the badge on the card. They lift a little on
+   hover to read as the links they are. */
+.ct-node.ct-node-rich {
+  border: 1px solid var(--ct-rule);
+  border-radius: 6px;
+  padding: .85rem 1rem .8rem;
+  box-shadow: 0 1px 2px rgba(16, 24, 20, .04);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.ct-node.ct-node-rich:hover {
+  border-color: var(--ct-celadon);
+  box-shadow: 0 6px 18px rgba(0, 63, 45, .08);
+  transform: translateY(-1px);
+}
+.ct-node-rich .ct-node-stats { padding-top: .5rem; border-top: 1px solid var(--ct-rule); }
 .min-w-0 { min-width: 0; }
 
 .ct-health-dot {
@@ -1020,15 +1084,192 @@ mark.ct-pii {
 
 /* -- Login ---------------------------------------------------------------- */
 
+/* A split screen: the form on a light panel, the photograph beside it. Below
+   the large breakpoint the photograph steps aside and the form has the whole
+   screen, because a phone user came to sign in, not to look at a tower. */
 .ct-login {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--ct-green-900);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--ct-surface);
 }
 
-.ct-login-card { width: 100%; max-width: 380px; }
+@media (min-width: 992px) {
+  .ct-login { grid-template-columns: minmax(420px, 5fr) 7fr; }
+}
+
+.ct-login-panel {
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  background: var(--ct-surface);
+}
+
+.ct-login-inner {
+  width: 100%;
+  max-width: 400px;
+  min-height: calc(100vh - 5rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-login-brand { display: flex; flex-direction: column; }
+.ct-login-brand-name {
+  font-family: var(--ct-serif);
+  font-weight: 600;
+  font-size: 1.15rem;
+  line-height: 1.15;
+  color: var(--ct-green-900);
+}
+.ct-login-brand-sub {
+  margin-top: .2rem;
+  font-size: .62rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ct-muted);
+}
+
+/* Auto margins centre the form in whatever height the panel has. */
+.ct-login-form { margin: auto 0; padding: 3rem 0; }
+
+.ct-login-title {
+  margin: 0 0 .4rem;
+  font-family: var(--ct-serif);
+  font-weight: 600;
+  font-size: 1.9rem;
+  color: var(--ct-ink);
+}
+.ct-login-lead { margin-bottom: 1.75rem; font-size: .92rem; color: var(--ct-muted); }
+
+.ct-login .form-label { margin-bottom: .35rem; font-size: .78rem; font-weight: 600; color: var(--ct-body); }
+.ct-login .form-control {
+  padding: .65rem .8rem;
+  font-size: .92rem;
+  border-color: var(--ct-rule-strong);
+  border-radius: var(--ct-radius);
+}
+.ct-login .form-control:focus {
+  border-color: var(--ct-green-700);
+  box-shadow: 0 0 0 .2rem rgba(0, 63, 45, .12);
+}
+
+.ct-login-password { position: relative; }
+.ct-login-password .form-control { padding-right: 2.75rem; }
+.ct-login-reveal {
+  position: absolute;
+  top: 50%;
+  right: .4rem;
+  transform: translateY(-50%);
+  padding: .3rem .45rem;
+  border: 0;
+  background: none;
+  line-height: 1;
+  color: var(--ct-muted);
+}
+.ct-login-reveal:hover,
+.ct-login-reveal:focus-visible { color: var(--ct-green-900); }
+
+.ct-login-submit {
+  width: 100%;
+  padding: .7rem 1rem;
+  font-size: .92rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ct-green-900);
+  border: 1px solid var(--ct-green-900);
+  border-radius: var(--ct-radius);
+}
+.ct-login-submit:hover,
+.ct-login-submit:focus-visible { color: #fff; background: var(--ct-green-700); border-color: var(--ct-green-700); }
+
+.ct-login-help { margin: 1.25rem 0 0; font-size: .8rem; color: var(--ct-muted); }
+
+.ct-login-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .35rem 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ct-rule);
+  font-size: .72rem;
+  color: var(--ct-muted);
+}
+.ct-login-foot i { color: var(--ct-green-700); }
+
+.ct-login-visual {
+  position: relative;
+  display: none;
+  overflow: hidden;
+  /* Stands in for the photograph if it cannot load, so the panel still reads
+     as deliberate rather than broken. */
+  background: linear-gradient(160deg, var(--ct-green-900) 0%, var(--ct-midnight) 100%);
+}
+@media (min-width: 992px) {
+  .ct-login-visual { display: block; }
+}
+
+.ct-login-visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 25%;
+}
+
+/* A brand tint, heaviest where the words sit, so they stay legible whatever
+   part of the photograph ends up behind them. */
+.ct-login-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 63, 45, .10) 0%,
+    rgba(0, 63, 45, .30) 45%,
+    rgba(2, 24, 17, .90) 100%
+  );
+}
+
+.ct-login-visual-copy {
+  position: absolute;
+  left: 3.5rem;
+  right: 3.5rem;
+  bottom: 4.5rem;
+  z-index: 1;
+  max-width: 34rem;
+  color: #fff;
+}
+.ct-login-kicker {
+  margin-bottom: .75rem;
+  font-size: .66rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ct-accent);
+}
+.ct-login-visual-copy h2 {
+  margin: 0 0 1.25rem;
+  font-family: var(--ct-serif);
+  font-weight: 600;
+  font-size: 2.1rem;
+  line-height: 1.2;
+  color: #fff;
+}
+.ct-login-points { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.ct-login-points li { display: flex; gap: .6rem; font-size: .9rem; color: rgba(255, 255, 255, .85); }
+.ct-login-points i { color: var(--ct-accent); }
+
+.ct-login-credit {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1rem;
+  z-index: 1;
+  margin: 0;
+  font-size: .68rem;
+  color: rgba(255, 255, 255, .6);
+}
+.ct-login-credit a { color: rgba(255, 255, 255, .85); }
 
 .pagination { --bs-pagination-border-radius: var(--ct-radius); }
 .page-link { color: var(--ct-green-700); font-size: .78rem; }

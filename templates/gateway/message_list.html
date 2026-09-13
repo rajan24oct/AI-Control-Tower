@@ -28,10 +28,11 @@
   </div>
 
   <div class="ct-card mb-3">
+    {% include "partials/_pagination.html" with position="top" %}
     <div class="table-responsive">
       <table class="table ct-table mb-0">
         <thead>
-          <tr><th>When</th><th>From</th><th>To</th><th>Subject</th><th>Status</th></tr>
+          <tr>{% sort_th "When" "when" first="desc" %}{% sort_th "From" "from" %}{% sort_th "To" "to" %}{% sort_th "Subject" "subject" %}{% sort_th "Status" "status" %}</tr>
         </thead>
         <tbody>
           {% for message in messages_page %}

@@ -45,6 +45,16 @@ class ApplicationListView(OrganizationScopedMixin, ListView):
     paginate_by = 25
     ordering = ["name"]
     search_fields = ["name", "description", "department", "business_purpose"]
+    sort_fields = {
+        "application": "name",
+        "team": "team__name",
+        "environment": "environment",
+        "criticality": ("criticality", Criticality.values),
+        "risk": ("risk_level", RiskLevel.values),
+        "agents": "agent_total",
+        "owner": ["business_owner__first_name", "business_owner__last_name"],
+        "status": "status",
+    }
     filter_fields = {
         "environment": "environment",
         "criticality": "criticality",
@@ -58,6 +68,8 @@ class ApplicationListView(OrganizationScopedMixin, ListView):
             .get_base_queryset()
             .select_related("team", "business_owner", "technical_owner")
             .annotate(agent_total=Count("agents", distinct=True))
+            # Meta.ordering does not survive an aggregate, so pages would shuffle.
+            .order_by("name")
         )
 
     def get_context_data(self, **kwargs):
@@ -90,6 +102,19 @@ class AgentListView(OrganizationScopedMixin, ListView):
     paginate_by = 25
     ordering = ["name"]
     search_fields = ["name", "agent_id", "description", "business_purpose"]
+    sort_fields = {
+        "agent": "name",
+        "framework": "framework",
+        "model": "primary_model__model_name",
+        "provider": "provider__name",
+        "environment": "environment",
+        "risk": ("risk_level", RiskLevel.values),
+        "autonomy": "autonomy_level",
+        # The column shows "required" when the flag is set *or* autonomy forces
+        # it; flag then autonomy keeps every "required" row on the same side.
+        "approval": ["requires_human_approval", "autonomy_level"],
+        "status": "status",
+    }
     filter_fields = {
         "framework": "framework",
         "environment": "environment",
@@ -137,6 +162,17 @@ class ModelListView(OrganizationScopedMixin, ListView):
     paginate_by = 25
     ordering = ["provider__name", "model_name"]
     search_fields = ["model_name", "model_id", "model_family"]
+    sort_fields = {
+        "model": "model_name",
+        "provider": "provider__name",
+        "type": "model_type",
+        "context": "context_window",
+        "input": "input_cost_per_1k",
+        "output": "output_cost_per_1k",
+        "approved": "approved_for_use",
+        "risk": ("risk_classification", RiskLevel.values),
+        "status": "status",
+    }
     filter_fields = {
         "provider": "provider_id",
         "type": "model_type",
@@ -205,6 +241,18 @@ class ProviderListView(OrganizationScopedMixin, ListView):
     paginate_by = 25
     ordering = ["name"]
     search_fields = ["name", "description", "endpoint", "adapter_key"]
+    # Credential status is resolved from the environment at request time, so
+    # it is shown but not offered as a sort key.
+    sort_fields = {
+        "provider": "name",
+        "type": "provider_type",
+        "adapter": "adapter_key",
+        "region": "region",
+        "models": "model_total",
+        "health": ("health_status", HealthStatus.values),
+        "approved": "is_approved",
+        "status": "status",
+    }
     filter_fields = {
         "type": "provider_type",
         "health": "health_status",
@@ -212,7 +260,13 @@ class ProviderListView(OrganizationScopedMixin, ListView):
     }
 
     def get_base_queryset(self):
-        return super().get_base_queryset().annotate(model_total=Count("models", distinct=True))
+        return (
+            super()
+            .get_base_queryset()
+            .annotate(model_total=Count("models", distinct=True))
+            # Meta.ordering does not survive an aggregate, so pages would shuffle.
+            .order_by("name")
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

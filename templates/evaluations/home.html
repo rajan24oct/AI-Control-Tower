@@ -75,11 +75,13 @@
   </div>
 
   <div class="ct-card mb-3">
+    {% include "partials/_pagination.html" with position="top" %}
     <div class="table-responsive">
       <table class="table ct-table mb-0">
         <thead>
-          <tr><th>Suite</th><th>Target</th><th class="text-end">Cases</th>
-              <th class="text-end">Pass bar</th><th>Blocking</th><th>Status</th></tr>
+          <tr>{% sort_th "Suite" "suite" %}{% sort_th "Target" "target" %}
+              {% sort_th "Cases" "cases" css="text-end" first="desc" %}{% sort_th "Pass bar" "pass_bar" css="text-end" first="desc" %}
+              <th>Blocking</th>{% sort_th "Status" "status" %}</tr>
         </thead>
         <tbody>
           {% for suite in suites %}
