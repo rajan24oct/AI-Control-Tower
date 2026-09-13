@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load control_tower humanize %}
 
 {% block title %}Dashboard - AI Control Tower{% endblock %}
@@ -58,7 +58,7 @@
 
   <div class="row g-3 mb-4">
     {% for metric in data.metrics %}
-      <div class="col-6 col-md-4 col-xl-3">
+      <div class="col-4 col-md-3 col-xl-2">
         {% if metric.url and metric.available %}<a href="{{ metric.url }}" class="text-decoration-none text-reset">{% endif %}
         <div class="ct-metric">
           <div class="d-flex justify-content-between align-items-start">
@@ -123,7 +123,15 @@
     </div>
     <div class="col-12 col-lg-6">
       <div class="ct-card h-100">
-        <div class="ct-card-header">Latency &amp; Error Trend</div>
+        {% comment %}
+          Latency only. Failures used to share this chart on a second y-axis,
+          which invents a relationship between two unrelated scales; they are
+          already the red segments in Execution Volume.
+        {% endcomment %}
+        <div class="ct-card-header">
+          <span>Average Latency</span>
+          <span class="small text-muted fw-normal">Failures are shown in Execution Volume</span>
+        </div>
         <div class="ct-card-body"><div style="height:230px"><canvas id="chart-latency"></canvas></div></div>
       </div>
     </div>
@@ -169,38 +177,125 @@
     </div>
   </div>
 
-  {% if data.modules %}
-    <div class="ct-card mt-3">
-      <div class="ct-card-header">
-        <span><i class="bi bi-boxes me-1"></i> Platform Modules</span>
-        <span class="small text-muted">Everything above is computed from live inventory and telemetry</span>
-      </div>
-      <div class="ct-card-body">
-        <div class="row g-2">
-          {% for module in data.modules %}
-            <div class="col-12 col-md-4">
-              {% if module.url %}<a href="{{ module.url }}" class="text-decoration-none text-reset">{% endif %}
-              <div class="ct-module is-{{ module.state }}">
-                <div class="d-flex align-items-center gap-2">
-                  {% if module.state == "live" %}
-                    <i class="bi bi-check-circle-fill text-success"></i>
-                  {% else %}
-                    <i class="bi bi-clock text-muted"></i>
-                  {% endif %}
-                  <span class="ct-module-name">{{ module.name }}</span>
-                  <span class="badge badge-soft ms-auto {% if module.state == 'live' %}text-bg-success{% else %}text-bg-light text-dark{% endif %}">
-                    {{ module.state|title }}
-                  </span>
-                </div>
-                <p class="ct-module-detail">{{ module.description }}</p>
-              </div>
-              {% if module.url %}</a>{% endif %}
+    {% comment %}
+      One chart per module, each answering the question that module exists to
+      answer. Every chart has a one-line summary above it and a table twin
+      below it, so no value is readable only through colour or a tooltip.
+    {% endcomment %}
+    {% with verdicts=data.charts.policy_verdicts routing=data.charts.routing_outcomes coverage=data.charts.gateway_coverage evidence=data.charts.evaluation_evidence %}
+    <div class="row g-3 mt-0">
+      <div class="col-12 col-lg-6">
+        <div class="ct-card h-100">
+          <div class="ct-card-header">
+            <span><i class="bi bi-file-earmark-ruled me-1"></i> Policy Verdicts</span>
+            <a href="{% url 'policies:list' %}" class="small text-decoration-none">Policy engine</a>
+          </div>
+          <div class="ct-card-body">
+            <p class="ct-chart-summary">
+              <strong>{{ verdicts.totals.denied|intcomma }}</strong> denied,
+              <strong>{{ verdicts.totals.approval|intcomma }}</strong> sent for approval,
+              {{ verdicts.totals.warned|intcomma }} warned only
+              <span class="ct-chart-note">&middot; {{ date_range.describe }}</span>
+            </p>
+            <div style="height:220px">
+              <canvas id="chart-policy-verdicts" role="img" aria-label="Policy verdicts per day"></canvas>
             </div>
-          {% endfor %}
+            <details class="ct-chart-table" data-table-for="policy_verdicts">
+              <summary>View as table</summary>
+              <div class="ct-chart-table-body"></div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <div class="ct-card h-100">
+          <div class="ct-card-header">
+            <span><i class="bi bi-signpost-split me-1"></i> Routing Outcomes</span>
+            <a href="{% url 'routing:list' %}" class="small text-decoration-none">Model routing</a>
+          </div>
+          <div class="ct-card-body">
+            <p class="ct-chart-summary">
+              <strong>{{ routing.fallback_rate|percentage }}</strong> of served requests needed a fallback,
+              <strong>{{ routing.totals.failed|intcomma }}</strong> found no working model
+              <span class="ct-chart-note">&middot; {{ date_range.describe }}</span>
+            </p>
+            <div style="height:220px">
+              <canvas id="chart-routing-outcomes" role="img" aria-label="Routing outcomes per day"></canvas>
+            </div>
+            <details class="ct-chart-table" data-table-for="routing_outcomes">
+              <summary>View as table</summary>
+              <div class="ct-chart-table-body"></div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <div class="ct-card h-100">
+          <div class="ct-card-header">
+            <span><i class="bi bi-router me-1"></i> Gateway Coverage</span>
+            <a href="{% url 'gateway:overview' %}" class="small text-decoration-none">AI gateway</a>
+          </div>
+          <div class="ct-card-body">
+            <p class="ct-chart-summary">
+              <strong>{{ coverage.gateway_share|percentage }}</strong> of executions ran through the gateway,
+              where policy and budget are enforced; the rest were reported after the fact
+              <span class="ct-chart-note">&middot; {{ date_range.describe }}</span>
+            </p>
+            <div style="height:220px">
+              <canvas id="chart-gateway-coverage" role="img" aria-label="Gateway versus reported executions per day"></canvas>
+            </div>
+            <details class="ct-chart-table" data-table-for="gateway_coverage">
+              <summary>View as table</summary>
+              <div class="ct-chart-table-body"></div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <div class="ct-card h-100">
+          <div class="ct-card-header">
+            <span><i class="bi bi-clipboard-check me-1"></i> Evaluation Evidence</span>
+            <a href="{% url 'evaluations:home' %}" class="small text-decoration-none">Evaluation centre</a>
+          </div>
+          <div class="ct-card-body">
+            <p class="ct-chart-summary">
+              {% if evidence.labels %}
+                Latest run for each evaluated model, worst first.
+              {% else %}
+                No model has a completed evaluation yet.
+              {% endif %}
+              {% if evidence.unevaluated_approved %}
+                <strong class="text-danger">
+                  <i class="bi bi-exclamation-triangle"></i>
+                  {{ evidence.unevaluated_approved }} approved model{{ evidence.unevaluated_approved|pluralize }}
+                  never evaluated.
+                </strong>
+              {% endif %}
+              <span class="ct-chart-note">&middot; current evidence, not affected by the date range</span>
+            </p>
+            <div style="height:180px">
+              <canvas id="chart-evaluation-evidence" role="img" aria-label="Latest evaluation score per model"></canvas>
+            </div>
+            {% if evidence.labels %}
+              <div class="ct-chart-key" aria-hidden="true">
+                <span><i data-status="good"></i> Passed</span>
+                <span><i data-status="warning"></i> Below the pass bar</span>
+                <span><i data-status="critical"></i> Blocked by a safety or red-team case</span>
+                <span><i class="is-tick"></i> Suite's pass bar</span>
+              </div>
+            {% endif %}
+            <details class="ct-chart-table" data-table-for="evaluation_evidence">
+              <summary>View as table</summary>
+              <div class="ct-chart-table-body"></div>
+            </details>
+          </div>
         </div>
       </div>
     </div>
-  {% endif %}
+    {% endwith %}
 
   {# Inside the AJAX region so a filter change swaps the data with the markup. #}
   <script id="charts-data" type="application/json">{{ charts_json|safe }}</script>
@@ -216,20 +311,28 @@ window.renderDashboardCharts = function () {
   if (!el) return;
   const charts = JSON.parse(el.textContent);
   const palette = window.ctPalette.series;
+  const status = window.ctPalette.status;
+  const SURFACE = '#ffffff';
+  const INK = '#1a1f1d';
+  const BODY = '#3d4543';
 
-  function empty(canvasId) {
+  const esc = value => String(value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+
+  function empty(canvasId, message) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     canvas.replaceWith(Object.assign(document.createElement('p'), {
       className: 'text-muted small text-center mb-0 py-5',
-      textContent: 'No data yet.'
+      textContent: message || 'No data yet.'
     }));
   }
 
-  function build(canvasId, config, hasData) {
+  function build(canvasId, config, hasData, emptyMessage) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    if (!hasData) return empty(canvasId);
+    if (!hasData) return empty(canvasId, emptyMessage);
     // Chart.js refuses to reuse a canvas that still owns an instance.
     const existing = Chart.getChart(canvas);
     if (existing) existing.destroy();
@@ -250,6 +353,69 @@ window.renderDashboardCharts = function () {
       plugins: { legend: { position: position || 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
     };
   }
+
+  // -- Table twins --------------------------------------------------------
+  // Every module chart has one: the same values, readable without colour,
+  // without hovering, and by a screen reader.
+
+  function tableView(key, headers, rows, note) {
+    const box = document.querySelector('[data-table-for="' + key + '"] .ct-chart-table-body');
+    if (!box) return;
+    if (!rows.length) {
+      box.innerHTML = '<p class="small text-muted mb-0 px-1">Nothing recorded.</p>';
+      return;
+    }
+    const head = headers.map((h, i) => '<th' + (i ? ' class="text-end"' : '') + '>' + esc(h) + '</th>').join('');
+    const body = rows.map(row => '<tr>' + row.map((value, i) =>
+      '<td class="small' + (i ? ' text-end' : '') + '">' + esc(value) + '</td>').join('') + '</tr>').join('');
+    box.innerHTML = '<table class="table ct-table mb-0"><thead><tr>' + head + '</tr></thead><tbody>' +
+      body + '</tbody></table>' + (note ? '<p class="small text-muted mt-1 mb-0">' + esc(note) + '</p>' : '');
+  }
+
+  function dailyTable(key, data, series) {
+    const rows = [];
+    (data.labels || []).forEach((label, i) => {
+      const values = series.map(s => data[s.key][i]);
+      if (values.some(v => v > 0)) rows.push([label].concat(values));
+    });
+    tableView(key, ['Day'].concat(series.map(s => s.label)), rows,
+      rows.length ? 'Days with no activity are left out.' : '');
+  }
+
+  // Stacked daily columns to the house mark specs: columns capped at 24px, a
+  // 2px surface gap between segments, rounded only at the top of the stack,
+  // and one index-mode tooltip covering the whole day.
+  function stackedDaily(canvasId, data, series, emptyMessage) {
+    const hasData = data.labels && series.some(s => (data[s.key] || []).some(v => v > 0));
+    build(canvasId, {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: series.map((s, i) => ({
+          label: s.label,
+          data: data[s.key],
+          backgroundColor: s.color,
+          maxBarThickness: 24,
+          borderColor: SURFACE,
+          borderWidth: { top: 2 },
+          borderSkipped: 'start',
+          borderRadius: i === series.length - 1 ? { topLeft: 4, topRight: 4 } : 0
+        }))
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+        }
+      }
+    }, hasData, emptyMessage);
+  }
+
+  // -- Existing estate charts -------------------------------------------
 
   // Execution volume: successful vs failed, stacked.
   const volume = charts.execution_volume || {labels: []};
@@ -287,29 +453,21 @@ window.renderDashboardCharts = function () {
     options: { ...baseOptions, scales: { y: { beginAtZero: true } } }
   }, spend.labels.length && spend.cost.some(v => v > 0));
 
+  // One measure, one axis.
   const latency = charts.latency_and_errors || {labels: []};
   build('chart-latency', {
     type: 'line',
     data: {
       labels: latency.labels,
-      datasets: [
-        {
-          label: 'Avg latency (ms)', data: latency.latency, borderColor: window.ctPalette.teal,
-          backgroundColor: window.ctPalette.tealFill, fill: true, tension: .3, yAxisID: 'y'
-        },
-        {
-          label: 'Errors', data: latency.errors, borderColor: window.ctPalette.danger,
-          tension: .3, pointRadius: 2, yAxisID: 'y1'
-        }
-      ]
+      datasets: [{
+        label: 'Average latency', data: latency.latency, borderColor: window.ctPalette.teal,
+        backgroundColor: window.ctPalette.tealFill, fill: true, tension: .3, pointRadius: 2
+      }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-      scales: {
-        y: { beginAtZero: true, position: 'left', title: { display: true, text: 'ms', font: { size: 10 } } },
-        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 } }
-      }
+      ...baseOptions,
+      interaction: { mode: 'index', intersect: false },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => v + ' ms' } } }
     }
   }, latency.labels.length && latency.latency.some(v => v > 0));
 
@@ -345,6 +503,138 @@ window.renderDashboardCharts = function () {
   horizontalBar('chart-cost-application', charts.cost_by_application || {labels: []}, palette[4]);
   horizontalBar('chart-usage-model', charts.usage_by_model || {labels: []}, palette[0]);
   horizontalBar('chart-usage-agent', charts.usage_by_agent || {labels: []}, palette[2]);
+
+  // -- Platform module charts -------------------------------------------
+
+  // Policy engine: enforced verdicts in status colour, "warned only" in slate,
+  // because a warning is recorded but stops nothing. Denied sits on the
+  // baseline, where a segment is easiest to compare day to day.
+  const verdicts = charts.policy_verdicts || {labels: []};
+  const verdictSeries = [
+    { key: 'denied', label: 'Denied', color: status.critical },
+    { key: 'approval', label: 'Sent for approval', color: status.warning },
+    { key: 'warned', label: 'Warned only', color: window.ctPalette.muted }
+  ];
+  stackedDaily('chart-policy-verdicts', verdicts, verdictSeries,
+    'The policy engine blocked or flagged nothing in this period.');
+  dailyTable('policy_verdicts', verdicts, verdictSeries);
+
+  // Model routing: the healthy outcome on the baseline, so "how often did the
+  // first choice work" is the first thing read.
+  const routing = charts.routing_outcomes || {labels: []};
+  const routingSeries = [
+    { key: 'first_choice', label: 'First choice served', color: status.good },
+    { key: 'fallback', label: 'Needed a fallback', color: status.warning },
+    { key: 'failed', label: 'Nothing worked', color: status.critical }
+  ];
+  stackedDaily('chart-routing-outcomes', routing, routingSeries,
+    'No routing decisions were recorded in this period.');
+  dailyTable('routing_outcomes', routing, routingSeries);
+
+  // Gateway: an emphasis chart. Enforced traffic in the brand colour,
+  // reported traffic as context, because the story is the share that is governed.
+  const coverage = charts.gateway_coverage || {labels: []};
+  const coverageSeries = [
+    { key: 'gateway', label: 'Through the gateway', color: window.ctPalette.green },
+    { key: 'reported', label: 'Reported only', color: window.ctPalette.context }
+  ];
+  stackedDaily('chart-gateway-coverage', coverage, coverageSeries,
+    'No executions were recorded in this period.');
+  dailyTable('gateway_coverage', coverage, coverageSeries);
+
+  // Evaluation centre: latest score per model, coloured by verdict, with each
+  // suite's own pass bar drawn as a tick on the bar and the verdict written at
+  // the tip -- so a blocked run can never be read as merely a low score.
+  const evidence = charts.evaluation_evidence || {labels: []};
+  const verdictColour = { passed: status.good, failed: status.warning, blocked: status.critical };
+  const verdictText = i => {
+    const verdict = evidence.verdicts[i];
+    if (verdict === 'blocked') return 'Blocked · ' + String(evidence.blocked_by[i] || '').replace('_', ' ');
+    return verdict === 'passed' ? 'Passed' : 'Below bar';
+  };
+
+  const evidenceMarks = {
+    id: 'evidenceMarks',
+    afterDatasetsDraw(chart, args, options) {
+      const { ctx, scales: { x } } = chart;
+      ctx.save();
+      ctx.font = '500 11px Inter, -apple-system, "Segoe UI", sans-serif';
+      ctx.textBaseline = 'middle';
+      chart.getDatasetMeta(0).data.forEach((bar, i) => {
+        const half = (bar.height || 14) / 2;
+        const tick = x.getPixelForValue(options.thresholds[i]);
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tick, bar.y - half - 3);
+        ctx.lineTo(tick, bar.y + half + 3);
+        ctx.stroke();
+        ctx.fillStyle = BODY;
+        ctx.fillText(options.labels[i], Math.max(bar.x, tick) + 8, bar.y);
+      });
+      ctx.restore();
+    }
+  };
+
+  const evidenceCanvas = document.getElementById('chart-evaluation-evidence');
+  if (evidenceCanvas && (evidence.labels || []).length) {
+    // One row per model; the card grows with the list instead of squeezing it.
+    evidenceCanvas.parentElement.style.height = Math.max(140, evidence.labels.length * 38 + 36) + 'px';
+  }
+
+  build('chart-evaluation-evidence', {
+    type: 'bar',
+    data: {
+      labels: evidence.labels,
+      datasets: [{
+        label: 'Latest score',
+        data: evidence.scores,
+        backgroundColor: (evidence.verdicts || []).map(v => verdictColour[v] || window.ctPalette.muted),
+        maxBarThickness: 18,
+        borderRadius: 4,
+        borderSkipped: 'start'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      layout: { padding: { right: 150 } },
+      plugins: {
+        legend: { display: false },
+        evidenceMarks: {
+          thresholds: evidence.thresholds || [],
+          labels: (evidence.labels || []).map((_, i) => evidence.scores[i].toFixed(1) + '%  ·  ' + verdictText(i))
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const i = ctx.dataIndex;
+              return [
+                evidence.scores[i].toFixed(1) + '% on ' + evidence.suites[i],
+                'Pass bar ' + evidence.thresholds[i] + '%  ·  ' + verdictText(i)
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { min: 0, max: 100, ticks: { stepSize: 25, callback: v => v + '%' } },
+        y: { grid: { display: false } }
+      }
+    },
+    plugins: [evidenceMarks]
+  }, (evidence.labels || []).length, 'No model has a completed evaluation yet.');
+
+  tableView('evaluation_evidence', ['Model', 'Suite', 'Score', 'Pass bar', 'Verdict'],
+    (evidence.labels || []).map((model, i) => [
+      model, evidence.suites[i], evidence.scores[i].toFixed(1) + '%',
+      evidence.thresholds[i] + '%', verdictText(i)
+    ]));
+
+  document.querySelectorAll('.ct-chart-key i[data-status]').forEach(swatch => {
+    swatch.style.background = status[swatch.dataset.status];
+  });
 };
 
 $(function () { window.renderDashboardCharts(); });

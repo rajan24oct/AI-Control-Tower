@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% load control_tower humanize mcp_tags %}
+
+{% block title %}{{ server.name }}{% endblock %}
+
+{% block content %}
+<div id="server-detail" data-ajax-region>
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <a href="{% url 'mcp_gateway:servers' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Server Registry</a>
+    <h2 class="h4 mt-1 mb-1">{{ server.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{{ server.get_transport_display }}</span>
+      <span class="badge badge-soft text-bg-{{ server.health_status|health_style }}">{{ server.get_health_status_display }}</span>
+      {% if server.is_approved %}
+        <span class="badge badge-soft text-bg-success">Approved</span>
+      {% else %}
+        <span class="badge badge-soft text-bg-warning">Not approved</span>
+      {% endif %}
+      <span class="badge badge-soft text-bg-light text-dark">{{ server.get_access_mode_display }}</span>
+      {% if server.circuit_state == "open" %}
+        <span class="badge badge-soft text-bg-danger">Out of rotation</span>
+      {% endif %}
+      <span class="badge badge-soft text-bg-{{ server.status|status_style }}">{{ server.get_status_display }}</span>
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if can_manage and server.is_gateway_reachable %}
+      <form method="post" action="{% url 'mcp_gateway:server_sync' server.pk %}" class="m-0"
+            data-ajax-action data-ajax-refresh="#server-detail">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-arrow-repeat"></i> Sync tools</button>
+      </form>
+      <form method="post" action="{% url 'mcp_gateway:server_health' server.pk %}" class="m-0"
+            data-ajax-action data-ajax-refresh="#server-detail">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-heart-pulse"></i> Health check</button>
+      </form>
+    {% endif %}
+    {% if can_approve %}
+      <form method="post" action="{% url 'mcp_gateway:server_approval' server.pk %}" class="m-0"
+            data-ajax-action data-ajax-refresh="#server-detail">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        {% if server.is_approved %}
+          <input type="hidden" name="decision" value="revoke">
+          <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-shield-x"></i> Revoke approval</button>
+        {% else %}
+          <input type="hidden" name="decision" value="approve">
+          <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-shield-check"></i> Approve</button>
+        {% endif %}
+      </form>
+    {% endif %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:mcp_gateway_mcpserver_change' server.pk %}">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+  </div>
+</div>
+
+{% if not server.is_gateway_reachable %}
+  <div class="alert alert-secondary small py-2">
+    <i class="bi bi-info-circle"></i>
+    Registered for inventory and governance only. The gateway cannot reach
+    {{ server.get_transport_display }} servers{% if server.transport == "stdio" %} &mdash; a stdio server
+    is a process on someone's machine, and the platform does not spawn processes on a web request{% endif %}.
+  </div>
+{% endif %}
+{% if server.description %}<p class="small text-muted">{{ server.description }}</p>{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Connection</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Tool prefix</dt><dd><code>{{ server.slug }}__</code></dd></div>
+          <div class="col-6"><dt>Transport</dt><dd>{{ server.get_transport_display }}</dd></div>
+          {% if server.endpoint %}
+            <div class="col-12"><dt>Endpoint</dt><dd class="text-break">{{ server.endpoint }}</dd></div>
+          {% endif %}
+          {% if server.command %}
+            <div class="col-12"><dt>Command</dt><dd><code class="text-break">{{ server.command }}</code></dd></div>
+          {% endif %}
+          <div class="col-6"><dt>Auth</dt><dd>{{ server.get_auth_method_display }}</dd></div>
+          <div class="col-6"><dt>Protocol</dt><dd>{{ server.protocol_version|default:"—" }}</dd></div>
+          {% if server.needs_credential %}
+            <div class="col-12">
+              <dt>Credential reference</dt>
+              <dd>
+                <code>{{ server.credential_ref }}</code>
+                {% if server.has_resolvable_credential %}
+                  <span class="badge badge-soft text-bg-success ms-1">Resolved</span>
+                {% else %}
+                  <span class="badge badge-soft text-bg-danger ms-1">Not resolvable</span>
+                {% endif %}
+                <div class="small text-muted mt-1">
+                  Only this variable name is stored. The gateway injects the secret on each call, so
+                  agents never hold it.
+                </div>
+              </dd>
+            </div>
+          {% endif %}
+          <div class="col-12">
+            <dt>Server reports</dt>
+            <dd>
+              {% if server.server_info.name %}
+                {{ server.server_info.title|default:server.server_info.name }} {{ server.server_info.version }}
+              {% else %}<span class="text-muted">Never synced</span>{% endif %}
+            </dd>
+          </div>
+          <div class="col-12"><dt>Last synced</dt><dd class="mb-0">{{ server.last_synced_at|naturaltime|default:"Never" }}</dd></div>
+          {% if server.last_sync_error %}
+            <div class="col-12"><dt>Last sync error</dt><dd class="mb-0 small text-danger">{{ server.last_sync_error }}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Governance</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Approval</dt>
+            <dd>
+              {% if server.is_approved %}
+                Approved {{ server.approved_at|naturaltime }}{% if server.approved_by %} by {{ server.approved_by.get_full_name|default:server.approved_by.email }}{% endif %}
+              {% else %}<span class="text-warning">Not approved</span>{% endif %}
+            </dd>
+          </div>
+          <div class="col-6"><dt>Access</dt><dd>{{ server.get_access_mode_display }}</dd></div>
+          <div class="col-6"><dt>Data</dt><dd>{{ server.get_data_classification_display }}</dd></div>
+          <div class="col-6"><dt>Risk</dt>
+            <dd><span class="badge badge-soft text-bg-{{ server.risk_level|risk_style }}">{{ server.get_risk_level_display }}</span></dd></div>
+          <div class="col-6"><dt>Owner</dt><dd>{{ server.owner.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Team</dt><dd>{{ server.team.name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Publisher</dt><dd class="mb-0">{{ server.publisher|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Category</dt><dd class="mb-0">{{ server.category|default:"—" }}</dd></div>
+          {% if server.documentation_url %}
+            <div class="col-12 mt-2"><dt>Documentation</dt>
+              <dd class="mb-0"><a href="{{ server.documentation_url }}" target="_blank" rel="noopener" class="text-break">{{ server.documentation_url }}</a></dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Health and Breaker</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Last probe</dt>
+            <dd><span class="badge badge-soft text-bg-{{ server.health_status|health_style }}">{{ server.get_health_status_display }}</span>
+              {% if server.last_health_latency_ms %}<span class="small text-muted">{{ server.last_health_latency_ms }} ms</span>{% endif %}</dd></div>
+          <div class="col-6"><dt>Checked</dt><dd>{{ server.last_health_check|naturaltime|default:"Never" }}</dd></div>
+          <div class="col-6"><dt>Breaker</dt>
+            <dd><span class="badge badge-soft text-bg-{{ server.circuit_state|circuit_style }}">{{ server.get_circuit_state_display }}</span></dd></div>
+          <div class="col-6"><dt>Failures in a row</dt><dd>{{ server.consecutive_failures }} <span class="small text-muted">({{ server.circuit_trips }} trip{{ server.circuit_trips|pluralize }} ever)</span></dd></div>
+          {% if server.last_error %}
+            <div class="col-12"><dt>Last error</dt><dd class="mb-0 small text-danger">{{ server.last_error }}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span>Tools <span class="badge text-bg-secondary">{{ tools|length }}</span></span>
+        <span class="small text-muted">
+          {{ tool_counts.enabled|default:0 }} enabled
+          {% if tool_counts.pending_review %}&middot; <span class="text-warning">{{ tool_counts.pending_review }} to review</span>{% endif %}
+        </span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Tool</th><th>Risk</th><th>Status</th><th class="text-end">Review</th></tr></thead>
+          <tbody>
+            {% for tool in tools %}
+              <tr>
+                <td>
+                  <code class="small">{{ tool.qualified_name }}</code>
+                  {% if tool.is_read_only %}<span class="badge badge-soft text-bg-success ms-1">Read-only</span>
+                  {% elif tool.is_destructive %}<span class="badge badge-soft text-bg-danger ms-1">Destructive</span>{% endif %}
+                  <div class="small text-muted">{{ tool.description|truncatechars:120 }}</div>
+                </td>
+                <td><span class="badge badge-soft text-bg-{{ tool.risk_level|risk_style }}">{{ tool.get_risk_level_display }}</span></td>
+                <td class="text-nowrap">
+                  <span class="badge badge-soft text-bg-{{ tool.status|tool_status_style }}">{{ tool.get_status_display }}</span>
+                  {% if tool.changed_since_review %}
+                    <div><span class="badge badge-soft text-bg-danger">Changed since review</span></div>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  {% if can_approve and tool.status != "removed" %}
+                    <div class="d-flex gap-1 justify-content-end">
+                      {% if tool.status != "enabled" %}
+                        <form method="post" action="{% url 'mcp_gateway:tool_review' tool.pk %}" class="m-0"
+                              data-ajax-action data-ajax-refresh="#server-detail">
+                          {% csrf_token %}
+                          <input type="hidden" name="decision" value="enable">
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                          <button type="submit" class="btn btn-sm btn-outline-success">Enable</button>
+                        </form>
+                      {% endif %}
+                      {% if tool.status != "disabled" %}
+                        <form method="post" action="{% url 'mcp_gateway:tool_review' tool.pk %}" class="m-0"
+                              data-ajax-action data-ajax-refresh="#server-detail">
+                          {% csrf_token %}
+                          <input type="hidden" name="decision" value="disable">
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                          <button type="submit" class="btn btn-sm btn-outline-secondary">Disable</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% elif tool.reviewed_by %}
+                    <span class="small text-muted">{{ tool.reviewed_by.get_full_name|default:tool.reviewed_by.email }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4">
+                <div class="ct-empty py-4"><i class="bi bi-tools"></i>
+                  <p class="mb-0">{% if server.is_gateway_reachable %}No tools discovered yet. Sync to ask the server what it offers.{% else %}Tools are only discovered for servers the gateway can reach.{% endif %}</p></div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span>Access Grants <span class="badge text-bg-secondary">{{ grants|length }}</span></span>
+        {% if can_manage %}
+          <a href="{% url 'admin:mcp_gateway_mcpaccessgrant_add' %}?server={{ server.pk }}" class="small text-decoration-none">
+            <i class="bi bi-plus-lg"></i> Grant an agent</a>
+        {% endif %}
+      </div>
+      <div class="ct-card-body">
+        {% if server.access_mode == "open" %}
+          <p class="small text-muted mb-2">
+            Open: every active agent in the organization may use this server's enabled tools.
+            Grants only take effect on restricted servers.
+          </p>
+        {% endif %}
+        {% for grant in grants %}
+          <div class="d-flex justify-content-between align-items-start border-bottom py-2 small">
+            <div>
+              <a href="{% url 'inventory:agent_detail' grant.agent.pk %}" class="fw-semibold text-decoration-none">{{ grant.agent.name }}</a>
+              <div class="text-muted">
+                {% if grant.allowed_tools %}{{ grant.allowed_tools|join:", " }}{% else %}All enabled tools{% endif %}
+              </div>
+            </div>
+            <div class="text-end text-nowrap">
+              {% if grant.is_expired %}
+                <span class="badge badge-soft text-bg-danger">Expired</span>
+              {% elif grant.expires_at %}
+                <span class="text-muted">Until {{ grant.expires_at|date:"j M Y" }}</span>
+              {% else %}
+                <span class="text-muted">No expiry</span>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          {% if server.access_mode != "open" %}
+            <p class="small text-muted mb-0">No agent has been granted access, so no agent can use this server.</p>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Recent Calls</span>
+        <a href="{% url 'mcp_gateway:calls' %}?server={{ server.pk }}" class="small text-decoration-none">All calls</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <thead><tr><th>When</th><th>Tool</th><th>Agent</th><th>Status</th><th class="text-end">Latency</th></tr></thead>
+          <tbody>
+            {% for call in recent_calls %}
+              <tr>
+                <td class="small text-nowrap">{{ call.created_at|naturaltime }}</td>
+                <td>
+                  <code class="small">{{ call.tool.name|default:call.tool_name }}</code>
+                  {% if call.reason %}<div class="ct-attention-detail {% if call.status == 'blocked' or call.status == 'failed' %}text-danger{% endif %}">{{ call.reason|truncatechars:110 }}</div>{% endif %}
+                </td>
+                <td class="small">{{ call.agent.name|default:"—" }}</td>
+                <td><span class="badge badge-soft text-bg-{{ call.status|call_status_style }}">{{ call.get_status_display }}</span></td>
+                <td class="small text-end">{% if call.latency_ms is not None %}{{ call.latency_ms }} ms{% else %}—{% endif %}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5">
+                <div class="ct-empty py-4"><i class="bi bi-list-columns-reverse"></i>
+                  <p class="mb-0">No calls to this server yet.</p></div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

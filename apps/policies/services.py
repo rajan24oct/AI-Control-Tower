@@ -8,7 +8,7 @@ expression evaluation anywhere in here.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
@@ -381,12 +381,20 @@ class PolicyEngine:
         return Policy.objects.for_organization(organization).filter(status="active")
 
     @classmethod
-    def evaluate(cls, organization, context: PolicyContext) -> PolicyDecision:
+    def evaluate(cls, organization, context: PolicyContext, *, types=None) -> PolicyDecision:
+        """Evaluate every active policy, or only the given types.
+
+        The type filter exists for callers that evaluate in two stages -- the
+        gateway checks agent-level policies before routing and model-level ones
+        against the model routing actually chose.
+        """
         decision = PolicyDecision()
         if organization is None:
             return decision
 
         for policy in cls.policies_for(organization):
+            if types is not None and policy.policy_type not in types:
+                continue
             evaluator = EVALUATORS.get(policy.policy_type)
             if evaluator is None:
                 logger.warning("No evaluator for policy type %s", policy.policy_type)
@@ -489,4 +497,44 @@ class PolicyEngine:
         decision = cls.evaluate(organization, context)
         if record:
             cls.record(organization, context, decision, requested_action)
+        return decision
+
+    #: Policy types whose verdict depends on *which model* serves, rather than
+    #: on the agent asking. A caller that routes has to check these against the
+    #: model it chose, because the model an agent declares is not always the
+    #: one that runs -- and checking the declared one produces both false
+    #: denials and, worse, false permissions.
+    MODEL_DEPENDENT_TYPES = frozenset({PolicyType.MODEL_APPROVAL, PolicyType.PROVIDER})
+
+    #: Everything else: decided by the agent and the request, not the model.
+    AGENT_LEVEL_TYPES = frozenset(PolicyType.values) - MODEL_DEPENDENT_TYPES
+
+    @classmethod
+    def check_agent(
+        cls, organization, context: PolicyContext, requested_action: str = "", record: bool = True
+    ) -> PolicyDecision:
+        """Everything decidable before a model has been chosen."""
+        decision = cls.evaluate(organization, context, types=cls.AGENT_LEVEL_TYPES)
+        if record and decision.matches:
+            cls.record(organization, context, decision, requested_action)
+        return decision
+
+    @classmethod
+    def check_model(
+        cls, organization, model, context: PolicyContext, *, requested_action: str = "",
+        record: bool = True,
+    ) -> PolicyDecision:
+        """Evaluate only the model-dependent policies, against one model.
+
+        The gateway calls this per routing candidate. Re-running the whole
+        engine for each would repeat agent-level checks that cannot change
+        between candidates, and would multiply the work on the request path.
+        """
+        if organization is None or model is None:
+            return PolicyDecision()
+
+        scoped = replace(context, model=model, provider=model.provider)
+        decision = cls.evaluate(organization, scoped, types=cls.MODEL_DEPENDENT_TYPES)
+        if record and decision.matches:
+            cls.record(organization, scoped, decision, requested_action)
         return decision

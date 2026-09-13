@@ -26,7 +26,17 @@
     danger: "#a32b26",
     muted: "#7f8480",
     // Risk levels run low -> critical and must stay in that order.
-    risk: ["#a9cbbf", "#d9c68a", "#cf9187", "#8c3b34"]
+    risk: ["#a9cbbf", "#d9c68a", "#cf9187", "#8c3b34"],
+    // Outcome states for charts: served / fell back / failed, passed /
+    // failed / blocked. Re-stepped from the brand's success, warning and
+    // danger tokens -- same hues, spread in lightness -- because the brand
+    // trio failed the colour-vision check as chart fills (warning and danger
+    // sat at dE 14.4 for full-colour readers). This set passes all-pairs:
+    // CVD dE >= 9.2, normal-vision dE >= 21.5. The amber is under 3:1 on
+    // white, so every chart using it also ships labels and a table view.
+    status: { good: "#2b8a5e", warning: "#cf9530", critical: "#a32b26" },
+    // Context in an emphasis chart: present, but not competing.
+    context: "#c4ccc9"
   };
 
   /* Restrained chart defaults: thin gridlines, no heavy borders, small type.

@@ -659,9 +659,12 @@
     <ol>
       <li><a href="#boundary">Two modes</a></li>
       <li><a href="#onboarding">Onboarding path</a></li>
+      <li><a href="#estate">Onboarding the estate</a></li>
       <li><a href="#paths">Three ways to integrate</a></li>
       <li><a href="#api">API reference</a></li>
       <li><a href="#gateway">The AI Gateway</a></li>
+      <li><a href="#mcp">The MCP Gateway</a></li>
+      <li><a href="#build">Building on the gateways</a></li>
       <li><a href="#evaluation">Evaluation Centre</a></li>
       <li><a href="#events">Event vocabulary</a></li>
       <li><a href="#identifiers">Identifier resolution</a></li>
@@ -799,10 +802,10 @@
               <strong>one organization</strong> and carries a role like any user.
             </p>
             <p>
-              Create it in Django Admin under <em>Control and Settings &rarr; Integrations</em>. Set
-              <code>external_system</code> to the engine's name &mdash; it lands in the audit trail on
-              every write. The default role, <em>AI Developer</em>, already grants
-              <code>telemetry.ingest</code>.
+              Create it from the profile menu, under <em>Control and Settings &rarr; Integrations</em>.
+              Set <code>external_system</code> to the engine's name &mdash; it lands in the audit trail
+              on every write. The default role, <em>AI Developer</em>, already grants
+              <code>telemetry.ingest</code>, <code>gateway.invoke</code> and <code>mcp.invoke</code>.
             </p>
           </div>
         </li>
@@ -814,6 +817,10 @@
               Keys are <code>act_&lt;prefix&gt;_&lt;secret&gt;</code>. Only a SHA-256 hash of the secret
               is stored, so the raw key is shown <strong>once</strong> at creation and is not
               recoverable afterwards. Put it straight into your secret manager.
+            </p>
+            <p>
+              The quickest route is the admin: select the service account and run
+              <em>Issue a new API key</em>. From code:
             </p>
             <div class="code">
               <div class="code-head"><span>python manage.py shell</span></div>
@@ -905,6 +912,265 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
             <p>
               The run now appears in <em>Observability &rarr; Executions</em>, and while it was
               running it was pushed live to <em>Live Monitor</em> over the WebSocket.
+            </p>
+          </div>
+        </li>
+
+      </ol>
+    </section>
+
+    <!-- ================= ESTATE ONBOARDING ================= -->
+    <section id="estate">
+      <p class="kicker">Step by step</p>
+      <h2 class="sec">Onboarding the AI estate</h2>
+      <p>
+        Everything an application touches is registered before it is used: the provider it calls,
+        the models behind it, the agent that does the work, the application it serves, the
+        identity it authenticates as, and the MCP servers it reaches for tools. Register in this
+        order &mdash; each record points at the ones before it.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Step</th><th>Record</th><th>Register in</th><th>Or over the API</th><th>Needs</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Platform provider</td><td>Admin &rarr; AI providers</td><td class="path"><code>POST /providers/</code></td><td><code>provider.manage</code></td></tr>
+            <tr><td>2</td><td>Models</td><td>Admin &rarr; AI models</td><td class="path"><code>POST /models/</code></td><td><code>model.manage</code>, <code>model.approve</code></td></tr>
+            <tr><td>3</td><td>Agent</td><td>Admin &rarr; AI agents</td><td class="path"><code>POST /agents/</code></td><td><code>agent.manage</code></td></tr>
+            <tr><td>4</td><td>Application</td><td>Admin &rarr; AI applications</td><td class="path"><code>POST /applications/</code></td><td><code>application.manage</code></td></tr>
+            <tr><td>5</td><td>Service account and key</td><td>Profile menu &rarr; Integrations</td><td>&mdash;</td><td>administrator</td></tr>
+            <tr><td>6</td><td>MCP servers and tools</td><td>MCP Gateway &rarr; Server Registry</td><td>&mdash;</td><td><code>mcp.manage</code>, <code>mcp.approve</code></td></tr>
+            <tr><td>7</td><td>Routing, policies, budgets</td><td>AI Gateway, AI Governance, AI FinOps</td><td>&mdash;</td><td><code>policy.manage</code>, <code>cost.manage</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The registry pages under <em>AI Landscape</em> show every record and link to its edit form.
+        Over the API, create payloads name the <code>organization</code> and every related record by
+        its <strong>UUID</strong>; only calls your application makes at run time &mdash; telemetry
+        and both gateways &mdash; accept the loose identifiers described under
+        <a href="#identifiers">identifier resolution</a>.
+      </p>
+
+      <ol class="steps">
+
+        <li class="step">
+          <div>
+            <h3>Register the platform provider</h3>
+            <p>
+              A provider is a place models run. Its <code>adapter_key</code> is the binding that
+              matters: it names the adapter the platform calls through &mdash; <code>openai</code>,
+              <code>generic_rest</code> for an in-house inference service, or <code>mock</code> for a
+              demo. <code>GET /api/v1/adapters/</code> lists what this installation can reach.
+              <code>provider_type</code> is only a label.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/providers/</span></div>
+<pre>{
+  <span class="k">"organization"</span>: <span class="s">"&lt;organization-uuid&gt;"</span>,
+  <span class="k">"name"</span>: <span class="s">"OpenAI Platform"</span>,
+  <span class="k">"provider_type"</span>: <span class="s">"openai"</span>,
+  <span class="k">"adapter_key"</span>: <span class="s">"openai"</span>,
+  <span class="k">"endpoint"</span>: <span class="s">"https://api.openai.com/v1"</span>,
+  <span class="k">"region"</span>: <span class="s">"us-east"</span>,
+  <span class="k">"authentication_method"</span>: <span class="s">"api_key"</span>,
+  <span class="k">"credential_ref"</span>: <span class="s">"OPENAI_API_KEY"</span>,   <span class="c">// a variable NAME, never the key</span>
+  <span class="k">"status"</span>: <span class="s">"active"</span>
+}</pre>
+            </div>
+            <p>
+              Then set the variable in the <em>platform's</em> environment and restart it. In the
+              admin, run <em>Run health check</em> and <em>Refresh capabilities from adapter</em> on
+              the provider; the registry shows the credential as <strong>Resolved</strong> once it
+              can find it. Governance marks it <code>is_approved</code> &mdash; the default provider
+              policy requires that before production traffic reaches it.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Register and approve its models</h3>
+            <p>
+              <code>model_id</code> is the provider's own name for the model and the value callers
+              pin. Prices per 1,000 tokens drive both the cost dashboard and routing, so fill them
+              in even for an internal model.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/models/</span></div>
+<pre>{
+  <span class="k">"organization"</span>: <span class="s">"&lt;organization-uuid&gt;"</span>,
+  <span class="k">"provider"</span>: <span class="s">"&lt;provider-uuid&gt;"</span>,
+  <span class="k">"model_name"</span>: <span class="s">"GPT-4o mini"</span>,
+  <span class="k">"model_id"</span>: <span class="s">"gpt-4o-mini"</span>,
+  <span class="k">"model_type"</span>: <span class="s">"chat"</span>,
+  <span class="k">"context_window"</span>: <span class="n">128000</span>,
+  <span class="k">"input_cost_per_1k"</span>: <span class="s">"0.00015"</span>,
+  <span class="k">"output_cost_per_1k"</span>: <span class="s">"0.0006"</span>,
+  <span class="k">"capabilities"</span>: [<span class="s">"supports_chat"</span>, <span class="s">"supports_streaming"</span>, <span class="s">"supports_tool_calling"</span>],
+  <span class="k">"risk_classification"</span>: <span class="s">"low"</span>,
+  <span class="k">"status"</span>: <span class="s">"active"</span>
+}</pre>
+            </div>
+            <p>
+              Approve it with the admin action <em>Approve for use</em>, which the audit trail
+              records as a model approval. Until then the default policy keeps it out of
+              production and the AI Gateway skips it. If a model-approval policy sets
+              <code>require_evaluation</code>, run a suite in the <a href="#evaluation">Evaluation
+              Centre</a> first: the gateway reads the model's latest completed run.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Register the agent</h3>
+            <p>
+              <code>agent_id</code> is the stable identifier your code sends to both gateways and to
+              telemetry, so choose it once. Autonomy, risk and data classification are what the
+              policies read.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/agents/</span></div>
+<pre>{
+  <span class="k">"organization"</span>: <span class="s">"&lt;organization-uuid&gt;"</span>,
+  <span class="k">"name"</span>: <span class="s">"Customer Support Agent"</span>,
+  <span class="k">"agent_id"</span>: <span class="s">"customer-support-agent"</span>,
+  <span class="k">"framework"</span>: <span class="s">"langgraph"</span>,
+  <span class="k">"provider"</span>: <span class="s">"&lt;provider-uuid&gt;"</span>,
+  <span class="k">"primary_model"</span>: <span class="s">"&lt;model-uuid&gt;"</span>,
+  <span class="k">"environment"</span>: <span class="s">"production"</span>,
+  <span class="k">"risk_level"</span>: <span class="s">"moderate"</span>,
+  <span class="k">"autonomy_level"</span>: <span class="n">2</span>,
+  <span class="k">"requires_human_approval"</span>: <span class="n">true</span>,
+  <span class="k">"restricted_tools"</span>: [<span class="s">"issue_refund"</span>],
+  <span class="k">"data_classification"</span>: <span class="s">"confidential"</span>,
+  <span class="k">"status"</span>: <span class="s">"active"</span>
+}</pre>
+            </div>
+            <div class="note warn">
+              <span class="label">Autonomy decides what the gateways will do</span>
+              <p>
+                With the default policies, an agent at autonomy <strong>3 or above</strong> in
+                production needs human approval &mdash; and a gateway call cannot wait for a person,
+                so both gateways refuse it with the reason. <code>restricted_tools</code> is enforced
+                by the MCP Gateway; <code>allowed_tools</code> is descriptive.
+              </p>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Register the application</h3>
+            <p>
+              The application is what the business sees: owners, criticality, the data it handles
+              and when it is next reviewed. Link the agents, models and providers it uses.
+            </p>
+            <div class="code">
+              <div class="code-head"><span class="verb">POST</span><span>/api/v1/applications/</span></div>
+<pre>{
+  <span class="k">"organization"</span>: <span class="s">"&lt;organization-uuid&gt;"</span>,
+  <span class="k">"name"</span>: <span class="s">"Customer Support Portal"</span>,
+  <span class="k">"business_purpose"</span>: <span class="s">"AI-assisted responses for tier-1 support."</span>,
+  <span class="k">"environment"</span>: <span class="s">"production"</span>,
+  <span class="k">"criticality"</span>: <span class="s">"high"</span>,
+  <span class="k">"data_classification"</span>: <span class="s">"confidential"</span>,
+  <span class="k">"risk_level"</span>: <span class="s">"moderate"</span>,
+  <span class="k">"review_date"</span>: <span class="s">"2027-03-31"</span>,
+  <span class="k">"agents"</span>: [<span class="s">"&lt;agent-uuid&gt;"</span>],
+  <span class="k">"ai_models"</span>: [<span class="s">"&lt;model-uuid&gt;"</span>],
+  <span class="k">"providers"</span>: [<span class="s">"&lt;provider-uuid&gt;"</span>],
+  <span class="k">"status"</span>: <span class="s">"active"</span>
+}</pre>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Give the application its own identity</h3>
+            <p>
+              Create one service account per application or engine &mdash; never a shared one &mdash;
+              and issue it a key as in <a href="#onboarding">steps 2 and 3 above</a>. The
+              <em>AI Developer</em> role grants <code>telemetry.ingest</code>,
+              <code>gateway.invoke</code> and <code>mcp.invoke</code>: everything an application
+              needs, and nothing that changes the registry's governance. Deploy the key as a secret,
+              for example <code>CONTROL_TOWER_KEY</code>.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Onboard the MCP servers it needs</h3>
+            <p>
+              In <em>MCP Gateway &rarr; Server Registry</em>, choose <em>Register server</em>. The
+              name becomes the slug, and the slug becomes the prefix of every tool the server
+              contributes (<code>servicenow__create_incident</code>). Choose
+              <strong>Streamable HTTP</strong>, give the endpoint, and name the environment variable
+              holding the server's credential in <code>credential_ref</code> &mdash; then set that
+              variable on the platform. Leave access <em>restricted</em> unless every agent in the
+              organization should reach it.
+            </p>
+            <p>On the server's page, in order:</p>
+            <ol>
+              <li><strong>Health check</strong> &mdash; proves the endpoint and credential work.</li>
+              <li><strong>Approve</strong> (<code>mcp.approve</code>) &mdash; until then no agent can see the server.</li>
+              <li><strong>Sync tools</strong> &mdash; asks the server what it offers. New tools arrive <em>awaiting review</em>.</li>
+              <li><strong>Review each tool</strong> &mdash; enable what agents may call, disable the rest. The
+                <em>Tool Catalog</em>'s review queue collects them across servers.</li>
+              <li><strong>Grant an agent</strong> &mdash; on a restricted server, name the agent, optionally
+                the tools it may use, and an expiry.</li>
+            </ol>
+            <div class="code">
+              <div class="code-head"><span class="verb">GET</span><span>/api/v1/mcp-gateway/tools/?agent=customer-support-agent</span></div>
+<pre><span class="c"># What the agent will be offered: its catalog, exactly as tools/list returns it.</span>
+curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
+  <span class="s">"https://tower.example.com/api/v1/mcp-gateway/tools/?agent=customer-support-agent"</span></pre>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Set the guardrails</h3>
+            <p>
+              <strong>Routing</strong> is optional. With no routing policy the AI Gateway ranks every
+              active model of the requested type with the balanced strategy and offers a
+              three-model fallback chain. Add one under <em>AI Gateway &rarr; Model Routing</em> to
+              require approved models, allow or block providers, set capability, context-window or
+              cost floors, or scope a rule to particular agents and environments &mdash; and try it
+              in the <em>Routing Simulator</em> before any traffic depends on it.
+            </p>
+            <p>
+              <strong>Policies</strong> under <em>AI Governance</em> apply to both gateways: model
+              approval, provider, data classification, autonomy, cost limits, tool access and human
+              approval. A tool-access policy's <code>blocked_tools</code> covers MCP tools by name.
+              <strong>Budgets</strong> under <em>AI FinOps</em> set to hard-stop make the AI Gateway
+              answer <code>402</code> once the period's spend is gone.
+            </p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
+            <h3>Prove it end to end</h3>
+            <ul>
+              <li>The provider is healthy and its credential shows <strong>Resolved</strong>.</li>
+              <li>The model is approved &mdash; and evaluated, if a policy requires it.</li>
+              <li>The agent is active, with autonomy inside what policy allows.</li>
+              <li><code>POST /api/v1/gateway/chat/</code> naming the agent returns <code>200</code>;
+                <em>Routing Decisions</em> shows which model served and why.</li>
+              <li>The MCP catalog lists the tools you enabled, and a test call appears under
+                <em>MCP Gateway &rarr; Tool Calls</em>.</li>
+              <li>The run shows in <em>Observability &rarr; Executions</em> with its cost.</li>
+            </ul>
+            <p>
+              <a href="#build">Building on the gateways</a> shows the application side of every
+              one of these calls.
             </p>
           </div>
         </li>
@@ -1104,6 +1370,24 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
               <td><code>gateway.invoke</code></td>
             </tr>
             <tr>
+              <td class="path"><code>/mcp/</code> <code>/mcp/{agent}/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>The MCP Gateway, as an MCP server (Streamable HTTP). Enforcing.</td>
+              <td><code>mcp.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/mcp-gateway/tools/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>The unified tool catalog for a caller.</td>
+              <td><code>mcp.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/mcp-gateway/tools/call/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>One enforced tool call, over plain REST.</td>
+              <td><code>mcp.invoke</code></td>
+            </tr>
+            <tr>
               <td class="path"><code>/approval-requests/</code></td>
               <td><span class="verb-tag">GET</span> <span class="verb-tag post">POST</span></td>
               <td>Raise a request for a human decision.</td>
@@ -1116,9 +1400,9 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
               <td><code>approval.view</code></td>
             </tr>
             <tr>
-              <td class="path"><code>/providers/</code> <code>/models/</code><br><code>/agents/</code> <code>/applications/</code></td>
+              <td class="path"><code>/providers/</code> <code>/models/</code><br><code>/agents/</code> <code>/applications/</code><br><code>/mcp-servers/</code></td>
               <td><span class="verb-tag">GET</span></td>
-              <td>The four registries.</td>
+              <td>The five registries.</td>
               <td><code>inventory.view</code></td>
             </tr>
             <tr>
@@ -1368,6 +1652,407 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
         <em>platform's</em> environment, and the gateway overview flags any that cannot resolve
         one &mdash; those fail every attempt.
       </p>
+    </section>
+
+    <!-- ================= MCP GATEWAY ================= -->
+    <section id="mcp">
+      <p class="kicker">In-path mode</p>
+      <h2 class="sec">The MCP Gateway</h2>
+      <p>
+        One registry for every MCP server the organization uses, and one MCP endpoint in front of
+        all of them. An agent connects once and sees every tool it is permitted, from every
+        approved server, named <code>&lt;server&gt;__&lt;tool&gt;</code>. The platform holds each
+        server's credential; the agent never does.
+      </p>
+
+      <h3>Connect a client</h3>
+      <p>
+        Any MCP client that speaks Streamable HTTP. Put the agent in the URL and a service-account
+        key in a header:
+      </p>
+      <div class="code">
+        <div class="code-head"><span>MCP client configuration</span></div>
+<pre>{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"control-tower"</span>: {
+      <span class="k">"type"</span>: <span class="s">"http"</span>,
+      <span class="k">"url"</span>: <span class="s">"https://tower.example.com/api/v1/mcp/customer-support-agent/"</span>,
+      <span class="k">"headers"</span>: { <span class="k">"Authorization"</span>: <span class="s">"Bearer act_&hellip;"</span> }
+    }
+  }
+}</pre>
+      </div>
+      <p>
+        The endpoint is stateless: it issues no <code>Mcp-Session-Id</code> and answers
+        <code>POST</code> only. It serves tools; resources and prompts are not proxied, and are not
+        advertised. <code>X-API-Key</code> works as well as a bearer token, and
+        <code>X-Agent-Id</code> can replace the agent in the URL. The key's role needs
+        <code>mcp.invoke</code>. Code that would rather not speak JSON-RPC gets the same catalog and
+        the same enforced calls over REST:
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/mcp-gateway/tools/call/</span></div>
+<pre>{
+  <span class="k">"agent"</span>: <span class="s">"customer-support-agent"</span>,
+  <span class="k">"tool"</span>: <span class="s">"servicenow__search_incidents"</span>,
+  <span class="k">"arguments"</span>: {<span class="k">"query"</span>: <span class="s">"card declined"</span>}
+}</pre>
+      </div>
+      <p>
+        <strong>200</strong> the tool ran (check <code>is_error</code>), <strong>403</strong> the
+        gateway refused, <strong>503</strong> the server is out of rotation or misconfigured,
+        <strong>502</strong> the server failed, <strong>404</strong> no such tool.
+      </p>
+
+      <h3>What every call must clear</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Check</th><th>Refuses when</th></tr></thead>
+          <tbody>
+            <tr><td>Registry</td><td>The server is inactive or unapproved, or the tool is disabled, removed, or awaiting review.</td></tr>
+            <tr><td>Access</td><td>The server is restricted and the agent holds no unexpired grant covering the tool, or the tool is on the agent's <code>restricted_tools</code>.</td></tr>
+            <tr><td>Policy</td><td>An agent-level policy denies it. Tool-access policies see the tool's own name, so <code>blocked_tools</code> applies to MCP tools unchanged. A policy requiring approval refuses: a tool call cannot wait on a person.</td></tr>
+            <tr><td>Breaker</td><td>The server failed repeatedly and is out of rotation until a probe gets through.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        A refusal comes back as a tool result with <code>isError: true</code> and the reason, so the
+        model can adapt &mdash; retrying will not change the answer. An unknown tool name is a
+        JSON-RPC error (<code>-32602</code>). Every call, refused or not, is kept in the tool-call
+        log. Name the run in <code>params._meta["io.aicontroltower/executionId"]</code> (or
+        <code>X-Execution-Id</code>) and the call also lands on that execution's timeline.
+      </p>
+
+      <div class="note warn">
+        <span class="label">Tools are reviewed, and re-reviewed</span>
+        <p>
+          Discovery can add tools to the registry but never makes one callable. New tools wait for
+          review, and so does any approved tool whose description, schema or annotations change
+          upstream &mdash; the signature of a poisoned tool. <code>tools/list</code> is answered from
+          the registry, never live from upstream, so a server cannot change what agents are offered
+          without someone approving it.
+        </p>
+      </div>
+
+      <h3>Transports</h3>
+      <p>
+        <strong>Streamable HTTP</strong> servers are reached through the gateway, with the secret
+        named by <code>credential_ref</code> injected as a bearer token or a named header.
+        <strong>stdio</strong> and legacy <strong>HTTP + SSE</strong> servers can be registered for
+        inventory and governance, but the gateway will not reach them &mdash; it does not spawn
+        processes on a web request. The <strong>mock</strong> transport makes the module
+        demonstrable with no servers deployed.
+      </p>
+    </section>
+
+    <!-- ================= BUILDING ON THE GATEWAYS ================= -->
+    <section id="build">
+      <p class="kicker">For application developers</p>
+      <h2 class="sec">Building on the gateways</h2>
+      <p>
+        An application needs two things from the platform: a model's answer, and tools that reach
+        real systems. The AI Gateway serves the first and the MCP Gateway the second. Both enforce
+        the same policies, both hold the upstream credentials so your code never does, and both
+        record what happened. Your application holds exactly one secret: its service-account key.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>You want</th><th>Call</th></tr></thead>
+          <tbody>
+            <tr><td>A model's answer, with policy, budgets, routing and fallback</td><td class="path"><code>POST /api/v1/gateway/chat/</code></td></tr>
+            <tr><td>Governed tools inside an MCP client or agent framework</td><td class="path"><code>/api/v1/mcp/{agent}/</code></td></tr>
+            <tr><td>One tool call from plain code</td><td class="path"><code>POST /api/v1/mcp-gateway/tools/call/</code></td></tr>
+            <tr><td>Visibility of a run your own engine executes</td><td class="path"><code>POST /api/v1/executions/</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>AI Gateway from Python</h3>
+      <p>
+        One call per model request. The status code tells you what to do next, so handle it rather
+        than retrying blindly.
+      </p>
+      <div class="code">
+        <div class="code-head"><span>Python &middot; requests</span></div>
+<pre>import os
+import requests
+
+TOWER = "https://tower.example.com/api/v1"
+HEADERS = {"X-API-Key": os.environ["CONTROL_TOWER_KEY"]}
+
+
+class ApprovalRequired(Exception):
+    """202: legitimate, but a person decides first. Poll the approval, then resend."""
+
+
+class Refused(Exception):
+    """402 or 403: out of budget or refused by policy. Retrying will not help."""
+
+
+class TryLater(Exception):
+    """502 or 503: nothing could serve it. Retry with backoff."""
+
+
+def ask(agent: str, question: str, *, trace_id: str = "") -&gt; str:
+    body = {
+        "agent": agent,
+        "messages": [{"role": "user", "content": question}],
+        "max_tokens": 800,
+    }
+    if trace_id:
+        body["trace_id"] = trace_id
+
+    <span class="c"># Longer than the gateway's own 60-second deadline, so the gateway times out first</span>
+    <span class="c"># and tells you why, instead of your client giving up without an answer.</span>
+    response = requests.post(f"{TOWER}/gateway/chat/", headers=HEADERS, json=body, timeout=90)
+
+    if response.status_code == 202:
+        raise ApprovalRequired(response.json()["detail"])
+    if response.status_code in (402, 403):
+        raise Refused(response.json()["detail"])
+    if response.status_code in (502, 503):
+        raise TryLater(response.json()["detail"])
+    response.raise_for_status()
+    return response.json()["output_text"]</pre>
+      </div>
+
+      <h3>Streaming from Python</h3>
+      <div class="code">
+        <div class="code-head"><span>Python &middot; server-sent events</span></div>
+<pre>import json
+
+
+def stream(agent: str, question: str):
+    with requests.post(
+        f"{TOWER}/gateway/chat/", headers=HEADERS, stream=True, timeout=90,
+        json={"agent": agent, "prompt": question, "stream": True},
+    ) as response:
+        <span class="c"># Refusals arrive as real statuses before any event, never inside the stream.</span>
+        response.raise_for_status()
+        event = None
+        for line in response.iter_lines(decode_unicode=True):
+            if line.startswith("event:"):
+                event = line.split(":", 1)[1].strip()
+            elif line.startswith("data:"):
+                payload = json.loads(line.split(":", 1)[1])
+                if event == "delta":
+                    yield payload["text"]
+                elif event == "error":
+                    <span class="c"># Past the first byte there is no fallback: decide whether to retry the whole request.</span>
+                    raise RuntimeError(payload["detail"])</pre>
+      </div>
+
+      <h3>AI Gateway from TypeScript</h3>
+      <div class="code">
+        <div class="code-head"><span>TypeScript &middot; fetch (Node 18+)</span></div>
+<pre>const TOWER = "https://tower.example.com/api/v1";
+
+export async function ask(agent: string, question: string): Promise&lt;string&gt; {
+  const response = await fetch(`${TOWER}/gateway/chat/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": process.env.CONTROL_TOWER_KEY!,
+    },
+    body: JSON.stringify({ agent, messages: [{ role: "user", content: question }] }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  const body = await response.json();
+  <span class="c">// 202 is "ok" to fetch, but it means a person has to decide first.</span>
+  if (!response.ok || response.status === 202) {
+    throw new Error(`${response.status} ${body.error}: ${body.detail}`);
+  }
+  return body.output_text;
+}</pre>
+      </div>
+
+      <h3>MCP Gateway: the raw protocol</h3>
+      <p>
+        The endpoint is stateless, so a single <code>tools/call</code> works without a handshake.
+        MCP clients still initialize first, and that works too.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/mcp/customer-support-agent/</span></div>
+<pre>curl https://tower.example.com/api/v1/mcp/customer-support-agent/ \
+  -H <span class="s">"Authorization: Bearer $CONTROL_TOWER_KEY"</span> \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -H <span class="s">"Accept: application/json, text/event-stream"</span> \
+  -d <span class="s">'{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+       "params": {"name": "servicenow__search_incidents",
+                  "arguments": {"query": "card declined"}}}'</span></pre>
+      </div>
+
+      <h3>MCP Gateway from the Python MCP SDK</h3>
+      <div class="code">
+        <div class="code-head"><span>Python &middot; pip install mcp</span></div>
+<pre>import asyncio
+import os
+
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
+URL = "https://tower.example.com/api/v1/mcp/customer-support-agent/"
+HEADERS = {"Authorization": f"Bearer {os.environ['CONTROL_TOWER_KEY']}"}
+
+
+async def main():
+    async with streamablehttp_client(URL, headers=HEADERS) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            listed = await session.list_tools()
+            print([tool.name for tool in listed.tools])
+
+            result = await session.call_tool(
+                "servicenow__search_incidents", {"query": "card declined"}
+            )
+            <span class="c"># A refusal is an error result that says why -- the model can read it and adapt.</span>
+            print("error:" if result.isError else "ok:", result.content[0].text)
+
+
+asyncio.run(main())</pre>
+      </div>
+
+      <h3>Inside agent frameworks</h3>
+      <p>
+        Any framework that speaks MCP over Streamable HTTP gets the governed catalog with no
+        extra code. Two common ones:
+      </p>
+      <div class="code">
+        <div class="code-head"><span>LangChain / LangGraph &middot; pip install langchain-mcp-adapters</span></div>
+<pre>from langchain_mcp_adapters.client import MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    "control-tower": {
+        "transport": "streamable_http",
+        "url": "https://tower.example.com/api/v1/mcp/customer-support-agent/",
+        "headers": {"Authorization": f"Bearer {os.environ['CONTROL_TOWER_KEY']}"},
+    }
+})
+tools = await client.get_tools()   <span class="c"># only what this agent may call, already reviewed</span>
+<span class="c"># Hand `tools` to your agent exactly as you would any other LangChain tools.</span></pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>OpenAI Agents SDK &middot; pip install openai-agents</span></div>
+<pre>from agents import Agent, Runner
+from agents.mcp import MCPServerStreamableHttp
+
+async with MCPServerStreamableHttp(
+    name="control-tower",
+    params={
+        "url": "https://tower.example.com/api/v1/mcp/customer-support-agent/",
+        "headers": {"Authorization": f"Bearer {os.environ['CONTROL_TOWER_KEY']}"},
+    },
+) as tower:
+    agent = Agent(name="Support", instructions="Resolve tier-1 queries.", mcp_servers=[tower])
+    result = await Runner.run(agent, "Is there an open incident about declined cards?")
+    print(result.final_output)</pre>
+      </div>
+
+      <h3>In developer tools</h3>
+      <p>
+        IDEs and assistants connect the same way, which gives every engineer the governed tool
+        estate without handing out a single upstream credential.
+      </p>
+      <div class="code">
+        <div class="code-head"><span>Claude Code</span></div>
+<pre>claude mcp add --transport http control-tower \
+  https://tower.example.com/api/v1/mcp/customer-support-agent/ \
+  --header <span class="s">"Authorization: Bearer $CONTROL_TOWER_KEY"</span></pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>VS Code &middot; .vscode/mcp.json</span></div>
+<pre>{
+  <span class="k">"inputs"</span>: [
+    {<span class="k">"type"</span>: <span class="s">"promptString"</span>, <span class="k">"id"</span>: <span class="s">"tower-key"</span>,
+     <span class="k">"description"</span>: <span class="s">"Control Tower API key"</span>, <span class="k">"password"</span>: <span class="n">true</span>}
+  ],
+  <span class="k">"servers"</span>: {
+    <span class="k">"control-tower"</span>: {
+      <span class="k">"type"</span>: <span class="s">"http"</span>,
+      <span class="k">"url"</span>: <span class="s">"https://tower.example.com/api/v1/mcp/customer-support-agent/"</span>,
+      <span class="k">"headers"</span>: {<span class="k">"Authorization"</span>: <span class="s">"Bearer ${input:tower-key}"</span>}
+    }
+  }
+}</pre>
+      </div>
+
+      <h3>Putting it together: one governed request</h3>
+      <p>
+        A support ticket arrives. The application opens a run, gets context from ServiceNow
+        through the MCP Gateway, asks a model through the AI Gateway, and closes the run. The tool
+        call lands on the run's timeline; the model call is recorded as its own execution under the
+        same trace; policy, budget, access and routing are applied at every step.
+      </p>
+      <div class="code">
+        <div class="code-head"><span>Python &middot; requests</span></div>
+<pre>import os
+import uuid
+
+import requests
+
+TOWER = "https://tower.example.com/api/v1"
+HEADERS = {"X-API-Key": os.environ["CONTROL_TOWER_KEY"]}
+AGENT = "customer-support-agent"
+
+
+def handle_ticket(question: str) -&gt; str:
+    run_id = f"support-{uuid.uuid4().hex[:12]}"
+
+    <span class="c"># 1. Open the run, so everything below can be traced back to it.</span>
+    requests.post(f"{TOWER}/executions/", headers=HEADERS, timeout=10, json={
+        "execution_id": run_id, "agent": AGENT, "status": "running", "trace_id": run_id,
+    }).raise_for_status()
+
+    try:
+        <span class="c"># 2. Context through the MCP Gateway: reviewed tool, granted agent, logged call.</span>
+        tool = requests.post(f"{TOWER}/mcp-gateway/tools/call/", headers=HEADERS, timeout=45, json={
+            "agent": AGENT,
+            "tool": "servicenow__search_incidents",
+            "arguments": {"query": question},
+            "execution_id": run_id,
+        })
+        context = "\n".join(
+            item.get("text", "") for item in tool.json().get("content", [])
+        ) if tool.ok else ""
+
+        <span class="c"># 3. The answer through the AI Gateway: policy, budget, routing, fallback.</span>
+        answer = requests.post(f"{TOWER}/gateway/chat/", headers=HEADERS, timeout=90, json={
+            "agent": AGENT,
+            "trace_id": run_id,
+            "messages": [
+                {"role": "system", "content": f"Known incidents:\n{context or 'none found'}"},
+                {"role": "user", "content": question},
+            ],
+        })
+        answer.raise_for_status()
+
+        <span class="c"># 4. Close the run.</span>
+        requests.post(f"{TOWER}/executions/{run_id}/complete/", headers=HEADERS,
+                      timeout=10, json={}).raise_for_status()
+        return answer.json()["output_text"]
+
+    except Exception as exc:
+        requests.post(f"{TOWER}/executions/{run_id}/fail/", headers=HEADERS, timeout=10,
+                      json={"error_message": str(exc)[:500]})
+        raise</pre>
+      </div>
+
+      <div class="note">
+        <span class="label">Habits that keep an application governable</span>
+        <p>
+          <strong>Call from your backend, never from a browser.</strong> The key is a credential;
+          the MCP endpoint refuses browser origins nobody configured for exactly this reason.
+          <strong>Name the agent on every call</strong> &mdash; policy, grants and attribution all
+          key on it. <strong>Respect the status</strong>: never retry a 402 or 403, back off on 502
+          and 503, and treat 202 as "a person decides". <strong>Pass a trace id</strong> so a
+          request's model calls and tool calls read as one story. And <strong>rotate keys</strong>
+          by issuing a new one and revoking the old: one service account per application makes
+          that a single, contained change.
+        </p>
+      </div>
     </section>
 
     <!-- ================= EVALUATION ================= -->

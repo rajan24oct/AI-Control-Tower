@@ -1,9 +1,11 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.roles import Role
 from apps.agents.models import AIAgent, AutonomyLevel
@@ -121,6 +123,181 @@ class ModelApprovalPolicyTests(PolicyFixtureMixin, TestCase):
         self.agent.primary_model = self.shadow_model
         self.agent.save()
         self.assertFalse(self.evaluate(agent=self.agent).allowed)
+
+
+class EvaluationGateTests(PolicyFixtureMixin, TestCase):
+    """An approval has to be backed by a passing evaluation."""
+
+    def setUp(self):
+        self.build_estate()
+        self.suite = self._suite("Model approval baseline")
+
+    def _suite(self, name, threshold=80):
+        from apps.evaluations.models import EvaluationSuite
+
+        return EvaluationSuite.objects.create(
+            organization=self.organization, name=name,
+            pass_threshold=threshold, status=LifecycleStatus.ACTIVE,
+        )
+
+    def _run(self, *, passed=True, score="95.00", suite=None, finished=None,
+             blocked="", model=None):
+        from apps.evaluations.models import EvaluationRun, RunStatus
+
+        return EvaluationRun.objects.create(
+            organization=self.organization,
+            suite=suite or self.suite,
+            model=model or self.model,
+            status=RunStatus.COMPLETED,
+            passed=passed,
+            score=Decimal(score),
+            blocked_by_category=blocked,
+            total_cases=10,
+            completed_cases=10,
+            passed_cases=10 if passed else 4,
+            finished_at=finished or timezone.now(),
+        )
+
+    def _gate(self, **configuration):
+        return self.policy(
+            PolicyType.MODEL_APPROVAL,
+            effect=PolicyEffect.DENY,
+            configuration={"require_evaluation": True, **configuration},
+        )
+
+    # -- The gate off -------------------------------------------------------
+
+    def test_an_existing_policy_does_not_start_gating_on_upgrade(self):
+        """Adding the keys to the schema must not change existing behaviour."""
+        self.policy(PolicyType.MODEL_APPROVAL, effect=PolicyEffect.DENY, configuration={})
+        self.assertTrue(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    # -- The gate on --------------------------------------------------------
+
+    def test_an_approved_but_never_evaluated_model_is_denied(self):
+        self._gate()
+        decision = self.evaluate(agent=self.agent, model=self.model)
+
+        self.assertFalse(decision.allowed)
+        self.assertIn("never been evaluated", decision.reason)
+
+    def test_a_passing_evaluation_lets_the_model_through(self):
+        self._gate()
+        self._run(passed=True)
+        self.assertTrue(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    def test_a_failing_evaluation_denies_and_cites_the_score(self):
+        self._gate()
+        self._run(passed=False, score="56.25")
+
+        decision = self.evaluate(agent=self.agent, model=self.model)
+        self.assertFalse(decision.allowed)
+        self.assertIn("56.25", decision.reason)
+        self.assertIn("below the suite", decision.reason)
+
+    def test_a_blocked_run_is_reported_as_blocked_not_as_a_low_score(self):
+        # The two need different responses from whoever reads the violation.
+        self._gate()
+        self._run(passed=False, score="95.00", blocked="safety")
+
+        reason = self.evaluate(agent=self.agent, model=self.model).reason
+        self.assertIn("safety", reason)
+        self.assertIn("disqualifying", reason)
+
+    def test_the_latest_run_decides_not_the_best_one(self):
+        """Otherwise the control becomes a search for one good day."""
+        self._gate()
+        self._run(passed=True, score="99.00", finished=timezone.now() - timedelta(days=2))
+        self._run(passed=False, score="40.00", finished=timezone.now())
+
+        decision = self.evaluate(agent=self.agent, model=self.model)
+        self.assertFalse(decision.allowed)
+        self.assertIn("40.00", decision.reason)
+
+    def test_a_later_pass_clears_an_earlier_failure(self):
+        self._gate()
+        self._run(passed=False, score="40.00", finished=timezone.now() - timedelta(days=2))
+        self._run(passed=True, score="92.00", finished=timezone.now())
+
+        self.assertTrue(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    # -- Staleness ----------------------------------------------------------
+
+    def test_a_stale_pass_is_refused_when_a_limit_is_set(self):
+        self._gate(evaluation_max_age_days=30)
+        self._run(passed=True, finished=timezone.now() - timedelta(days=90))
+
+        decision = self.evaluate(agent=self.agent, model=self.model)
+        self.assertFalse(decision.allowed)
+        self.assertIn("90 days ago", decision.reason)
+
+    def test_a_recent_pass_is_accepted(self):
+        self._gate(evaluation_max_age_days=30)
+        self._run(passed=True, finished=timezone.now() - timedelta(days=5))
+        self.assertTrue(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    def test_no_age_limit_means_any_pass_counts(self):
+        self._gate()
+        self._run(passed=True, finished=timezone.now() - timedelta(days=900))
+        self.assertTrue(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    # -- Required suites ----------------------------------------------------
+
+    def test_a_required_suite_that_was_never_passed_denies(self):
+        self._gate(required_suites=["Red team baseline"])
+        self._run(passed=True)
+
+        decision = self.evaluate(agent=self.agent, model=self.model)
+        self.assertFalse(decision.allowed)
+        self.assertIn("Red team baseline", decision.reason)
+
+    def test_passing_every_required_suite_allows(self):
+        red_team = self._suite("Red team baseline")
+        self._gate(required_suites=["Red team baseline"])
+        self._run(passed=True, finished=timezone.now() - timedelta(minutes=5))
+        self._run(passed=True, suite=red_team)
+
+        self.assertTrue(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    # -- Interaction with the rest of the policy ----------------------------
+
+    def test_an_unapproved_model_still_fails_first(self):
+        # The registry flag is the cheaper check and the more fundamental one.
+        self._gate()
+        self._run(passed=True, model=self.shadow_model)
+
+        reason = self.evaluate(agent=self.agent, model=self.shadow_model).reason
+        self.assertIn("not approved for use", reason)
+
+    def test_another_models_evaluation_does_not_count(self):
+        self._gate()
+        self._run(passed=True, model=self.shadow_model)
+
+        decision = self.evaluate(agent=self.agent, model=self.model)
+        self.assertFalse(decision.allowed)
+        self.assertIn("never been evaluated", decision.reason)
+
+    def test_an_in_flight_run_is_not_evidence(self):
+        from apps.evaluations.models import EvaluationRun, RunStatus
+
+        self._gate()
+        EvaluationRun.objects.create(
+            organization=self.organization, suite=self.suite, model=self.model,
+            status=RunStatus.RUNNING, total_cases=10,
+        )
+        self.assertFalse(self.evaluate(agent=self.agent, model=self.model).allowed)
+
+    def test_the_gate_accepts_its_configuration_keys(self):
+        policy = Policy(
+            organization=self.organization, name="Gate",
+            policy_type=PolicyType.MODEL_APPROVAL, effect=PolicyEffect.DENY,
+            configuration={
+                "require_evaluation": True,
+                "evaluation_max_age_days": 30,
+                "required_suites": ["Model approval baseline"],
+            },
+        )
+        policy.full_clean()
 
     def test_a_blocked_risk_classification_is_caught(self):
         Policy.objects.all().delete()

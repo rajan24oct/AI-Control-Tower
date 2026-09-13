@@ -705,6 +705,51 @@ a:hover > .ct-metric { border-color: var(--ct-rule-strong); }
   overflow-y: auto;
 }
 
+/* -- Module charts -------------------------------------------------------- */
+
+/* The one-line answer above a chart. Values in ink; colour stays on the marks. */
+.ct-chart-summary {
+  font-size: .8rem;
+  color: var(--ct-body);
+  margin: 0 0 .6rem;
+  line-height: 1.45;
+}
+.ct-chart-summary strong { color: var(--ct-ink); font-weight: 600; }
+.ct-chart-summary .ct-chart-note { color: var(--ct-muted); }
+
+/* Hand-built key for charts whose marks carry per-bar colour. */
+.ct-chart-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem 1rem;
+  margin-top: .5rem;
+  font-size: .72rem;
+  color: var(--ct-muted);
+}
+.ct-chart-key span { display: inline-flex; align-items: center; gap: .35rem; }
+.ct-chart-key i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.ct-chart-key i.is-tick { width: 2px; height: 12px; border-radius: 0; background: var(--ct-ink); }
+
+/* The table twin every chart carries: the same values, readable without colour. */
+.ct-chart-table { margin-top: .6rem; }
+.ct-chart-table > summary {
+  font-size: .72rem;
+  color: var(--ct-muted);
+  cursor: pointer;
+  list-style: none;
+}
+.ct-chart-table > summary::-webkit-details-marker { display: none; }
+.ct-chart-table > summary::before { content: "\25B8"; display: inline-block; margin-right: .3rem; }
+.ct-chart-table[open] > summary::before { transform: rotate(90deg); }
+.ct-chart-table > summary:focus-visible { outline: 2px solid var(--ct-green-700); outline-offset: 2px; }
+.ct-chart-table-body { max-height: 13rem; overflow: auto; margin-top: .4rem; }
+.ct-chart-table-body table { font-variant-numeric: tabular-nums; }
+
 /* -- Evaluation output ---------------------------------------------------- */
 
 .ct-eval-output {

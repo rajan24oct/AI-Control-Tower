@@ -48,6 +48,14 @@ class Perm:
     # being able to report telemetry.
     GATEWAY_INVOKE = "gateway.invoke"
 
+    # MCP Gateway. Three different acts: registering a server points the
+    # platform at a new system; approving it and reviewing its tools is the
+    # governance decision that lets agents reach it; invoking actually calls
+    # tools that can change things in the outside world.
+    MCP_MANAGE = "mcp.manage"
+    MCP_APPROVE = "mcp.approve"
+    MCP_INVOKE = "mcp.invoke"
+
     COST_VIEW = "cost.view"
     COST_MANAGE = "cost.manage"
 
@@ -95,6 +103,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.COST_MANAGE,
         Perm.PROMPT_VIEW,
         Perm.GATEWAY_INVOKE,
+        Perm.MCP_MANAGE,
+        Perm.MCP_INVOKE,
     },
     Role.AI_DEVELOPER: _READ_ONLY
     | {
@@ -104,10 +114,12 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.TELEMETRY_INGEST,
         Perm.PROMPT_VIEW,
         Perm.GATEWAY_INVOKE,
+        Perm.MCP_INVOKE,
     },
     Role.GOVERNANCE_MANAGER: _READ_ONLY
     | {
         Perm.MODEL_APPROVE,
+        Perm.MCP_APPROVE,
         Perm.POLICY_MANAGE,
         Perm.RISK_MANAGE,
         Perm.APPROVAL_DECIDE,

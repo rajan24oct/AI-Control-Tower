@@ -100,7 +100,12 @@ class MessagingService:
             environment=request.environment,
             estimated_cost=Decimal("0"),
         )
-        decision = PolicyEngine.check(organization, context, requested_action="gateway.message")
+        # Agent-level policies only: no model serves a message, so gating one
+        # on the sender's declared model would be checking something that has
+        # nothing to do with whether the message may be sent.
+        decision = PolicyEngine.check_agent(
+            organization, context, requested_action="gateway.message"
+        )
 
         if not decision.allowed:
             return (decision.reason or "Blocked by policy.", decision.policy_names)

@@ -68,6 +68,7 @@ LOCAL_APPS = [
     "apps.policies",
     "apps.routing",
     "apps.gateway",
+    "apps.mcp_gateway",
     "apps.evaluations",
     "apps.notifications",
     "apps.inventory",
@@ -282,6 +283,25 @@ CONTROL_TOWER = {
         # Hard-stop budgets refuse traffic. Set false to make every budget
         # advisory again without editing each one.
         "ENFORCE_BUDGETS": env_bool("GATEWAY_ENFORCE_BUDGETS", True),
+    },
+    # MCP Gateway. The same trade as the AI Gateway: the platform is in the
+    # path of every tool call it brokers, so an upstream that hangs must not
+    # hang the agent, and a server that keeps failing is taken out of the path.
+    "MCP_GATEWAY": {
+        "CALL_TIMEOUT_SECONDS": float(os.environ.get("MCP_GATEWAY_CALL_TIMEOUT", "30")),
+        "CIRCUIT_FAILURE_THRESHOLD": int(os.environ.get("MCP_GATEWAY_CIRCUIT_THRESHOLD", "5")),
+        "CIRCUIT_COOL_OFF_SECONDS": int(os.environ.get("MCP_GATEWAY_CIRCUIT_COOL_OFF", "30")),
+        # A tool a server starts advertising is not callable until someone has
+        # reviewed it -- and neither is one whose definition changes after
+        # review. Turning this off trusts every upstream with every tool.
+        "REVIEW_NEW_TOOLS": env_bool("MCP_GATEWAY_REVIEW_NEW_TOOLS", True),
+        # Tool arguments and result previews are kept in the call log and
+        # shown only to holders of prompt.view. False keeps them out entirely.
+        "RECORD_ARGUMENTS": env_bool("MCP_GATEWAY_RECORD_ARGUMENTS", True),
+        "MAX_RECORDED_CHARS": 2000,
+        # Browser origins allowed to reach the MCP endpoint, in addition to
+        # CSRF_TRUSTED_ORIGINS. Clients that are not browsers send no Origin.
+        "ALLOWED_ORIGINS": env_list("MCP_GATEWAY_ALLOWED_ORIGINS"),
     },
     "PROMPT_DISPLAY": {
         "MAX_CHARS": 1200,

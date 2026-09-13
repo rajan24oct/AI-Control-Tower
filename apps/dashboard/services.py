@@ -521,6 +521,131 @@ class DashboardService:
                 self.agents.values("framework").annotate(total=Count("id")).order_by("-total"),
                 "framework", dict(AgentFramework.choices),
             ),
+            # One chart per platform module, each answering the question that
+            # module exists to answer rather than restating its row counts.
+            "policy_verdicts": self._daily_policy_verdicts(),
+            "routing_outcomes": self._daily_routing_outcomes(),
+            "gateway_coverage": self._daily_gateway_coverage(),
+            "evaluation_evidence": self._evaluation_evidence(),
+        }
+
+    # -- Platform module charts -----------------------------------------------
+
+    #: Models shown on the evaluation chart. Past this a bar chart stops being
+    #: readable; the Evaluation Centre holds the full list.
+    EVIDENCE_LIMIT = 10
+
+    def _by_day(self, queryset, date_field: str, buckets: dict) -> dict:
+        """Count rows per day into named buckets across the selected window.
+
+        Every day in the window is present, so a quiet day renders as zero
+        rather than as a gap the reader has to interpret.
+        """
+        rows = (
+            queryset.filter(**{
+                f"{date_field}__date__gte": self.range.start,
+                f"{date_field}__date__lte": self.range.end,
+            })
+            .annotate(day=TruncDate(date_field))
+            .values("day")
+            .annotate(**{name: Count("id", filter=condition) for name, condition in buckets.items()})
+        )
+        by_day = {row["day"]: row for row in rows}
+        days = self._day_series()
+
+        series = {"labels": [self._day_label(day) for day in days]}
+        for name in buckets:
+            series[name] = [by_day.get(day, {}).get(name, 0) for day in days]
+        series["totals"] = {name: sum(series[name]) for name in buckets}
+        return series
+
+    def _daily_policy_verdicts(self) -> dict:
+        """What the policy engine stopped, sent to a human, or merely noted."""
+        return self._by_day(
+            PolicyViolation.objects.for_organization(self.organization),
+            "created_at",
+            {
+                "denied": Q(effect=PolicyEffect.DENY),
+                "approval": Q(effect=PolicyEffect.REQUIRE_APPROVAL),
+                "warned": Q(effect=PolicyEffect.WARN),
+            },
+        )
+
+    def _daily_routing_outcomes(self) -> dict:
+        """How often the first choice worked, and how often nothing did."""
+        from apps.routing.models import RouteOutcome, RoutingDecision
+
+        served = Q(outcome=RouteOutcome.SERVED)
+        series = self._by_day(
+            RoutingDecision.objects.for_organization(self.organization),
+            "created_at",
+            {
+                # An engine reporting an outcome without an attempt number gave
+                # no sign of falling back, so it is not counted as one.
+                "first_choice": served & (Q(attempt__lte=1) | Q(attempt__isnull=True)),
+                "fallback": served & Q(attempt__gt=1),
+                "failed": Q(outcome=RouteOutcome.EXHAUSTED),
+            },
+        )
+        totals = series["totals"]
+        served_total = totals["first_choice"] + totals["fallback"]
+        series["fallback_rate"] = totals["fallback"] / served_total if served_total else 0.0
+        return series
+
+    def _daily_gateway_coverage(self) -> dict:
+        """How much of the estate's traffic is actually under enforcement.
+
+        Reported traffic is observed; gateway traffic is governed. The share
+        between the two is the honest measure of what the controls reach.
+        """
+        series = self._by_day(
+            self.executions,
+            "started_at",
+            {"gateway": Q(source_adapter="gateway"), "reported": ~Q(source_adapter="gateway")},
+        )
+        totals = series["totals"]
+        everything = totals["gateway"] + totals["reported"]
+        series["gateway_share"] = totals["gateway"] / everything if everything else 0.0
+        return series
+
+    def _evaluation_evidence(self) -> dict:
+        """The latest completed run per model, worst first.
+
+        Deliberately not date-filtered: the question is what the current
+        evidence says, and a model evaluated last month still has that as its
+        evidence. The latest run is used, never the best one -- the same rule
+        the model-approval gate applies.
+        """
+        from django.db.models import OuterRef, Subquery
+
+        from apps.evaluations.models import EvaluationRun, RunStatus
+        from apps.evaluations.services import EvaluationStats
+
+        completed = EvaluationRun.objects.for_organization(self.organization).filter(
+            status=RunStatus.COMPLETED, model__isnull=False
+        )
+        latest_for_model = (
+            completed.filter(model=OuterRef("model"))
+            .order_by("-finished_at")
+            .values("pk")[:1]
+        )
+        runs = list(
+            completed.filter(pk=Subquery(latest_for_model)).select_related("model", "suite")
+        )
+
+        # Worst first: what needs attention sits where the eye lands.
+        verdict_rank = {"blocked": 0, "failed": 1, "passed": 2}
+        runs.sort(key=lambda run: (verdict_rank.get(run.verdict, 3), run.score))
+        runs = runs[: self.EVIDENCE_LIMIT]
+
+        return {
+            "labels": [run.model.model_name for run in runs],
+            "scores": [float(run.score) for run in runs],
+            "thresholds": [run.suite.pass_threshold for run in runs],
+            "verdicts": [run.verdict for run in runs],
+            "blocked_by": [run.blocked_by_category for run in runs],
+            "suites": [run.suite.name for run in runs],
+            "unevaluated_approved": EvaluationStats(self.organization).unevaluated_approved_count(),
         }
 
     def _day_series(self):

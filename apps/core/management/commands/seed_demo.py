@@ -304,6 +304,9 @@ class Command(BaseCommand):
         governance = self._governance(
             organization, users, teams, applications, agents, models, providers
         )
+        # MCP traffic runs after governance so the gateway judges it against
+        # the seeded policies: its refusals are the policies' own decisions.
+        mcp = self._mcp(organization, agents, teams, users)
 
         self._say()
         self._say(f"Seeded '{organization.name}'", self.style.SUCCESS)
@@ -324,6 +327,10 @@ class Command(BaseCommand):
         self._say(
             f"  {governance['policies']} control policies, "
             f"{governance['violations']} policy findings"
+        )
+        self._say(
+            f"  {mcp['servers']} MCP servers, {mcp['tools']} MCP tools, "
+            f"{mcp['calls']} MCP tool calls"
         )
         self._say()
         self._say(f"  Sign in: {USERS[0][0]} / {password}")
@@ -560,6 +567,12 @@ class Command(BaseCommand):
             "budgets": len(budgets),
             "alerts": alerts,
         }
+
+    def _mcp(self, organization, agents, teams, users) -> dict:
+        """MCP servers, reviewed tools, grants and brokered traffic."""
+        from apps.mcp_gateway.demo import seed_mcp
+
+        return seed_mcp(organization, agents, teams, users)
 
     def _superuser(self, email: str, password: str) -> bool:
         if not email or User.objects.filter(email=email).exists():

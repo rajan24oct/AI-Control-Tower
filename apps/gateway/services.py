@@ -352,6 +352,12 @@ class GatewayService:
                 )
                 continue
 
+            denial = cls._model_denial(organization, request, model)
+            if denial:
+                attempts.append(Attempt(model, False, 0, skipped=denial))
+                last_error = denial
+                continue
+
             adapter = model.provider.get_adapter(
                 timeout=min(remaining, float(setting("ATTEMPT_TIMEOUT_SECONDS", 30)))
             )
@@ -390,12 +396,8 @@ class GatewayService:
         Routing.report_outcome(
             decision, outcome=RouteOutcome.EXHAUSTED, detail=last_error or "No attempt succeeded."
         )
-        raise AllAttemptsFailed(
-            "Every model in the route failed before streaming could start.",
-            detail={
-                "attempts": [a.as_entry(i) for i, a in enumerate(attempts, start=1)],
-                "last_error": last_error,
-            },
+        cls._raise_exhausted(
+            attempts, last_error, "Every model in the route failed before streaming could start."
         )
 
     @staticmethod
@@ -542,6 +544,11 @@ class GatewayService:
 
         Everywhere else a `deny` is a recommendation an engine may ignore. The
         gateway is holding the request, so here it is the answer.
+
+        Only the agent-level policies are decided here. Which model serves is
+        not known until routing has run, and checking the model the agent
+        merely *declares* would refuse requests that routing would have served
+        from a permitted model -- see `_model_denial`.
         """
         from apps.policies.services import PolicyContext, PolicyEngine
 
@@ -557,7 +564,9 @@ class GatewayService:
             environment=request.environment,
             estimated_cost=Decimal("0"),
         )
-        decision = PolicyEngine.check(organization, context, requested_action="gateway.complete")
+        decision = PolicyEngine.check_agent(
+            organization, context, requested_action="gateway.complete"
+        )
 
         if not decision.allowed:
             raise PolicyDenied(
@@ -632,6 +641,12 @@ class GatewayService:
                 )
                 continue
 
+            denial = cls._model_denial(organization, request, model)
+            if denial:
+                attempts.append(Attempt(model, False, 0, skipped=denial))
+                last_error = denial
+                continue
+
             attempt_started = time.monotonic()
             try:
                 result = cls._call(model, request, timeout=min(remaining, float(setting("ATTEMPT_TIMEOUT_SECONDS", 30))))
@@ -670,13 +685,55 @@ class GatewayService:
         Routing.report_outcome(
             decision, outcome=RouteOutcome.EXHAUSTED, detail=last_error or "No attempt succeeded."
         )
+        cls._raise_exhausted(attempts, last_error, "Every model in the route failed.")
+
+    @staticmethod
+    def _raise_exhausted(attempts, last_error: str, message: str):
+        """Fail with the status that matches *why* nothing served.
+
+        A chain where every candidate was refused by policy is a refusal, not a
+        bad gateway: the caller must not retry it, and a 502 would tell them to.
+        """
+        entries = [a.as_entry(i) for i, a in enumerate(attempts, start=1)]
+        attempted = [a for a in attempts if not a.skipped]
+
+        if attempts and not attempted and all(a.skipped for a in attempts):
+            if any("policy" in a.skipped.lower() or "not approved" in a.skipped.lower()
+                   or "evaluat" in a.skipped.lower() for a in attempts):
+                raise PolicyDenied(
+                    "No permitted model is available for this request.",
+                    detail={"attempts": entries},
+                )
+
         raise AllAttemptsFailed(
-            "Every model in the route failed.",
-            detail={
-                "attempts": [a.as_entry(i) for i, a in enumerate(attempts, start=1)],
-                "last_error": last_error,
-            },
+            message, detail={"attempts": entries, "last_error": last_error}
         )
+
+    @staticmethod
+    def _model_denial(organization, request: GatewayRequest, model) -> str:
+        """Why this candidate may not serve, or an empty string.
+
+        The pre-flight check runs before routing, so it can only see the model
+        the *agent declares*. Routing may well choose a different one -- so the
+        model-dependent policies are re-checked here, against the model that
+        would actually run. Without this, gating on model approval or on
+        evaluation evidence would be checking the wrong model.
+        """
+        from apps.policies.services import PolicyContext, PolicyEngine
+
+        context = PolicyContext(
+            agent=request.agent,
+            action="gateway.complete",
+            data_classification=getattr(request.agent, "data_classification", "") or "",
+            environment=request.environment,
+            estimated_cost=Decimal("0"),
+        )
+        decision = PolicyEngine.check_model(
+            organization, model, context, requested_action="gateway.complete"
+        )
+        if decision.allowed and not decision.requires_approval:
+            return ""
+        return decision.reason or f"{model.model_name} is not permitted by policy."
 
     @staticmethod
     def _call(model, request: GatewayRequest, *, timeout: float):

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load control_tower humanize mcp_tags %}
+
+{% block title %}MCP Tool Calls{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="results" data-ajax-region>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="{% url 'mcp_gateway:overview' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> MCP Gateway
+    </a>
+    <form method="get" class="d-flex align-items-center gap-2 flex-wrap" data-ajax-filter="#results">
+      <input type="search" name="q" value="{{ search_query }}"
+             class="form-control form-control-sm" placeholder="Tool or reason" style="width:14rem">
+      <select name="status" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any status</option>
+        {% for value, label in call_statuses %}
+          <option value="{{ value }}" {% if active_filters.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="server" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any server</option>
+        {% for server in servers %}
+          <option value="{{ server.pk }}" {% if active_filters.server == server.pk|stringformat:"s" %}selected{% endif %}>{{ server.name }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+  </div>
+
+  {% if not can_view_content %}
+    <p class="small text-muted">
+      <i class="bi bi-eye-slash"></i> Argument values and results are hidden: reading what agents
+      sent to tools needs the <code>prompt.view</code> permission.
+    </p>
+  {% endif %}
+
+  <div class="ct-card mb-3">
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>When</th><th>Tool</th><th>Caller</th><th>Status</th><th class="text-end">Latency</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          {% for call in calls %}
+            <tr>
+              <td class="small text-nowrap">{{ call.created_at|naturaltime }}</td>
+              <td>
+                <code class="small">{{ call.tool_name }}</code>
+                <div class="small text-muted">
+                  {% if call.server %}<a href="{% url 'mcp_gateway:server_detail' call.server.pk %}" class="text-decoration-none">{{ call.server.name }}</a>{% endif %}
+                  &middot; {{ call.get_channel_display }}
+                </div>
+              </td>
+              <td class="small">
+                {{ call.agent.name|default:"No agent named" }}
+                {% if call.service_account %}<div class="text-muted">{{ call.service_account.name }}</div>{% endif %}
+                {% if call.execution %}
+                  <div><a href="{% url 'executions:detail' call.execution.pk %}" class="text-decoration-none font-monospace">{{ call.execution.external_id|truncatechars:24 }}</a></div>
+                {% endif %}
+              </td>
+              <td class="text-nowrap">
+                <span class="badge badge-soft text-bg-{{ call.status|call_status_style }}">{{ call.get_status_display }}</span>
+              </td>
+              <td class="small text-end">{% if call.latency_ms is not None %}{{ call.latency_ms }} ms{% else %}—{% endif %}</td>
+              <td class="small" style="max-width:32rem">
+                {% if call.reason %}
+                  <div class="{% if call.status == 'blocked' or call.status == 'failed' %}text-danger{% endif %}">{{ call.reason|truncatechars:160 }}</div>
+                {% endif %}
+                {% if call.policies %}
+                  <div class="text-muted">Policies: {{ call.policies|join:", " }}</div>
+                {% endif %}
+                {% if call.arguments %}
+                  {% if can_view_content %}
+                    <div class="text-muted text-break"><code>{{ call.arguments|as_json|truncatechars:220 }}</code></div>
+                  {% else %}
+                    <div class="text-muted">Arguments: {{ call.arguments.keys|join:", " }}</div>
+                  {% endif %}
+                {% endif %}
+                {% if can_view_content and call.result_preview %}
+                  <div class="text-muted text-break">&rarr; {{ call.result_preview|truncatechars:160 }}</div>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6">
+              <div class="ct-empty py-5">
+                <i class="bi bi-list-columns-reverse"></i>
+                <p class="mb-0">No tool calls match these filters.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endif %}
+{% endblock %}

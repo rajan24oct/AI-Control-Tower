@@ -280,10 +280,10 @@ class EvaluationStats:
             "failed": completed.filter(passed=False).count(),
             "blocked": completed.exclude(blocked_by_category="").count(),
             "spend": completed.aggregate(total=Sum("total_cost"))["total"] or Decimal("0"),
-            "unevaluated_approved_models": self._unevaluated(),
+            "unevaluated_approved_models": self.unevaluated_approved_count(),
         }
 
-    def _unevaluated(self) -> int:
+    def unevaluated_approved_count(self) -> int:
         """Approved models with no completed evaluation behind them.
 
         The number a governance manager actually wants: how much of what we have

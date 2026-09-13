@@ -246,11 +246,10 @@ class ModuleStatusTests(TestCase):
         modules = {m.name: m for m in DashboardService(self.organization).build().modules}
         self.assertIn("1 active policies", modules["Policy engine"].description)
 
-    def test_the_modules_card_renders(self):
+    def test_the_modules_card_is_not_on_the_dashboard(self):
+        # Removed by request; the per-module charts carry this information now.
         response = self.client.get(reverse("dashboard:home"))
-        self.assertContains(response, "Platform Modules")
-        self.assertContains(response, "Model routing")
-        self.assertContains(response, "Evaluation centre")
+        self.assertNotContains(response, "Platform Modules")
 
     def test_policy_metrics_appear_on_the_dashboard(self):
         response = self.client.get(reverse("dashboard:home"))

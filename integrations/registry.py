@@ -81,6 +81,9 @@ class AdapterRegistry:
     def register_execution(self, key: str, adapter_class: type, **kwargs) -> type:
         return self.register(AdapterKind.EXECUTION, key, adapter_class, **kwargs)
 
+    def register_mcp(self, key: str, adapter_class: type, **kwargs) -> type:
+        return self.register(AdapterKind.MCP, key, adapter_class, **kwargs)
+
     # -- Lookup -------------------------------------------------------------
 
     def get_class(self, kind: str, key: str) -> type:
@@ -104,6 +107,9 @@ class AdapterRegistry:
 
     def get_execution(self, key: str, config: AdapterConfig | None = None) -> BaseExecutionAdapter:
         return self.get(AdapterKind.EXECUTION, key, config)
+
+    def get_mcp(self, key: str, config: AdapterConfig | None = None) -> BaseMCPAdapter:
+        return self.get(AdapterKind.MCP, key, config)
 
     # -- Introspection ------------------------------------------------------
 
@@ -172,6 +178,14 @@ def register_agent(key: str, **kwargs):
 def register_execution(key: str, **kwargs):
     def decorator(cls):
         registry.register_execution(key, cls, **kwargs)
+        return cls
+
+    return decorator
+
+
+def register_mcp(key: str, **kwargs):
+    def decorator(cls):
+        registry.register_mcp(key, cls, **kwargs)
         return cls
 
     return decorator

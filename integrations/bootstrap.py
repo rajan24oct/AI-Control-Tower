@@ -20,6 +20,8 @@ ADAPTER_MODULES = [
     "integrations.providers.generic_rest",
     "integrations.agents.mock",
     "integrations.webhooks.generic",
+    "integrations.mcp.mock",
+    "integrations.mcp.streamable_http",
 ]
 
 _loaded = False

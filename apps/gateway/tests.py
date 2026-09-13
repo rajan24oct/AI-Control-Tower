@@ -267,7 +267,7 @@ class GatewayEnforcementTests(GatewayFixtureMixin, TestCase):
         self.build_estate()
 
     def test_a_deny_policy_stops_the_request(self):
-        with patch("apps.policies.services.PolicyEngine.check") as check:
+        with patch("apps.policies.services.PolicyEngine.check_agent") as check:
             check.return_value.allowed = False
             check.return_value.requires_approval = False
             check.return_value.reason = "Blocked by policy."
@@ -278,7 +278,7 @@ class GatewayEnforcementTests(GatewayFixtureMixin, TestCase):
                 GatewayService.complete(self.organization, self.request())
 
     def test_a_denied_request_never_reaches_a_provider(self):
-        with patch("apps.policies.services.PolicyEngine.check") as check, \
+        with patch("apps.policies.services.PolicyEngine.check_agent") as check, \
              patch("apps.providers.models.registry.get_provider") as get_provider:
             check.return_value.allowed = False
             check.return_value.requires_approval = False
@@ -320,6 +320,115 @@ class GatewayEnforcementTests(GatewayFixtureMixin, TestCase):
             get_provider.return_value.execute.return_value = result()
             response = GatewayService.complete(self.organization, self.request())
         self.assertEqual(response.output_text, "hello")
+
+
+class ModelGateTests(GatewayFixtureMixin, TestCase):
+    """The model that actually runs has to clear model-dependent policy.
+
+    The pre-flight check runs before routing, so it can only see the model the
+    agent declares. These cover the gap that leaves.
+    """
+
+    def setUp(self):
+        self.build_estate()
+        # Routing has its own approval filter. Turn it off so a denied model
+        # still reaches the chain and the *policy* layer is what stops it --
+        # otherwise this suite would only be re-testing routing.
+        RoutingPolicy.objects.filter(organization=self.organization).update(
+            require_approved_models=False
+        )
+
+    def _deny_model(self, model):
+        """Deny exactly one model, leaving the rest permitted."""
+        Policy.objects.create(
+            organization=self.organization,
+            name=f"Block {model.model_name}",
+            policy_type=PolicyType.MODEL_APPROVAL,
+            effect=PolicyEffect.DENY,
+            status=LifecycleStatus.ACTIVE,
+        )
+        model.approved_for_use = False
+        model.save(update_fields=["approved_for_use"])
+
+    def test_a_denied_primary_falls_through_to_a_permitted_fallback(self):
+        self._deny_model(self.primary_model)
+
+        with patch("apps.providers.models.registry.get_provider") as get_provider:
+            get_provider.return_value.execute.return_value = result(text="from the backup")
+            response = GatewayService.complete(self.organization, self.request())
+
+        self.assertEqual(response.model, self.backup_model)
+        self.assertTrue(any("not approved" in a.skipped for a in response.attempts if a.skipped))
+
+    def test_a_denied_model_is_never_called(self):
+        self._deny_model(self.primary_model)
+        called = []
+
+        def get_provider(key, config):
+            from unittest.mock import MagicMock
+
+            adapter = MagicMock()
+            adapter.execute.side_effect = lambda r: (called.append(r.model_id), result())[1]
+            return adapter
+
+        with patch("apps.providers.models.registry.get_provider", side_effect=get_provider):
+            GatewayService.complete(self.organization, self.request())
+
+        self.assertEqual(called, ["backup-large"])
+
+    def test_a_chain_where_every_model_is_denied_is_a_refusal_not_a_bad_gateway(self):
+        # A 502 would tell the caller to retry, and retrying will never work.
+        self._deny_model(self.primary_model)
+        self._deny_model(self.backup_model)
+
+        with patch("apps.providers.models.registry.get_provider") as get_provider:
+            with self.assertRaises(PolicyDenied):
+                GatewayService.complete(self.organization, self.request())
+            get_provider.return_value.execute.assert_not_called()
+
+    def test_an_evaluation_gate_blocks_the_model_that_would_serve(self):
+        """The bug this exists to prevent: gating the wrong model."""
+        from apps.evaluations.models import EvaluationRun, EvaluationSuite, RunStatus
+
+        Policy.objects.create(
+            organization=self.organization, name="Must pass evaluation",
+            policy_type=PolicyType.MODEL_APPROVAL, effect=PolicyEffect.DENY,
+            status=LifecycleStatus.ACTIVE,
+            configuration={"require_evaluation": True},
+        )
+        suite = EvaluationSuite.objects.create(
+            organization=self.organization, name="Baseline", status=LifecycleStatus.ACTIVE
+        )
+        # Only the backup has evidence, so only the backup may serve -- even
+        # though routing would otherwise prefer the cheaper primary.
+        EvaluationRun.objects.create(
+            organization=self.organization, suite=suite, model=self.backup_model,
+            status=RunStatus.COMPLETED, passed=True, score=Decimal("95.00"),
+            total_cases=5, completed_cases=5, passed_cases=5, finished_at=timezone.now(),
+        )
+
+        with patch("apps.providers.models.registry.get_provider") as get_provider:
+            get_provider.return_value.execute.return_value = result()
+            response = GatewayService.complete(self.organization, self.request())
+
+        self.assertEqual(response.model, self.backup_model)
+        self.assertTrue(
+            any("never been evaluated" in a.skipped for a in response.attempts if a.skipped)
+        )
+
+    def test_the_streaming_path_applies_the_same_gate(self):
+        self._deny_model(self.primary_model)
+
+        from unittest.mock import MagicMock
+
+        adapter = MagicMock()
+        adapter.supports.return_value = True
+        adapter.stream.side_effect = lambda r: chunks("backup text")
+
+        with patch("apps.providers.models.registry.get_provider", return_value=adapter):
+            events = dict(GatewayService.stream(self.organization, self.request()))
+
+        self.assertEqual(events["start"]["model"], "backup-large")
 
 
 class GatewayResilienceTests(GatewayFixtureMixin, TestCase):
@@ -489,7 +598,7 @@ class StreamingTests(GatewayFixtureMixin, TestCase):
         self.assertFalse(ProviderCircuit.objects.exists())
 
     def test_policy_is_enforced_before_any_event_is_produced(self):
-        with patch("apps.policies.services.PolicyEngine.check") as check, \
+        with patch("apps.policies.services.PolicyEngine.check_agent") as check, \
              patch("apps.providers.models.registry.get_provider") as get_provider:
             check.return_value.allowed = False
             check.return_value.requires_approval = False
@@ -554,7 +663,7 @@ class StreamingEndpointTests(GatewayFixtureMixin, TestCase):
 
     def test_a_refusal_stays_a_real_status_code_not_a_200_stream(self):
         """A client must not have to parse a success to learn it was denied."""
-        with patch("apps.policies.services.PolicyEngine.check") as check:
+        with patch("apps.policies.services.PolicyEngine.check_agent") as check:
             check.return_value.allowed = False
             check.return_value.requires_approval = False
             check.return_value.reason = "Blocked by policy."
@@ -675,7 +784,7 @@ class MessagingTests(GatewayFixtureMixin, TestCase):
         self.assertEqual(second, [])
 
     def test_a_blocked_message_is_kept_with_its_reason(self):
-        with patch("apps.policies.services.PolicyEngine.check") as check:
+        with patch("apps.policies.services.PolicyEngine.check_agent") as check:
             check.return_value.allowed = False
             check.return_value.requires_approval = False
             check.return_value.reason = "Agents may not discuss pricing."
@@ -689,7 +798,7 @@ class MessagingTests(GatewayFixtureMixin, TestCase):
         self.assertIn("pricing", message.blocked_reason.lower())
 
     def test_a_blocked_message_is_never_delivered(self):
-        with patch("apps.policies.services.PolicyEngine.check") as check:
+        with patch("apps.policies.services.PolicyEngine.check_agent") as check:
             check.return_value.allowed = False
             check.return_value.requires_approval = False
             check.return_value.reason = "no"

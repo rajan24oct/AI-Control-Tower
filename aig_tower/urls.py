@@ -13,6 +13,7 @@ urlpatterns = [
     path("policies/", include("apps.policies.urls")),
     path("routing/", include("apps.routing.urls")),
     path("gateway/", include("apps.gateway.urls")),
+    path("mcp-gateway/", include("apps.mcp_gateway.urls")),
     path("evaluations/", include("apps.evaluations.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("audit/", include("apps.audit.urls")),
