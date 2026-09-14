@@ -262,7 +262,12 @@ python manage.py seed_demo
 This builds *Northwind Financial Group*: 8 users across every role, 4 teams, providers, models,
 agents, applications, 500 mock executions, pricing, budgets and alerts, risks, approval rules and
 requests, the seven default control policies with findings, and a governed MCP estate (servers,
-reviewed tools, access grants and real gateway traffic).
+reviewed tools, access grants and real gateway traffic). It then runs the IRGF lifecycle over the
+estate:
+- risk classifications
+- deployment authorizations for three agents and one application
+- a change waiting at Gate G4, and an exception waiting for its decision
+- the Control Plane checking all of it
 
 | Option | Default | Effect |
 |---|---|---|
@@ -271,7 +276,38 @@ reviewed tools, access grants and real gateway traffic).
 | `--executions` | `500` | Mock executions to generate; `0` skips them |
 
 `seed_demo` is safe to re-run: records are updated in place. It does **replace** the mock
-execution history each time (unless `--executions 0`).
+execution history each time (unless `--executions 0`). It ends with a summary like this:
+
+```text
+Seeded 'Northwind Financial Group'
+  8 users, 4 teams, 5 providers, 10 models, 8 agents, 5 applications
+  500 executions, 12218 execution events
+  12 risks, 10 approval requests, 7 approval rules
+  5 budgets, 9 budget alerts, 1 pricing version
+  7 control policies, 8 policy findings
+  7 MCP servers, 15 MCP tools, 46 MCP tool calls
+  11 IRGF risk classifications (stage S2)
+  3 agent deployment authorizations in force (IRGF S7, Gate G3)
+  1 application authorization(s) in force, with composite authority (IRGF chapter 16)
+  560 actions verified (IRGF link 07), 13 unresolved drift records, 2 incidents (M13)
+```
+
+The classification line appears on the first run only. A re-run never rewrites score history or
+gate decisions. The Control Plane records are rebuilt on every run, so the count of verified
+actions can differ by a few.
+
+Each IRGF record in the demo is easiest to see as the person it is waiting for:
+
+| To see | Sign in as | Open |
+|---|---|---|
+| Everything, and the second signature on a Tier 4 decision | `ava.mitchell@northwind.example` — Organization Administrator, the Enterprise Governance Sponsor | Any page |
+| The first signature on the Tier 4 change and exception that are waiting | `sofia.hernandez@northwind.example` — AI Governance Manager, the AI Governance Body | *AI Governance → Changes · G4* and *Exceptions · M17* |
+| All four resolutions of a drift incident | `tom.becker@northwind.example` — Risk Manager | *AI Governance → Drift · M13*, the support agent's action-limit breach |
+| An application whose authorization is blocked by an unauthorized agent | `chen.wei@northwind.example` — the Customer Support Portal's business owner | The portal's page → *Request authorization* |
+
+The IRGF alignment explains each record: [gates](docs/irgf-alignment.md#10-phase-2-gates-g3-and-g4-and-m17-exceptions),
+[the Control Plane](docs/irgf-alignment.md#11-phase-3-the-control-plane) and
+[applications](docs/irgf-alignment.md#12-phase-4-applications-and-composite-authority).
 
 Sign in as `ava.mitchell@northwind.example` (Organization Administrator) or `admin@northwind.example`
 (superuser, for `/admin/`), with the password above. The full list of demo users and what each role
@@ -339,12 +375,51 @@ This is idempotent (it matches by name) and gives you:
 > the platform — for example, an agent at autonomy level 3 or above in production will be refused
 > gateway calls until the rule is adjusted, because a gateway call cannot wait for a human.
 
+The defaults include no IRGF policy, so nothing is refused for lacking a risk classification or a
+deployment authorization. Add those once your estate is classified and authorized (step 6).
+
 ### 5. Onboard the estate
 
 Register, in order: providers ([section 8](#8-connect-real-model-providers)) → models → agents →
 applications → MCP servers ([section 9](#9-connect-mcp-servers)) → service accounts
 ([section 10](#10-give-applications-an-identity)). The Integration Handbook's *Onboarding the
 estate* section walks through each with sample API payloads.
+
+### 6. Classify and authorize (IRGF)
+
+The platform governs every system through the IRGF lifecycle
+([IRGF alignment](docs/irgf-alignment.md)). For your own estate:
+
+1. **Assign the gate seats.** Tier 3–4 decisions belong to the AI Governance Body (`gate.decide`,
+   held by AI Governance Managers and Organization Administrators). Tier 4's second signature
+   belongs to the Enterprise Governance Sponsor (`gate.sponsor`, held by Organization
+   Administrators). Tier 4 needs two different people, so give these roles to at least two. The
+   Risk and Compliance Lead is anyone holding `risk.manage`.
+2. **Classify (S2).** Score each agent and application under *AI Governance → Risk
+   Classification*. Someone outside its delivery line countersigns: not the scorer, and not an
+   owner.
+3. **Complete each Agent Card.** For every agent that acts, record what it is not for, its action
+   limits, escalation thresholds and kill-switch conditions. At Tier 3–4 it also needs at least one
+   automatic kill-switch trigger, and a service account bound to it
+   ([section 10](#10-give-applications-an-identity)).
+4. **Mark action-limit arguments.** On each MCP server's page, say which argument of a tool that
+   moves value carries the amount, and which names the counterparty.
+5. **Authorize (Gate G3).** Press *Request authorization* on each agent's page, then on each
+   application's. The request page lists the entry criteria for the system's tier.
+6. **Enforce.** Under *AI Governance → Policies*, add a `risk_classification` policy and a
+   `deployment_authorization` policy, both with effect `deny`. The gateways then refuse any system
+   that skipped S2 or G3. Scope them to production with these configurations:
+
+   ```json
+   {"environments": ["production"], "require_countersignature": true}
+   ```
+
+   ```json
+   {"environments": ["production"]}
+   ```
+
+From then on, the Control Plane compares what runs with what was authorized. Changes to an
+authorized system wait at Gate G4.
 
 ---
 
@@ -510,7 +585,16 @@ celery -A aig_tower beat --loglevel=info
 
 The schedule lives in [`aig_tower/celery.py`](aig_tower/celery.py): provider health checks every
 5 minutes, budget threshold checks every 15, cost rollups hourly, expiry of stale approvals every
-10, reminders for expiring approvals every 30, and overdue risk-review reminders daily.
+10, reminders for expiring approvals every 30, and overdue risk-review reminders daily. Two IRGF
+jobs run alongside them:
+- the **lifecycle sweep**, hourly: it expires M17 exceptions and escalates overdue Gate G3
+  conditions
+- the **Control Plane sweep**, every minute: it verifies runs, looks for drift and escalates drift
+  past its response window
+
+Without beat, the Control Plane still verifies tool calls and agent messages as they are recorded.
+Runs and the drift checks wait until someone with `risk.manage` or `gate.decide` presses *Run the
+Control Plane now* on the Control Plane page.
 
 ---
 
@@ -626,6 +710,12 @@ environment today — add them to `aig_tower/settings.py` when you move to SMTP.
 - [ ] One Celery beat, at least one worker
 - [ ] `python manage.py check --deploy` passes
 - [ ] Default policies reviewed for your organization
+- [ ] IRGF gate seats assigned to at least two people: an AI Governance Manager, and a different
+      Organization Administrator for Tier 4's second signature
+- [ ] `risk_classification` and `deployment_authorization` policies in place once the estate is
+      classified and authorized ([section 7](#6-classify-and-authorize-irgf))
+- [ ] The Control Plane's verification ceilings suit you: 24 hours at Tier 1 down to 5 minutes at
+      Tier 4 by default, changed with `CONTROL_PLANE` in `aig_tower/settings.py`
 - [ ] Database backups (`pg_dump`) scheduled — all durable state lives in PostgreSQL; Redis holds
       only queues, cache and broadcasts
 - [ ] `python manage.py verify_audit_log --fail-on-tamper` scheduled, if you want tamper checks alerted
@@ -657,6 +747,10 @@ cannot resolve, and the **MCP Gateway** overview does the same for MCP servers.
 
 ![AI Gateway overview](docs/screenshots/11-ai-gateway.png)
 
+Then open *AI Governance → Control Plane · M12*. Signed in with `risk.manage` or `gate.decide`,
+press *Run the Control Plane now*: it verifies recent runs and reports any drift. With Celery beat
+running, this happens every minute on its own.
+
 Finally, run the test suite — it uses its own throwaway database:
 
 ```bash
@@ -682,6 +776,13 @@ docker compose up --build -d
 ```
 
 — the `web` service applies migrations and collects static files on start.
+
+**Upgrading an installation from before the IRGF lifecycle.** The migrations add the tables for
+classification, the gates and the Control Plane, and backfill one timestamp on existing policies.
+Your agents and applications start unclassified and unauthorized, and nothing is refused until you
+add IRGF policies. The Control Plane does record every system running in production without a Gate
+G3 authorization as structural drift, from its first sweep. Work through
+[section 7, step 6](#6-classify-and-authorize-irgf) to clear it.
 
 ---
 
@@ -731,6 +832,10 @@ python manage.py generate_executions --purge
 | A provider health check says *The 'openai' package is required* | `pip install openai` in the platform's environment, then restart. |
 | `database is locked` | SQLite under concurrent writes. Use PostgreSQL (Option B or C) for anything shared. |
 | `seed_demo` changed my execution history | It regenerates mock executions on every run. Use `--executions 0` to leave them alone. |
+| `seed_demo` prints no *IRGF risk classifications* line | Expected on a re-run: it classifies each system once, and never rewrites score history or gate decisions. |
+| The Control Plane never verifies runs | Celery beat is not running, so neither is the Control Plane sweep. Start beat ([section 11](#11-background-workers)), or press *Run the Control Plane now* on its page. |
+| Every production agent shows structural drift | It runs in production without a Gate G3 authorization, which is expected after an upgrade ([section 14](#14-upgrading)). Authorize it, or record an M17 exception for the divergence. |
+| A gateway refuses an agent with *has no deployment authorization* | A `deployment_authorization` policy is active and the agent holds no authorization in force for that environment. Request one from the agent's page. |
 | No emails arrive | The default backend prints them to the console. See *Email* in section 12. |
 | Celery worker exits immediately on Windows | Add `--pool=solo`. |
 

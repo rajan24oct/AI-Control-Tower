@@ -34,6 +34,14 @@ an immutable audit trail, cost and tool-definition drift. Phase 1 adds the part 
 off: a **tier for every system**, set at **S2** and **countersigned**, and puts it to work in the
 controls, in agent identity and in a kill-switch.
 
+Phases 2 to 4 build on that tier:
+- **Phase 2** adds the gates that follow it: deployment authorization at **G3**, change control at
+  **G4** and time-boxed exceptions under **M17** ([section 10](#10-phase-2-gates-g3-and-g4-and-m17-exceptions)).
+- **Phase 3** adds the **Control Plane**, which compares what runs with what was authorized
+  ([section 11](#11-phase-3-the-control-plane)).
+- **Phase 4** extends authorization from agents to **applications**
+  ([section 12](#12-phase-4-applications-and-composite-authority)).
+
 ## 2. What Phase 1 adds
 
 | Capability | IRGF reference | Where |
@@ -143,8 +151,9 @@ rule specifies must match).
 
 **Approval decisions at Tier 3–4.** When a request concerns a Tier 3 or 4 system, the person who
 raised it and the system's owners cannot approve or reject it. IRGF moves Tier 3–4 decisions to a
-governance body; until Phase 2 adds decision bodies and dual authorization, this keeps the decision
-out of the delivery line.
+governance body. Gate decisions apply IRGF's decision rights in full, including decision bodies and
+dual authorization ([section 10](#10-phase-2-gates-g3-and-g4-and-m17-exceptions)). Approval requests
+keep this simpler rule, which still keeps the decision out of the delivery line.
 
 ## 5. Agent identity: chain link 02
 
@@ -184,8 +193,9 @@ Gate G3 requires a pre-approved kill-switch for every agent that acts. Each agen
   the audit trail, and notify the agent's managers (*Agent Suspended* notifications, in-app and
   email by default).
 
-IRGF prohibits automated corrective action at Tier 3–4 except a pre-approved kill-switch; the
-platform performs none of its own.
+IRGF prohibits automated corrective action at Tier 3–4 except a pre-approved kill-switch. That is
+the only correction the platform automates. Since Phase 3, the Control Plane pulls the switch when a
+trigger the agent pre-approved at Gate G3 fires ([section 11](#11-phase-3-the-control-plane)).
 
 ## 7. The Agent Card and the governance chain
 
@@ -198,14 +208,16 @@ act. The agent record gains the fields it was missing:
 | `action_limits` — `max_value_per_action`, `max_value_per_day`, `max_actions_per_hour`, `currency`, `allowed_counterparties` | 06 Action |
 | `escalation_thresholds` — when it must hand over to a person | 06 Action |
 | `kill_switch_conditions` — the pre-approved conditions for suspension | 06 Action |
+| `kill_switch_triggers` — conditions a machine can evaluate, which suspend the agent automatically (Phase 3) | 06 Action |
 
 Together with the existing purpose, owner and allowed tools, these make up the card. An agent at
 autonomy level 2 or above, or with an allow-list of tools, **acts**, and its page lists whatever the
 card still lacks. Advisory agents are exempt, as IRGF's minimum viable framework allows. Action
 limits are validated — an unknown limit name is rejected, so a misspelt limit cannot pass for a set
-one — and are recorded, not yet enforced (see Phase 3).
+one — and, since Phase 3, the MCP Gateway enforces them before every tool call
+([section 11](#11-phase-3-the-control-plane)).
 
-![An agent's classification, governance chain, Agent Card and kill-switch](screenshots/33-irgf-agent.png)
+![The fraud agent's page: a Tier 4 classification, a governance chain with gaps, an incomplete Agent Card and the kill-switch](screenshots/33-irgf-agent.png)
 
 Each agent page also shows the **eight-link chain (M10)** and where the agent stands on each link:
 
@@ -213,11 +225,11 @@ Each agent page also shows the **eight-link chain (M10)** and where the agent st
 |---|---|
 | 01 Agent | Purpose and out-of-scope are both stated |
 | 02 Identity | A service account is bound to it (a gap at Tier 3–4 without one) |
-| 03 Permission | Always recorded: autonomy level, approval requirement, MCP grants |
+| 03 Permission | Autonomy level, approval requirement and MCP grants are recorded, and a Gate G3 authorization is in force (Phase 2) |
 | 04 Tool | It has an explicit allow-list |
 | 05 Policy | At least one deny or approval policy in scope can stop it |
-| 06 Action | Action limits and kill-switch conditions are declared, and it is not suspended |
-| 07 Verification | Planned: post-action checks arrive with the Control Plane |
+| 06 Action | Action limits and kill-switch conditions are declared and it is not suspended; at Tier 3–4, at least one kill-switch trigger is automatic (Phase 3) |
+| 07 Verification | Every action in the last day was verified against the authorized state within its tier's ceiling (Phase 3). Without a G3 authorization there is nothing to verify against |
 | 08 Audit | Always: every call and change is in the hash-verified audit trail |
 
 ## 8. Who does what
@@ -229,6 +241,11 @@ Each agent page also shows the **eight-link chain (M10)** and where the agent st
 | Bind an identity (link 02) | System owner and Security | Django admin | Administrators |
 | Pull or release the kill-switch (link 06) | System owner, Security, on-call | `agent.suspend` (release: people only) | AI Developer, AI Platform Administrator, AI Governance Manager, Risk Manager, Org Admin |
 | Decide a Tier 3–4 approval | AI Governance Body | `approval.decide`, and not the requester or an owner | AI Governance Manager, Approver, Org Admin |
+| Request a G3 authorization or an exception | System owner, delivery team | `agent.manage` / `application.manage`, or being the system's owner | AI Developer, AI Platform Administrator, Org Admin, and owners |
+| Decide at G3, G4 or M17 | By tier ([section 10](#10-phase-2-gates-g3-and-g4-and-m17-exceptions)): at Tier 1–2 the system owner (G3) or the Risk and Compliance Lead (G4, M17), or the AI Governance Body; at Tier 3 the Body; at Tier 4 the Body, then the Enterprise Governance Sponsor | Ownership, `risk.manage`, `gate.decide`, `gate.sponsor` | Owners, Risk Manager, AI Governance Manager, Org Admin |
+| Mark a tool's action-limit arguments (link 06) | Tool reviewer | `mcp.approve` | AI Governance Manager, Org Admin |
+| Revert or ratify drift (M13) | System owner, risk function or AI Governance Body | Ownership, `risk.manage` or `gate.decide` | Owners, AI Governance Manager, Risk Manager, Org Admin |
+| Except or escalate drift; run the Control Plane (M12) | Risk function or AI Governance Body | `risk.manage` or `gate.decide` | AI Governance Manager, Risk Manager, Org Admin |
 
 ## 9. A worked example
 
@@ -246,6 +263,14 @@ Each agent page also shows the **eight-link chain (M10)** and where the agent st
    After the fix, a person resumes it with a note.
 6. **Trigger.** Later the agent's autonomy is raised to level 4. Its classification is flagged for
    re-scoring, and *Needs Attention* says so, until someone scores it again.
+7. **G3 (Phase 2).** Re-scored and countersigned, the agent is authorized at Tier 4. The AI
+   Governance Body signs, then the Enterprise Governance Sponsor, and the configuration they signed
+   is frozen.
+8. **G4.** An engineer widens the kill-switch conditions. That is a material change: it waits at
+   Gate G4, and the authorization stays in force meanwhile.
+9. **M12–M13 (Phase 3).** The engine reports a run that called `approve_payout`, a tool the
+   authorization restricts. The Control Plane records a Tier 4 security incident, due the same
+   business day. Once the engine is fixed, the owner reverts it.
 
 ## 10. Phase 2: Gates G3 and G4, and M17 exceptions
 
@@ -324,8 +349,10 @@ must be the one that runs. Re-authorizing supersedes the previous record.
 **Enforcing it.** A new policy type, `deployment_authorization`, refuses agents that hold no
 authorization in force for the environment they run in. A suspended authorization counts as none.
 Its options are `environments`, and `block_pending_changes`, which also refuses material changes
-still awaiting G4. A deployment pipeline can check first with `GET /api/v1/deployment-authorizations/?agent=<id>`.
-Each agent in the API also carries its `deployment_authorization`.
+still awaiting G4. A deployment pipeline can check first:
+`GET /api/v1/deployment-authorizations/?environment=production` lists each authorization with the
+agent's `agent_id` and `in_force`. The `agent` filter takes the agent's platform UUID, not its
+`agent_id`. Each agent in the API also carries its `deployment_authorization`.
 
 ### Change (S9 · Gate G4)
 

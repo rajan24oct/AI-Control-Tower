@@ -1406,6 +1406,24 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
               <td><code>inventory.view</code></td>
             </tr>
             <tr>
+              <td class="path"><code>/agents/{id}/suspend/</code> <code>resume/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>Pull or release an agent's kill-switch (IRGF link 06). Only a person can release it.</td>
+              <td><code>agent.suspend</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/deployment-authorizations/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>Gate G3 authorizations of agents and applications, with the authorized configuration and <code>in_force</code>. A deployment pipeline checks here before it ships.</td>
+              <td><code>inventory.view</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/drift-records/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>Drift the Control Plane found (IRGF M13), for incident tooling. Resolving stays in the Control Tower.</td>
+              <td><code>inventory.view</code></td>
+            </tr>
+            <tr>
               <td class="path"><code>ws://…/ws/executions/{org_id}/</code></td>
               <td><span class="verb-tag">WS</span></td>
               <td>Live push of running executions.</td>
@@ -1599,6 +1617,11 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
               <td>Do not retry. The response names the policies.</td>
             </tr>
             <tr>
+              <td>403</td><td><code>policy_denied</code>: <em>no deployment authorization</em></td>
+              <td>A <code>deployment_authorization</code> policy is active, and the agent holds no Gate G3 authorization in force here, or its authorization is suspended while a major change waits at Gate G4.</td>
+              <td>Do not retry. Request authorization from the agent's page, or have the change decided.</td>
+            </tr>
+            <tr>
               <td>403</td><td><code>agent_suspended</code></td>
               <td>The agent's kill-switch is pulled (IRGF agent chain link 06).</td>
               <td>Stop. A person must resume the agent in the Control Tower.</td>
@@ -1727,6 +1750,7 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
             <tr><td>Registry</td><td>The server is inactive or unapproved, or the tool is disabled, removed, or awaiting review.</td></tr>
             <tr><td>Access</td><td>The server is restricted and the agent holds no unexpired grant covering the tool, or the tool is on the agent's <code>restricted_tools</code>.</td></tr>
             <tr><td>Policy</td><td>An agent-level policy denies it. Tool-access policies see the tool's own name, so <code>blocked_tools</code> applies to MCP tools unchanged. A policy requiring approval refuses: a tool call cannot wait on a person.</td></tr>
+            <tr><td>Limits</td><td>The call breaks the agent's action limits (IRGF link 06): the value per action or per day, the actions per hour, or the counterparty. The value and counterparty come from the tool arguments a reviewer marked on the server's page. The attempt is an incident, and it suspends the agent if the agent pre-approved the <code>action_limit_breach</code> trigger.</td></tr>
             <tr><td>Breaker</td><td>The server failed repeatedly and is out of rotation until a probe gets through.</td></tr>
           </tbody>
         </table>
@@ -1736,7 +1760,9 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
         model can adapt &mdash; retrying will not change the answer. An unknown tool name is a
         JSON-RPC error (<code>-32602</code>). Every call, refused or not, is kept in the tool-call
         log. Name the run in <code>params._meta["io.aicontroltower/executionId"]</code> (or
-        <code>X-Execution-Id</code>) and the call also lands on that execution's timeline.
+        <code>X-Execution-Id</code>) and the call also lands on that execution's timeline. Once
+        recorded, every call is verified against the agent's Gate G3 authorization by the Control
+        Plane (IRGF link 07). A divergence becomes a drift record; it never delays your answer.
       </p>
 
       <div class="note warn">
@@ -2343,6 +2369,8 @@ def handle_ticket(question: str) -&gt; str:
             <tr><td><code>cost_limit</code></td><td><code>max_cost_per_execution</code></td><td>nothing</td></tr>
             <tr><td><code>tool_access</code></td><td><code>blocked_tools</code>, <code>environments</code></td><td>nothing</td></tr>
             <tr><td><code>human_approval</code></td><td>&mdash;</td><td>delegates to the approval rules</td></tr>
+            <tr><td><code>risk_classification</code></td><td><code>environments</code>, <code>require_countersignature</code>, <code>block_when_rescore_due</code></td><td>the agent and application carry a countersigned IRGF S2 classification</td></tr>
+            <tr><td><code>deployment_authorization</code></td><td><code>environments</code>, <code>block_pending_changes</code></td><td>the agent, and the application when the check names one, hold a Gate G3 authorization in force for the environment</td></tr>
           </tbody>
         </table>
       </div>
@@ -2351,7 +2379,8 @@ def handle_ticket(question: str) -&gt; str:
         <code>require_approval</code> or <code>warn</code> &mdash; and a priority. Unknown
         configuration keys are rejected at save time, so a typo cannot silently disable a control.
         There is deliberately no policy DSL: a new kind of control is a new evaluator function,
-        not a new grammar for operators to learn.
+        not a new grammar for operators to learn. Every type also accepts <code>tiers</code>, a list
+        of IRGF risk tiers from 1 to 4: the policy then applies only to systems at those tiers.
       </p>
 
       <h3>Pausing for a human</h3>
@@ -2386,6 +2415,17 @@ def handle_ticket(question: str) -&gt; str:
   <span class="k">"expires_at"</span>: <span class="s">"2026-09-10T09:35:56Z"</span>
 }</pre>
       </div>
+
+      <h3>Before a deployment</h3>
+      <p>
+        Under IRGF, an agent or application may run in an environment only once Gate G3 has
+        authorized it there. A deployment pipeline can check before it ships:
+        <code>GET /api/v1/deployment-authorizations/?environment=production</code> lists that
+        environment's authorizations, each with the agent's <code>agent_id</code>, its
+        <code>status</code> and <code>in_force</code>. Fail the release unless the agent you are
+        shipping appears with <code>in_force: true</code>. The <code>agent</code> and
+        <code>application</code> filters take the platform's UUIDs, not your identifiers.
+      </p>
 
       <div class="note danger">
         <span class="label">The Tower governs; it does not execute</span>
@@ -2998,6 +3038,21 @@ python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets i
               <td>Monitor says &ldquo;Polling&rdquo;</td>
               <td>The socket could not be established; the fallback took over.</td>
               <td>Check the channel layer and any proxy in front of the app.</td>
+            </tr>
+            <tr>
+              <td><code>403 identity_not_bound</code></td>
+              <td>The key's service account is bound to other agents, or the agent is Tier 3–4 and the account is not bound to it (IRGF link 02).</td>
+              <td>Use the agent's own service account, or bind this one to the agent.</td>
+            </tr>
+            <tr>
+              <td><code>403 policy_denied</code> &ldquo;&hellip; has no deployment authorization&rdquo;</td>
+              <td>A <code>deployment_authorization</code> policy is active, and the agent holds no Gate G3 authorization in force for this environment.</td>
+              <td>Request authorization from the agent's page. If it says <em>suspended</em>, a major change waits at Gate G4: have it decided.</td>
+            </tr>
+            <tr>
+              <td>MCP call <code>blocked</code>: &ldquo;Action limit (link 06) &hellip;&rdquo;</td>
+              <td>The call's value, the day's total, the hourly rate or the counterparty breaks the agent's action limits.</td>
+              <td>Stay within the Agent Card's limits, or change them through Gate G4. If the agent was suspended too, a person resumes it.</td>
             </tr>
           </tbody>
         </table>

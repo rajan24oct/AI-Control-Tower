@@ -13,7 +13,8 @@ Related documents:
 - [README](../README.md) — product overview and a tour of every screen.
 - [SETUP.md](../SETUP.md) — step-by-step installation walkthroughs with screenshots.
 - [IRGF alignment](irgf-alignment.md) — how the platform applies the Intent-to-Runtime Governance
-  Framework: risk tiers, agent identity and the kill-switch.
+  Framework: risk tiers, the deployment and change gates, the Control Plane and applications as
+  systems of agents.
 - **Integration Handbook** — `/docs/integration/` in a running instance, with sample code for Python,
   TypeScript and common agent frameworks.
 
@@ -71,7 +72,11 @@ AI Control Tower gives an organization one control plane for its AI estate:
 - **Observability.** Every run — an *execution* — with a normalized event timeline, tokens, cost and
   latency, whether an external engine reported it or a gateway served it.
 - **Governance.** Control policies, approval rules and requests, budgets, a risk register,
-  evaluation suites and a hash-verified audit trail.
+  evaluation suites and a hash-verified audit trail. On top of them runs the IRGF lifecycle:
+  - a risk tier for every system (S2)
+  - deployment authorization (Gate G3) and change control (Gate G4)
+  - time-boxed exceptions (M17)
+  - a Control Plane that compares what runs with what was authorized (M12–M13)
 - **Enforcement.** Two gateways in the request path — the **AI Gateway** for model calls and the
   **MCP Gateway** for tool calls — that turn governance into real refusals and hold the upstream
   credentials, so applications never do.
@@ -129,6 +134,7 @@ flowchart TB
         gov["Policies, approvals, budgets, routing"]
         tel["Executions and telemetry"]
         audit["Audit trail and notifications"]
+        irgf["IRGF gates and Control Plane"]
     end
 
     adapters["Adapter registry: integrations/"]
@@ -148,6 +154,8 @@ flowchart TB
     api --> domain
     aigw --> gov
     mcpgw --> gov
+    mcpgw --> irgf
+    workers --> irgf
     aigw --> adapters
     mcpgw --> adapters
     adapters --> upstream
@@ -202,31 +210,34 @@ local memory.
 
 | Stage | What happens | Refusal |
 |---|---|---|
-| Identity | The API key resolves to a service account and its organization. The role must hold `gateway.invoke`. The `agent` is resolved. | 401, 403 |
-| Policy | The policy engine evaluates the request: agent, its declared model, environment and estimated cost. Model-dependent policies are checked again against every candidate model the router picks. | 403 `policy_denied`, 202 `approval_required` |
+| Identity | The API key resolves to a service account and its organization. The role must hold `gateway.invoke`. The `agent` is resolved. A suspended or retired agent is refused, and so is a Tier 3–4 agent named by a key not bound to it. | 401, 403 (`agent_suspended`, `agent_inactive`, `identity_not_bound`) |
+| Policy | The policy engine evaluates the request: agent, its declared model, environment and estimated cost, including any `risk_classification` and `deployment_authorization` policies. Model-dependent policies are checked again against every candidate model the router picks. | 403 `policy_denied`, 202 `approval_required` |
 | Budget | A hard-stop budget that is exhausted for the current period refuses the request, unless `GATEWAY_ENFORCE_BUDGETS=0`. | 402 `budget_exceeded` |
 | Routing | Builds a ranked chain of eligible models from the routing policy, model status, provider health and breaker state. A pinned `model` goes first. | 503 `no_route` |
 | Attempt chain | Calls each candidate in turn, each under `GATEWAY_ATTEMPT_TIMEOUT`, the whole request under `GATEWAY_DEADLINE`. Failures count against the provider's circuit breaker. | 502 `all_attempts_failed` |
-| Record | Writes the execution, its cost (priced from the model registry's rates) and the routing outcome. Recording is best-effort: a failure to record never fails a call that was served. | — |
+| Record | Writes the execution, its cost (priced from the model registry's rates) and the routing outcome. Recording is best-effort: a failure to record never fails a call that was served. The Control Plane sweep later verifies the run against the agent's authorization (IRGF link 07). | — |
 
-**MCP Gateway** — `identity → registry → access → policy → breaker → upstream → record`
+**MCP Gateway** — `identity → registry → access → policy → limits → breaker → upstream → record → verify`
 
 | Stage | Checks | Outcome when it fails |
 |---|---|---|
 | Identity | API key, `mcp.invoke`, the browser `Origin`, the protocol version and the agent | HTTP 401, 403, 400 or 404 |
 | Registry | The server is active, approved and reachable over Streamable HTTP; the tool is enabled (not awaiting review, disabled or removed upstream) | `blocked` |
-| Access | The agent is active; the tool is not on its `restricted_tools`; a restricted server needs an unexpired grant for the agent that covers the tool | `blocked` |
+| Access | The agent is active and not suspended; the tool is not on its `restricted_tools`; a restricted server needs an unexpired grant for the agent that covers the tool | `blocked` |
 | Policy | The policy engine evaluates the call, with action `mcp.tool_call`, the tool name, the agent and the environment | `blocked`, naming the policies |
+| Limits | The agent's action limits (IRGF link 06): the value in the tool's value argument, per call and per day; calls per hour; the counterparty. A refusal is an incident, and fires the agent's `action_limit_breach` trigger if it has one | `blocked` |
 | Breaker | The server's circuit is closed, or its cool-off has elapsed and a probe may go through | `unavailable` |
 | Upstream | The call goes out under `MCP_GATEWAY_CALL_TIMEOUT`, with the platform injecting the server's credential | `failed`, `tool_error` or `succeeded` |
 | Record | A tool-call log entry; arguments and a result preview if `MCP_GATEWAY_RECORD_ARGUMENTS=1`; the call goes onto the caller's execution timeline when the caller names one | — |
+| Verify | Once the record commits, the Control Plane checks the call against the agent's authorized configuration (IRGF link 07). A divergence becomes a drift record; the caller's answer is not delayed | — |
 
 **Telemetry ingestion** — an engine posts a run to `/api/v1/executions/`, or a whole payload to
 `/api/v1/telemetry/webhook/`. For webhook payloads the raw body is stored first, so a rejected
 payload survives for diagnosis. An execution adapter normalizes the payload. The execution is created
 or updated by its `execution_id`, loose identifiers are resolved against the registry, and events
 are appended. Cost is derived from registry pricing when the run did not report it. Ingestion writes
-a `telemetry_ingest` audit entry.
+a `telemetry_ingest` audit entry. Once a run has been quiet for 30 seconds, the Control Plane sweep
+verifies it, including the tools it reports calling (IRGF link 07).
 
 ### 1.6 Tenancy and access control
 
@@ -561,6 +572,15 @@ and requests, the default control policies with findings, and a governed MCP est
 reviewed tools, access grants and real gateway traffic. The demo providers use the `mock` adapter,
 so gateway calls succeed without any real provider credentials.
 
+It also runs the IRGF lifecycle:
+- eleven risk classifications
+- deployment authorizations for three agents and the Claims Processing Platform
+- a change waiting at Gate G4, and an exception waiting for its decision
+- the Control Plane over all the traffic, which leaves 13 drift records open, two of them incidents
+
+[SETUP.md](../SETUP.md#6-first-sign-in-and-the-demo-estate) shows the summary the command prints,
+and whom to sign in as to act on each record.
+
 | Option | Default | Effect |
 |---|---|---|
 | `--password` | `ControlTower!2026` | Password for every demo user |
@@ -629,10 +649,12 @@ Register records in dependency order; each one refers to the ones before it.
 | 2 | Models | Admin, or `POST /api/v1/models/` | Set `model_id` exactly as the provider expects it, plus pricing per 1,000 tokens; approve with **Approve for use** (`model.approve`) |
 | 3 | Agents | UI, admin, or `POST /api/v1/agents/` | Give it a stable `agent_id` — the identifier your code sends |
 | 4 | Applications | UI, admin, or `POST /api/v1/applications/` | Link its agents, models and providers |
-| 5 | MCP servers | **MCP Gateway → Server Registry → Register server** | **Health check → Approve → Sync tools →** review each tool **→ Grant an agent** access |
+| 5 | MCP servers | **MCP Gateway → Server Registry → Register server** | **Health check → Approve → Sync tools →** review each tool **→ Grant an agent** access; mark the action-limit arguments of tools that move value |
 | 6 | Service accounts | Admin or **Integrations** | One per application ([3.3](#33-service-accounts-and-api-keys)) |
 | 7 | Guardrails | Routing policies, control policies, budgets | Optional: without a routing policy, the gateway ranks every active model of the requested type |
-| 8 | Prove it | — | A gateway call naming the agent returns `200`; the MCP catalog lists the tools you enabled; both appear under Executions and MCP Tool Calls |
+| 8 | Classification (IRGF S2) | **AI Governance → Risk Classification** | Score each agent and application; someone outside its delivery line countersigns. Complete each acting agent's Agent Card, and bind a service account to every Tier 3–4 agent |
+| 9 | Authorization (IRGF Gate G3) | **Request authorization** on each agent's page, then on the application's | The request page lists the entry criteria for the tier. To enforce S2 and G3 at the gateways, add `risk_classification` and `deployment_authorization` policies with effect `deny` |
+| 10 | Prove it | — | A gateway call naming the agent returns `200`; the MCP catalog lists the tools you enabled; both appear under Executions and MCP Tool Calls, and the Control Plane lists them as verified |
 
 ![Add a provider](screenshots/29-admin-add-provider.png)
 
@@ -961,8 +983,8 @@ unknown agent.
 | `/providers/` `/models/` `/agents/` `/applications/` | GET, POST, PUT, PATCH, DELETE | The registries | `inventory.view`; writes need the matching `*.manage` |
 | `/agents/{id}/suspend/` | POST | Pull an agent's kill-switch (IRGF link 06) | `agent.suspend` |
 | `/agents/{id}/resume/` | POST | Release it: people only, never service accounts | `agent.suspend` |
-| `/deployment-authorizations/` | GET | Deployment authorizations of agents and applications (IRGF S7 · Gate G3) with their authorized `configuration` and `in_force`; filter by `agent`, `application`, `status`, `environment`, `tier`. Deciding stays in the web UI | `inventory.view` |
-| `/drift-records/` | GET | Drift found by the Control Plane (IRGF M13); filter by `agent`, `application`, `category`, `status`, `is_incident`, `signal`, `tier`. Resolving stays in the web UI | `inventory.view` |
+| `/deployment-authorizations/` | GET | Deployment authorizations of agents and applications (IRGF S7 · Gate G3) with the agent's `agent_id`, their authorized `configuration` and `in_force`; filter by `agent`, `application`, `status`, `environment`, `tier`. The `agent` and `application` filters take platform UUIDs, not `agent_id`. Deciding stays in the web UI | `inventory.view` |
+| `/drift-records/` | GET | Drift found by the Control Plane (IRGF M13); filter by `agent`, `application` (platform UUIDs), `category`, `status`, `is_incident`, `signal`, `tier`. Resolving stays in the web UI | `inventory.view` |
 | `/mcp-servers/` | GET | The MCP registry, with tool counts | `inventory.view` |
 | `/executions/` | GET, POST | Read runs; report or update a run | `execution.view` / `telemetry.ingest` |
 | `/executions/{id}/events/` | GET, POST | Read or append the timeline | `execution.view` / `telemetry.ingest` |
@@ -1444,6 +1466,11 @@ The answer is `201` with the message — `id`, `sender`, `recipient`, `subject`,
 `GET /api/v1/gateway/messages/{agent}/` returns `{"agent", "count", "messages": [...]}` for the
 recipient, or `404` for an unknown agent.
 
+In IRGF's terms every message is a delegation (chapter 16). Once a message is recorded, the Control
+Plane checks it against the delegation graphs of the authorized applications that either agent
+belongs to. A path that none of those graphs declares becomes integration drift; the message is
+still delivered.
+
 ### 5.12 MCP Gateway
 
 One MCP endpoint in front of every governed MCP server. A client connects once and sees every tool
@@ -1502,6 +1529,17 @@ Streamable HTTP; tools that are enabled; and, for a named agent, tools it is not
 servers it may use (open servers, or restricted servers where it holds an unexpired grant covering
 the tool). Tools a `deny` tool-access policy forbids are left out, so a model is not offered what
 would be refused. The catalog is answered from the registry, never live from upstream.
+
+**Action limits (IRGF link 06).** An agent's Agent Card can limit the value of one action, the value
+per day, the actions per hour and the counterparties it deals with. The gateway can hold a tool to
+the value and counterparty limits only once a reviewer (`mcp.approve`) marks which of its arguments
+carries the value and which names the counterparty. This is set under *Action-limit arguments* on
+the MCP server's page. Each call is checked after policy and before it goes upstream:
+- A call over a limit is refused as `blocked`, with *Action limit (link 06): …*, recorded, and raised
+  as an incident.
+- If the agent pre-approved the `action_limit_breach` trigger at Gate G3, it is suspended at once.
+- The hourly rate counts calls that reached a tool.
+- Values in another currency are not converted.
 
 **Connecting clients:**
 
@@ -1581,7 +1619,7 @@ The call returns `status`, `tool`, `is_error`, `content`, `structured_content`, 
 |---|---|---|
 | 200 | `succeeded` | The tool ran |
 | 200 | `tool_error` | The tool ran and reported an error (`is_error: true`) |
-| 403 | `blocked` | The gateway refused: registry, access or policy; `reason` says which |
+| 403 | `blocked` | The gateway refused: registry, access, policy or an action limit; `reason` says which |
 | 503 | `unavailable` | The server is out of rotation or misconfigured (for example a missing credential) |
 | 502 | `failed` | The server was unreachable, timed out or broke mid-response |
 | 404 | — | Unknown tool or unknown agent |
@@ -1769,7 +1807,7 @@ cannot quietly switch a control off.
 | `tool_access` | `blocked_tools`, `environments` | No tools blocked |
 | `human_approval` | — | Delegates to the approval rules |
 | `risk_classification` | `environments`, `require_countersignature`, `block_when_rescore_due` | The agent and application must carry a countersigned IRGF S2 classification |
-| `deployment_authorization` | `environments`, `block_pending_changes` | The agent must hold a deployment authorization in force (IRGF S7 · Gate G3); a suspended one counts as none |
+| `deployment_authorization` | `environments`, `block_pending_changes` | The agent, and the application when the check names one, must each hold a deployment authorization in force for the environment (IRGF S7 · Gate G3); a suspended one counts as none |
 
 Every type also accepts `tiers`: a list of IRGF risk tiers (1–4). The policy then applies only when
 the higher of the agent's and application's tier is listed, and an unclassified system matches no
@@ -1932,6 +1970,64 @@ whatever its rating.
 
 ![Audit trail](screenshots/23-audit-trail.png)
 
+### 6.9 IRGF classification and gates
+
+[IRGF alignment](irgf-alignment.md) explains the framework. This section is how the platform keeps
+its records.
+
+| Record | App | Created | What it drives |
+|---|---|---|---|
+| Risk classification (S2) | `apps.classification` | Scoring an agent or application; a countersignature confirms it | The tier: `tiers` on policies and approval rules, identity binding at Tier 3–4, gate decision rights, drift response windows and verification ceilings |
+| Deployment authorization (G3) | `apps.lifecycle` | *Request authorization*, then the signatures its tier needs | The authorized configuration: the baseline for change detection and for the Control Plane, and what the `deployment_authorization` policy looks for |
+| Change record (G4) | `apps.lifecycle` | Automatically, when an authorized agent or application, its MCP grants, its bound identities or its tier change | Minor changes move the baseline; material ones wait for G4; major ones suspend the authorization until G4 decides |
+| Exception (M17) | `apps.lifecycle` | Requested for one agent and one policy, or for one drift record | The policy engine skips the excepted policy for that agent, for at most 90 days |
+
+- **Change detection** runs on model signals, so an edit made through the admin, the API or the
+  platform itself is caught the same way. Each difference from the authorized configuration is
+  classified with IRGF's change table, in `apps/lifecycle/irgf.py`.
+- **Decision rights** are checked on every signature, in `apps/lifecycle/decisions.py`. They settle
+  which seat the next signature needs and who may hold it. They exclude owners and requesters from
+  Tier 3, anyone deciding a change they made or an exception they requested, the same person signing
+  twice at Tier 4, and service accounts.
+- **Conditions and expiry.** The hourly lifecycle sweep escalates overdue G3 conditions to whoever
+  signed. It also expires exceptions, warning seven days ahead.
+- **Re-score triggers** flag the current S2 record when autonomy rises, data classification rises,
+  an application moves to production, or a Tier 3–4 annual review falls due.
+
+### 6.10 Control Plane
+
+`apps.controlplane` compares the running state with the authorized configuration (IRGF M12), and
+records each divergence as drift (M13).
+
+| Observed | When | Checked against |
+|---|---|---|
+| MCP tool calls | As each is recorded, once the transaction commits | Allow-list and grants, restricted tools, identity, the data classification behind the tool, environment |
+| Agent-to-agent messages | As each is recorded | The delegation graphs of the authorized applications that either agent belongs to |
+| Runs, reported or served | By the sweep, once a run has been quiet for 30 seconds | Environment, model, identity, the tools the run reports; membership of the application the run names |
+| Evaluations, policies, budgets, tool definitions | By the sweep, every minute | The evaluation pass relied on at G3; policies whose substance changed since; budget alerts at 100%; reviewed tools that changed |
+
+- **Baseline.** The frozen configuration of the authorization in force. A system without one has
+  nothing to compare against, but running it in production is itself structural drift.
+- **Drift records** carry a fingerprint, so a recurrence adds to its record, keeping the latest 20
+  pieces of evidence, rather than opening another. Category and tier set the response window (IRGF
+  chapter 19); an unclassified system is triaged as Tier 3. A missed window escalates to the
+  holders of `gate.decide`.
+- **Resolution** is in the web UI: revert, ratify, except or escalate. `GET /api/v1/drift-records/`
+  is read-only.
+- **Verification** writes one row per action, with its latency from recording to verification and
+  its tier's ceiling (`CONTROL_PLANE["VERIFICATION_CEILING_SECONDS"]`, [4.8](#48-settings-that-live-in-code)).
+  A late verification shows link 07 as a gap on the agent's page.
+- **Automatic action** is limited to the kill-switch triggers an agent pre-approved at G3:
+  `action_limit_breach`, `boundary_divergence` and `unbound_identity`. The stricter of the registry
+  and the authorized configuration applies.
+- **Notifications** (category *Drift*, in-app and email) go to the system's owner and to holders of
+  `risk.manage`. Incidents, immediate routes and escalations also go to holders of `gate.decide`.
+  Digest routes collect into one message a day.
+- **Bulk writes**, such as seeding, can run inside `apps.controlplane.signals.deferred()` to leave
+  verification to the sweep.
+
+![Control Plane](screenshots/40-control-plane.png)
+
 ---
 
 ## 7. Security
@@ -1946,6 +2042,8 @@ whatever its rating.
 | Authorization | Role-based, per organization, on every page, action and API call ([1.6](#16-tenancy-and-access-control)). |
 | Content | Reading prompt text is its own permission (`prompt.view`); text from confidential and restricted agents is redacted on screen; MCP arguments are recorded only if enabled. |
 | MCP tools | New and changed tools wait for review; servers are restricted to granted agents by default; an agent's `restricted_tools` are enforced; the endpoint refuses unconfigured browser origins (the MCP specification's defence against DNS rebinding). |
+| Agent runtime (IRGF) | Tier 3–4 agents answer only to service accounts bound to them. Any on-call role can pull a kill-switch; only a person can release it. Action limits are checked before each MCP tool call, and every action is verified against the authorized configuration within a per-tier ceiling. |
+| Separation of duties | Gate decisions follow IRGF decision rights: from Tier 3 no owner or requester signs, Tier 4 needs two different people, and service accounts never sign. |
 | Audit | Append-only, hashed entries with actor attribution; `verify_audit_log` detects tampering. |
 | Transport | With `DJANGO_DEBUG=0`: secure cookies, HSTS, `nosniff`, `X-Frame-Options: DENY`. |
 | Containers | The image runs as an unprivileged user. |
@@ -1986,6 +2084,13 @@ whatever its rating.
   descriptive, so that tools missing from an inventory record are not silently cut off.
 - **Reporting mode is advisory.** An engine that calls providers directly can ignore a policy
   verdict. The refusal is recorded, but only the gateways can stop the call.
+- **Action limits need the MCP Gateway.** Limits are enforced only on calls the gateway brokers. A
+  tool an engine calls directly is checked afterwards, from the run it reports: a restricted or
+  unlisted tool becomes drift, not a refusal.
+- **Applications and the AI Gateway.** The gateway's model calls do not name an application, so an
+  application's own authorization is checked only where a caller or telemetry names it.
+- **Business calendar.** Drift response windows skip weekends and close at 18:00, but know no public
+  holidays.
 
 ---
 
@@ -2054,11 +2159,14 @@ Checks for a monitoring system:
 - Celery worker and beat processes are running; the queue in Redis database 1 drains.
 - The **AI Gateway** and **MCP Gateway** overviews show no open breakers and no missing credentials.
 - Provider health in the registry is fresh — last checked within the 5-minute cadence.
+- The **Control Plane** shows no drift past its response window, and verification within its
+  ceilings.
 - `verify_audit_log --fail-on-tamper` exits 0.
 
 ### 8.5 Backup and restore
 
-All durable state is in PostgreSQL: the registries, executions, policies, approvals, the audit
+All durable state is in PostgreSQL: the registries, executions, policies, approvals, the IRGF
+records (classifications, authorizations, changes, exceptions, drift and verifications), the audit
 trail, breaker state and API key hashes. Redis holds only queues, cache and broadcasts, and can be
 lost without losing data. Upstream credentials live in your secret store, not in the backup.
 
@@ -2247,7 +2355,8 @@ confidential or restricted. MCP tool arguments are recorded only while
 
 **Can it run without Redis?**
 Yes, with `USE_SQLITE=1` and `CELERY_TASK_ALWAYS_EAGER=1`, for local use. Scheduled jobs do not run
-then. With PostgreSQL (`USE_SQLITE=0`), Redis is required: it carries the cache and the WebSocket
+then. The Control Plane still verifies tool calls and agent messages as they are recorded, and
+*Run the Control Plane now*, on its page, does the rest by hand. With PostgreSQL (`USE_SQLITE=0`), Redis is required: it carries the cache and the WebSocket
 channel layer as well as Celery.
 
 **Can SQLite be used in production?**
@@ -2339,9 +2448,13 @@ Traffic outside the gateway can only be alerted on.
 Run `python manage.py verify_audit_log`. Schedule it with `--fail-on-tamper` to alert.
 
 **Does the platform follow a governance framework?**
-It applies the Intent-to-Runtime Governance Framework (IRGF). Every system gets a risk tier from its
-stage S2 classification, independently countersigned, and the tier is put to work in policies,
-approval rules and agent identity, alongside an agent kill-switch. See
+It applies the Intent-to-Runtime Governance Framework (IRGF):
+- Every system gets a risk tier from its stage S2 classification, independently countersigned.
+- Agents and applications are authorized at Gate G3, and changes to them go through Gate G4.
+- Exceptions under M17 are time-boxed.
+- The Control Plane compares what runs with what was authorized.
+
+The tier decides who signs, which controls apply and how fast drift must be answered. See
 [IRGF alignment](irgf-alignment.md).
 
 **Who can countersign a risk classification?**

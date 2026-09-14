@@ -102,8 +102,8 @@ setup — PostgreSQL and Redis without Docker, a clean install without demo data
 providers and MCP servers, and production deployment — see **[SETUP.md](SETUP.md)**. For the full
 technical reference — every setting, the integration contracts of the API and both gateways,
 operations, troubleshooting and FAQs — see the **[Technical Guide](docs/technical-guide.md)**. How the
-platform applies the IRGF governance framework — risk tiers, agent identity, the kill-switch — is in
-**[IRGF alignment](docs/irgf-alignment.md)**.
+platform applies the IRGF governance framework — risk tiers, the deployment and change gates, the
+Control Plane and applications as systems of agents — is in **[IRGF alignment](docs/irgf-alignment.md)**.
 
 **Prerequisites:** Python 3.12 and Git.
 
@@ -153,7 +153,10 @@ python manage.py seed_demo
 
 `seed_demo` builds a realistic organization — *Northwind Financial Group* — with users, teams,
 providers, models, agents, applications, 500 executions, budgets, risks, policies, approvals and a
-governed MCP estate with real gateway traffic. It is idempotent; run it again whenever you like.
+governed MCP estate with real gateway traffic. It also puts the IRGF lifecycle to work: risk
+classifications, deployment authorizations for agents and one application, a change waiting at
+Gate G4, an exception, and the drift the Control Plane finds. It is idempotent; run it again
+whenever you like.
 
 On its first run it also prints a **service-account API key** — the only time that key is shown.
 Copy it: it is how external code talks to the API and both gateways. (Lost it? Open the profile
@@ -319,17 +322,23 @@ Viewer in another.
 
 | Role | Beyond read access, may… |
 |---|---|
-| Organization Administrator / Super Administrator | Everything. |
-| AI Platform Administrator | Manage the inventory, providers, models, agents and applications; ingest telemetry; manage costs; read prompts; call the AI Gateway; manage and call the MCP Gateway; use the agent kill-switch. |
-| AI Developer | Manage agents and applications; score their risk classification; ingest telemetry; read prompts; call both gateways; use the agent kill-switch. |
-| AI Governance Manager | Approve models; approve MCP servers and review tools; manage policies and risks; countersign risk classifications; decide approvals; read the audit trail and prompts; use the agent kill-switch. |
-| Risk Manager | Manage risks; countersign risk classifications; read the audit trail and prompts; use the agent kill-switch. |
+| Organization Administrator / Super Administrator | Everything, including the second signature on Tier 4 gate decisions, as the Enterprise Governance Sponsor. |
+| AI Platform Administrator | Manage the inventory, providers, models, agents and applications; score their risk classification; request deployment authorizations and exceptions; ingest telemetry; manage costs; read prompts; call the AI Gateway; manage and call the MCP Gateway; use the agent kill-switch. |
+| AI Developer | Manage agents and applications; score their risk classification; request deployment authorizations and exceptions; ingest telemetry; read prompts; call both gateways; use the agent kill-switch. |
+| AI Governance Manager | Decide IRGF gates and exceptions as the AI Governance Body; approve models; approve MCP servers, review tools and mark their action-limit arguments; manage policies and risks; score and countersign risk classifications; resolve drift and run the Control Plane; decide approvals; read the audit trail and prompts; use the agent kill-switch. |
+| Risk Manager | Decide Tier 1–2 changes and exceptions as the Risk and Compliance Lead; manage risks; score and countersign risk classifications; resolve drift and run the Control Plane; read the audit trail and prompts; use the agent kill-switch. |
 | Approver | Decide approvals; read prompts. |
 | Auditor | Read the audit trail and prompts. |
 | Viewer | Read-only: inventory, executions, costs, risks, approvals, policies. No prompt text. |
 
+Ownership counts as well as role. A system's owner signs its Tier 1–2 deployment authorization,
+may request authorizations and exceptions for it, and may revert or ratify its drift. From Tier 3,
+owners and requesters are kept out of the decision. Tier 4 takes two different people: in the demo,
+Sofia Hernandez signs first for the AI Governance Body and Ava Mitchell second as the Sponsor. The
+[IRGF alignment](docs/irgf-alignment.md#8-who-does-what) lists who does what.
+
 Service accounts carry a role exactly like people do; the default, **AI Developer**, is everything an
-application needs.
+application needs. Service accounts never sign a gate decision.
 
 ---
 
@@ -352,7 +361,10 @@ Every AI asset, with its owner, environment, criticality, risk and status.
 ![Applications registry](docs/screenshots/04-applications.png)
 
 An agent's page shows its execution chain, the boundaries it runs within (allowed and restricted
-tools, knowledge sources) and the applications that use it.
+tools, knowledge sources) and the applications that use it. It also carries the agent's IRGF record:
+its risk tier, deployment authorization, Control Plane findings, the eight-link governance chain, its
+Agent Card and the kill-switch. An application's page adds its composition: member agents, the
+delegations between them and the authority they reach together.
 
 ![Agent detail](docs/screenshots/05-agent-detail.png)
 
@@ -440,10 +452,27 @@ can require passing evidence before a model may serve.
 
 ![Evaluation Centre](docs/screenshots/22-evaluations.png)
 
-The **Control Plane** (IRGF M12) compares what every agent actually does with what Gate G3 authorized.
-Each divergence becomes a drift record with a response window set by its category and tier (M13).
-Action limits are enforced before each tool call, and every action is verified after it. See
-[IRGF alignment](docs/irgf-alignment.md#11-phase-3-the-control-plane).
+### IRGF lifecycle
+
+The platform applies the [Intent-to-Runtime Governance Framework](docs/irgf-alignment.md) (IRGF).
+**Risk Classification** (stage S2) scores every agent and application on five dimensions and derives
+a tier from 1 to 4, which someone outside the delivery line countersigns. The tier then decides which
+policies apply, who signs each gate and how fast drift must be answered.
+
+![Risk classification register](docs/screenshots/30-irgf-register.png)
+
+**Deployment Authorizations** (Gate G3) authorize an agent or an application as one configuration,
+at one tier, for one owner. An application is authorized with its composite authority: everything
+its agents can reach between them. Tier 4 takes two signatures from two different people.
+**Changes** (Gate G4) then catch every edit to what was authorized and route it by IRGF's change
+table. **Exceptions** (M17) set one policy aside for at most 90 days.
+
+![Deployment authorizations](docs/screenshots/46-systems-register.png)
+
+The **Control Plane** (IRGF M12) compares what every agent and application actually does with what
+Gate G3 authorized. Each divergence becomes a drift record with a response window set by its category
+and tier (M13). Action limits are enforced before each tool call, and every action is verified after
+it. See [IRGF alignment](docs/irgf-alignment.md#11-phase-3-the-control-plane).
 
 ![Control Plane](docs/screenshots/40-control-plane.png)
 
@@ -487,14 +516,26 @@ sample payloads.
 4. **Application** — owners, criticality, data classification, review date, and the agents, models
    and providers it uses.
 5. **Identity** — create a service account for the application (profile menu → *Integrations*) and
-   run *Issue a new API key*. The key is shown once; store it as a secret.
+   run *Issue a new API key*. The key is shown once; store it as a secret. Bind the account to the
+   agents it runs (*Acts as* in the admin): from Tier 3, the gateways refuse an agent any key that is
+   not bound to it.
 6. **MCP servers** — *MCP Gateway → Server Registry → Register server*. Choose Streamable HTTP, set
    the endpoint and `credential_ref`, then **Health check → Approve → Sync tools → review each
-   tool → grant agents**.
+   tool → grant agents**. For a tool that moves value, mark which argument carries the amount and
+   which the counterparty (*Action-limit arguments*), so agents' action limits can hold it.
 7. **Guardrails** — routing policies (optional: without one, the gateway ranks every active model of
    the requested type and offers a three-model fallback chain), control policies and budgets.
-8. **Prove it** — a gateway call naming the agent returns `200`, the MCP catalog lists the tools
-   you enabled, and both show up under Executions and MCP Tool Calls.
+8. **Classify (IRGF S2)** — score each agent and application under *AI Governance → Risk
+   Classification*, and have someone outside its delivery line countersign. Fill in each acting
+   agent's Agent Card: what it is not for, action limits, escalation thresholds and kill-switch
+   conditions.
+9. **Authorize (IRGF Gate G3)** — *Request authorization* on each agent's page, then on the
+   application's. The request page lists the entry criteria for the tier; the decision rights say
+   who signs. To make the gateways refuse anything that skipped S2 or G3, add a `risk_classification`
+   and a `deployment_authorization` policy with effect `deny`. The defaults include neither.
+10. **Prove it** — a gateway call naming the agent returns `200`, the MCP catalog lists the tools
+    you enabled, both show up under Executions and MCP Tool Calls, and the Control Plane lists them
+    as verified against the authorization.
 
 ---
 
@@ -641,6 +682,12 @@ Celery beat runs these on a schedule (defined in [`aig_tower/celery.py`](aig_tow
 | Expire stale approvals | 10 minutes | Expires approval requests past their deadline. |
 | Notify expiring approvals | 30 minutes | Warns approvers before a request expires. |
 | Notify overdue risk reviews | day | Reminds owners of risks past their review date. |
+| IRGF lifecycle sweep | hour | Expires M17 exceptions, warning seven days ahead, and escalates overdue Gate G3 conditions. |
+| IRGF Control Plane sweep | minute | Verifies runs (link 07), looks for evaluation, policy, budget and tool-definition drift, escalates drift past its response window and sends the daily drift digest. |
+
+Tool calls and agent-to-agent messages are verified as they are recorded, with or without beat.
+Without beat, runs wait to be verified until someone presses *Run the Control Plane now* on the
+Control Plane page. The same applies to the drift checks.
 
 To run them outside Docker you need Redis, then:
 
@@ -704,6 +751,9 @@ aig-tower/
 │   ├── risks/                  Risk register and matrix
 │   ├── approvals/              Approval rules and the Approval Centre
 │   ├── policies/               Control policies and the policy engine
+│   ├── classification/         IRGF S2 risk classification: D1–D5, tiers, countersignature
+│   ├── lifecycle/              IRGF Gates G3 and G4, M17 exceptions, decision rights
+│   ├── controlplane/           IRGF Control Plane: drift, action limits, verification
 │   ├── evaluations/            Evaluation suites and runs
 │   ├── notifications/          In-app and email notifications
 │   ├── audit/                  Append-only, hash-verified audit trail
@@ -719,7 +769,8 @@ aig-tower/
 │   └── webhooks/               Webhook payload normalizers
 ├── templates/                  Server-rendered pages
 ├── static/                     CSS, JavaScript and images (logo)
-├── docs/screenshots/           The screenshots in this README
+├── docs/                       Technical Guide and IRGF alignment
+│   └── screenshots/            The screenshots in these documents
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
@@ -744,6 +795,12 @@ aig-tower/
   configured.
 - **Prompt content** is a separate privilege (`prompt.view`), and content from confidential or
   restricted agents is redacted on shared screens.
+- **Agent runtime controls (IRGF)**: a Tier 3–4 agent answers only to service accounts bound to it.
+  Anyone on call can pull an agent's kill-switch, and only a person can release it. Action limits
+  are checked before each tool call. Every action is verified against the authorized configuration
+  within a ceiling set per tier.
+- **Separation of duties**: from Tier 3, nobody signs a gate decision for a system they own or a
+  request they made. Tier 4 takes two different people, and service accounts never sign.
 - **Production**: set `DJANGO_DEBUG=0`, a strong `DJANGO_SECRET_KEY`, real `DJANGO_ALLOWED_HOSTS`
   and `DJANGO_CSRF_TRUSTED_ORIGINS`, serve over HTTPS, and use PostgreSQL and Redis.
 
@@ -760,7 +817,11 @@ aig-tower/
 | AI Gateway returns `503 no_route` | No active model of the requested type is eligible: check model status, provider health and your routing policy's filters. |
 | AI Gateway refuses an agent with "requires human approval" | With the default policies, agents at autonomy 3+ in production need approval, which a gateway call cannot wait for. Lower the autonomy or scope the policy. |
 | A gateway returns `403 identity_not_bound` | The key may not act as that agent: it is bound to other agents, or the agent is Tier 3–4 and the key is not bound to it. Use the agent's own service account, or bind this one to it. See [IRGF alignment](docs/irgf-alignment.md#5-agent-identity-chain-link-02). |
-| A gateway returns `403 agent_suspended` | The agent's kill-switch was pulled. A person must resume it from the agent's page. |
+| A gateway returns `403 agent_suspended` | The agent's kill-switch was pulled, by a person or by one of its own pre-approved triggers. A person must resume it from the agent's page. |
+| A gateway refuses an agent: *has no deployment authorization (IRGF S7 · Gate G3)* | A `deployment_authorization` policy is active, and the agent (or the application the call names) holds no authorization in force for that environment. Request one from the agent's page. *Suspended* means a major change is waiting at Gate G4: decide it under *AI Governance → Changes · G4*. |
+| An MCP call comes back `blocked` — *Action limit (link 06)* | The call's value, the day's total, the hourly rate or the counterparty breaks the agent's action limits. If the agent pre-approved the `action_limit_breach` trigger, it is now suspended too. |
+| Runs are never verified; the Control Plane looks stale | Celery beat is not running, so neither is the Control Plane sweep. Start beat, or press *Run the Control Plane now*. |
+| Every production agent shows structural drift | They run in production without a Gate G3 authorization. Authorize them, or record an M17 exception for the divergence. |
 | MCP client gets `401` | Send the key as `Authorization: Bearer act_...` or `X-API-Key: act_...`. |
 | MCP client gets `403` | The key's role lacks `mcp.invoke`, or the request came from a browser origin that is not allowed. |
 | A tool is missing from `tools/list` | The server is not approved, the tool is awaiting review or disabled, the agent has no (unexpired) grant on a restricted server, the tool is on the agent's restricted list, or a deny policy blocks it. |
