@@ -3,7 +3,9 @@
 This guide covers every way to install and run AI Control Tower, from a five-minute local demo to a
 production deployment. For an overview of the product and a tour of every screen, see the
 [README](README.md). For the developer guide — APIs, both gateways, sample code — open the
-**Integration Handbook** at `/docs/integration/` in a running instance.
+**Integration Handbook** at `/docs/integration/` in a running instance. For the complete
+configuration reference, integration contracts, operations and FAQs, see the
+[Technical Guide](docs/technical-guide.md).
 
 ## Contents
 
