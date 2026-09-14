@@ -26,6 +26,20 @@ class AuditAction(models.TextChoices):
     MODEL_APPROVAL = "model_approval", "Model Approval"
     HEALTH_CHECK = "health_check", "Health Check"
     TELEMETRY_INGEST = "telemetry_ingest", "Telemetry Ingest"
+    RISK_CLASSIFICATION = "risk_classification", "Risk Classification"
+    RISK_COUNTERSIGN = "risk_countersign", "Risk Countersignature"
+    AGENT_SUSPEND = "agent_suspend", "Agent Suspended"
+    AGENT_RESUME = "agent_resume", "Agent Resumed"
+    GATE_REQUEST = "gate_request", "Gate Request"
+    GATE_SIGNATURE = "gate_signature", "Gate Signature"
+    GATE_REJECTION = "gate_rejection", "Gate Rejection"
+    AUTHORIZATION_SUSPEND = "authorization_suspend", "Authorization Suspended"
+    AUTHORIZATION_REVOKE = "authorization_revoke", "Authorization Revoked"
+    CHANGE_DETECTED = "change_detected", "Change Detected"
+    EXCEPTION_EXPIRE = "exception_expire", "Exception Expired"
+    DRIFT_DETECTED = "drift_detected", "Drift Detected"
+    DRIFT_RESOLVED = "drift_resolved", "Drift Resolved"
+    DRIFT_ESCALATED = "drift_escalated", "Drift Escalated"
 
 
 class AuditSource(models.TextChoices):

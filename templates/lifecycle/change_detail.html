@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Change · {{ change.subject.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'lifecycle:changes' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Changes</a>
+  <h2 class="h4 mt-1 mb-1">{{ change.change_label }} · {{ change.subject.name }}</h2>
+  <div class="d-flex gap-2 flex-wrap">
+    <span class="badge text-bg-{{ change.classification|change_class_style }}">{{ change.classification|title }}</span>
+    <span class="badge badge-soft text-bg-{{ change.status|gate_status_style }}">{{ change.get_status_display }}</span>
+    <span class="badge text-bg-{{ change.tier|tier_style }}">Tier {{ change.tier }}</span>
+    <span class="badge badge-soft text-bg-light text-dark">IRGF S9 · Gate G4</span>
+  </div>
+</div>
+
+{% if change.requires_reauthorization and change.is_open %}
+  <div class="alert alert-danger py-2 small"><i class="bi bi-patch-exclamation-fill"></i>
+    <strong>G4 cannot approve this change.</strong> {{ change.classification_reason }}
+    <a href="{{ change.subject|authorize_url }}">Request authorization again at Gate G3</a>.
+  </div>
+{% elif change.requires_rescore and change.status == "awaiting_g4" and not rescore_done %}
+  <div class="alert alert-warning py-2 small"><i class="bi bi-arrow-repeat"></i>
+    <strong>Re-score first.</strong> A {{ change.classification }} change like this re-enters S2 and needs the tier countersigned (G2) before G4 can approve it.
+    <a href="{% if change.application_id %}{% url 'classification:score' 'applications' change.application.pk %}{% else %}{% url 'classification:score' 'agents' change.agent.pk %}{% endif %}">Score the {{ change.subject_kind }}</a>.
+  </div>
+{% endif %}
+{% if change.status == "rejected" %}
+  <div class="alert alert-danger py-2 small"><i class="bi bi-arrow-counterclockwise"></i>
+    <strong>Rejected at Gate G4.</strong> Revert the {{ change.subject_kind }} to its authorized value; the authorization stays suspended until then.
+  </div>
+{% elif change.status == "awaiting_confirmation" %}
+  <div class="alert alert-info py-2 small"><i class="bi bi-people-fill"></i>
+    <strong>A second person must confirm</strong> the lower class claimed at Tier {{ change.tier }}: not whoever made the change or proposed the class.
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>What changed</span><span class="small text-muted">against the authorized configuration</span></div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>{{ field_label }}</dt>
+            <dd><span class="text-muted">{{ before }}</span> <i class="bi bi-arrow-right mx-1"></i> <strong>{{ after }}</strong></dd></div>
+          <div class="col-12"><dt>Classification</dt><dd>{{ change.classification_reason }}</dd></div>
+          {% if not change.auto_classified %}
+            <div class="col-12"><dt>Reclassified by {{ change.reclassified_by.get_full_name|default:"—" }}</dt><dd>{{ change.reclassification_reason }}</dd></div>
+          {% endif %}
+          {% if change.confirmed_by %}
+            <div class="col-12"><dt>Confirmed by</dt><dd>{{ change.confirmed_by.get_full_name }} · {{ change.confirmed_at|date:"j M Y H:i" }}</dd></div>
+          {% endif %}
+          <div class="col-6"><dt>Detected</dt><dd>{{ change.detected_at|date:"j M Y H:i" }}</dd></div>
+          <div class="col-6"><dt>Made by</dt><dd>{{ change.changed_by_label|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Autonomy change</dt><dd>{% if change.autonomy_change %}Yes{% else %}No{% endif %}</dd></div>
+          <div class="col-6"><dt>Re-score needed (S2, G2)</dt><dd>{% if change.requires_rescore %}Yes{% if rescore_done %} · done{% endif %}{% else %}No{% endif %}</dd></div>
+          {% if change.delta_assurance_scope %}
+            <div class="col-12"><dt>Delta assurance scope</dt><dd class="mb-0">{{ change.delta_assurance_scope|linebreaksbr }}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+    <p class="small">Authorization: <a href="{% url 'lifecycle:authorization_detail' change.authorization.pk %}">{{ change.authorization }}</a></p>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    {% url 'lifecycle:change_decide' change.pk as decide_url %}
+    {% if change.status == "awaiting_g4" %}
+      {% include "lifecycle/_decision.html" with record=change open=True gate="G4" decide_url=decide_url sign_value="approve" %}
+    {% elif change.signatures %}
+      {% include "lifecycle/_decision.html" with record=change open=False gate="G4" decide_url=decide_url sign_value="approve" %}
+    {% endif %}
+
+    {% if can_reclassify %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header"><span>Reclassify</span><span class="small text-muted">with reasoning</span></div>
+        <div class="ct-card-body">
+          <form method="post" action="{% url 'lifecycle:change_reclassify' change.pk %}">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <select name="classification" class="form-select form-select-sm mb-2">
+              {% for value in classes %}<option value="{{ value }}" {% if value == change.classification %}selected{% endif %}>{{ value|title }}</option>{% endfor %}
+            </select>
+            <textarea name="reason" rows="2" class="form-control form-control-sm mb-2" required
+                      placeholder="Why this class fits: what the change does and does not affect"></textarea>
+            <button type="submit" class="btn btn-sm btn-outline-primary">Reclassify</button>
+            {% if not reclassifiable %}<div class="form-text">IRGF fixes this type's class: it can be raised, not lowered.</div>{% endif %}
+          </form>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_confirm %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">Second-person confirmation</div>
+        <div class="ct-card-body">
+          <p class="small">Proposed as <strong>{{ change.classification }}</strong> by {{ change.reclassified_by.get_full_name|default:"—" }}: {{ change.reclassification_reason }}</p>
+          <form method="post" action="{% url 'lifecycle:change_confirm' change.pk %}">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" class="btn btn-sm btn-success">Confirm the lower class</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

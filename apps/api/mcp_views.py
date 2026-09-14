@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from apps.accounts.roles import Perm
 from apps.api.authentication import ServiceAccountAuthentication
 from apps.api.execution_views import caller_organization, caller_service_account
+from apps.api.identity import IdentityRefused, acting_agent
 from apps.api.permissions import HasOrganizationPermission, IsAuthenticatedOrganizationMember
 from apps.core.constants import Environment
 from apps.executions.services import AssetResolver
@@ -118,6 +119,10 @@ def mcp_endpoint(request, agent_id=None):
         agent = AssetResolver(organization).agent(requested)
         if agent is None:
             return _jsonrpc_error(UNKNOWN_AGENT, f"Unknown agent '{requested}'.", status=404)
+    try:
+        agent = acting_agent(caller_service_account(request), agent, requested=bool(requested))
+    except IdentityRefused as exc:
+        return _jsonrpc_error(INVALID_REQUEST, exc.message, status=403)
 
     try:
         payload = json.loads(request.body or b"null")
@@ -159,6 +164,12 @@ def _invoking_organization(request):
     return organization, None
 
 
+def _identity_refused(exc: IdentityRefused) -> Response:
+    return Response(
+        {"error": exc.code, "detail": exc.message}, status=http_status.HTTP_403_FORBIDDEN
+    )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticatedOrganizationMember])
 def mcp_tools(request):
@@ -171,6 +182,10 @@ def mcp_tools(request):
     agent = AssetResolver(organization).agent(requested) if requested else None
     if requested and agent is None:
         return Response({"detail": "Unknown agent."}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        agent = acting_agent(caller_service_account(request), agent, requested=bool(requested))
+    except IdentityRefused as exc:
+        return _identity_refused(exc)
 
     entries = MCPGateway.catalog(
         organization, agent, environment=request.query_params.get("environment", "")
@@ -212,6 +227,12 @@ def mcp_call(request):
     agent = AssetResolver(organization).agent(data["agent"]) if data.get("agent") else None
     if data.get("agent") and agent is None:
         return Response({"detail": "Unknown agent."}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        agent = acting_agent(
+            caller_service_account(request), agent, requested=bool(data.get("agent"))
+        )
+    except IdentityRefused as exc:
+        return _identity_refused(exc)
 
     try:
         outcome = MCPGateway.call(

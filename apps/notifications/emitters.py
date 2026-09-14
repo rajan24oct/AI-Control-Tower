@@ -166,3 +166,109 @@ def approval_expiring(request) -> list:
         resource_type="approvals.ApprovalRequest",
         resource_id=request.pk,
     )
+
+
+def classification_needs_countersignature(record) -> list:
+    """IRGF S2 scores stay provisional until someone independent countersigns (M6)."""
+    subject = record.subject
+    scorer = f" by {record.scored_by}" if record.scored_by_id else ""
+    return NotificationService.notify(
+        organization=record.organization,
+        category=NotificationCategory.RISK_REVIEW,
+        severity=NotificationSeverity.WARNING if record.tier >= 3 else NotificationSeverity.INFO,
+        title=f"Countersign the risk classification of {subject}",
+        body=(
+            f"{subject} was scored Tier {record.tier}{scorer} (impact {record.impact}, "
+            f"control deficit {record.control_deficit}). Until someone outside its delivery "
+            "line countersigns, the tier is provisional: evidence for Gate G1, not Gate G2."
+        ),
+        url=reverse("classification:countersign", args=[record.pk]),
+        dedupe_key=f"classification_countersign:{record.pk}",
+        resource_type="classification.RiskClassification",
+        resource_id=record.pk,
+    )
+
+
+def agent_suspended(agent) -> list:
+    """The kill-switch was pulled (IRGF agent chain link 06)."""
+    return NotificationService.notify(
+        organization=agent.organization,
+        category=NotificationCategory.AGENT_SUSPENDED,
+        severity=NotificationSeverity.CRITICAL,
+        title=f"{agent.name} was suspended",
+        body=(
+            f"The kill-switch was pulled by {agent.suspended_by_label or 'the platform'}. "
+            f"Both gateways now refuse this agent.\n\nReason: {agent.suspension_reason}"
+        ),
+        url=reverse("inventory:agent_detail", args=[agent.pk]),
+        dedupe_key=f"agent_suspended:{agent.pk}:{agent.suspended_at.isoformat() if agent.suspended_at else ''}",
+        resource_type="agents.AIAgent",
+        resource_id=agent.pk,
+    )
+
+
+def agent_resumed(agent, *, resumed_by: str, note: str = "") -> list:
+    return NotificationService.notify(
+        organization=agent.organization,
+        category=NotificationCategory.AGENT_SUSPENDED,
+        severity=NotificationSeverity.INFO,
+        title=f"{agent.name} was resumed",
+        body=(
+            f"{resumed_by} released the kill-switch; the gateways serve this agent again."
+            + (f"\n\nNote: {note}" if note else "")
+        ),
+        url=reverse("inventory:agent_detail", args=[agent.pk]),
+        resource_type="agents.AIAgent",
+        resource_id=agent.pk,
+    )
+
+
+def lifecycle_notice(record, *, category, title, body, url, severity=NotificationSeverity.WARNING,
+                     recipients=None, dedupe_key="") -> list:
+    """IRGF gate events: a G3, G4 or M17 decision needed or made, an exception
+    lapsing, a condition overdue. The lifecycle service picks who is told."""
+    return NotificationService.notify(
+        organization=record.organization,
+        category=category,
+        severity=severity,
+        title=title,
+        body=body,
+        url=url,
+        recipients=recipients,
+        dedupe_key=dedupe_key,
+        resource_type=record._meta.label,
+        resource_id=record.pk,
+    )
+
+
+def drift_notice(record, *, title, body, recipients, severity=NotificationSeverity.WARNING,
+                 category=NotificationCategory.DRIFT, dedupe_key="") -> list:
+    """IRGF M13: drift found, or its response window missed. The Control Plane
+    routes by category and tier, and picks who is told."""
+    return NotificationService.notify(
+        organization=record.organization,
+        category=category,
+        severity=severity,
+        title=title,
+        body=body,
+        url=reverse("controlplane:drift_detail", args=[record.pk]),
+        recipients=recipients,
+        dedupe_key=dedupe_key,
+        resource_type=record._meta.label,
+        resource_id=record.pk,
+    )
+
+
+def digest_notice(organization, *, recipient, title, body, url, category,
+                  severity=NotificationSeverity.INFO, dedupe_key="") -> list:
+    """One notification standing for many findings that wait for a review."""
+    return NotificationService.notify(
+        organization=organization,
+        category=category,
+        severity=severity,
+        title=title,
+        body=body,
+        url=url,
+        recipients=[recipient],
+        dedupe_key=dedupe_key,
+    )

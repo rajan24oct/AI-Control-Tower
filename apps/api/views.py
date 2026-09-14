@@ -7,13 +7,15 @@ reuse.
 
 from __future__ import annotations
 
+from rest_framework import status as http_status
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.accounts.roles import Perm
 from apps.agents.models import AIAgent
+from apps.agents.services import KillSwitch, KillSwitchError
 from apps.api.permissions import HasOrganizationPermission, IsAuthenticatedOrganizationMember
 from apps.api.serializers import (
     AIAgentSerializer,
@@ -74,9 +76,48 @@ class AgentViewSet(OrganizationScopedViewSet):
     queryset = AIAgent.objects.select_related("organization", "provider", "primary_model", "team")
     serializer_class = AIAgentSerializer
     required_write_permission = Perm.AGENT_MANAGE
-    filterset_fields = ["framework", "environment", "risk_level", "autonomy_level", "status"]
+    filterset_fields = [
+        "framework", "environment", "risk_level", "risk_tier", "autonomy_level", "status",
+    ]
     search_fields = ["name", "agent_id", "description"]
-    ordering_fields = ["name", "created_at", "autonomy_level"]
+    ordering_fields = ["name", "created_at", "autonomy_level", "risk_tier"]
+
+    # The kill-switch has its own grant (agent.suspend), checked in the action
+    # rather than through the viewset's write permission.
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticatedOrganizationMember])
+    def suspend(self, request, pk=None):
+        """POST /api/v1/agents/{id}/suspend/ -- pull the kill-switch (IRGF link 06)."""
+        agent = self.get_object()
+        if not request.user.has_org_permission(agent.organization, Perm.AGENT_SUSPEND):
+            return Response(
+                {"detail": "Your role does not allow using an agent's kill-switch."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            KillSwitch.suspend(agent, actor=request.user, reason=request.data.get("reason", ""))
+        except KillSwitchError as exc:
+            return Response({"detail": str(exc)}, status=http_status.HTTP_409_CONFLICT)
+        return Response(self.get_serializer(agent).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticatedOrganizationMember])
+    def resume(self, request, pk=None):
+        """POST /api/v1/agents/{id}/resume/ -- people only: machines may stop, not restart."""
+        agent = self.get_object()
+        if not request.user.has_org_permission(agent.organization, Perm.AGENT_SUSPEND):
+            return Response(
+                {"detail": "Your role does not allow using an agent's kill-switch."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+        if getattr(request.user, "is_service_account", False):
+            return Response(
+                {"detail": "Only a person can release a kill-switch. Resume the agent in the Control Tower."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            KillSwitch.resume(agent, actor=request.user, note=request.data.get("note", ""))
+        except KillSwitchError as exc:
+            return Response({"detail": str(exc)}, status=http_status.HTTP_409_CONFLICT)
+        return Response(self.get_serializer(agent).data)
 
 
 class ApplicationViewSet(OrganizationScopedViewSet):

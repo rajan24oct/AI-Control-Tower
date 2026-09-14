@@ -1,0 +1,38 @@
+{% load control_tower %}
+{% comment %}
+  An application as a system of agents (IRGF chapter 16): the authority reachable
+  through all of them, which of them may invoke which, and drift against it.
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-diagram-3 me-1"></i> Composition</span>
+    <span class="small text-muted">IRGF chapter 16 · composite authority</span>
+  </div>
+  <div class="ct-card-body">
+    <dl class="ct-kv row mb-0">
+      <div class="col-12"><dt>Composite reachable authority</dt><dd>{{ composite_text }}</dd></div>
+      <div class="col-12">
+        <dt>Delegation graph</dt>
+        <dd>
+          {% for edge in application.delegations %}
+            <div><code>{{ edge.from }}</code> <i class="bi bi-arrow-right"></i> <code>{{ edge.to }}</code>
+              {% if edge.authority == "caller" %}<span class="badge badge-soft text-bg-warning ms-1">with the caller's authority</span>{% endif %}</div>
+          {% empty %}
+            <span class="text-muted small">None declared. With more than one acting agent, Tier 3–4 needs one at Gate G3.</span>
+          {% endfor %}
+        </dd>
+      </div>
+      <div class="col-12">
+        <dt>Drift against the application <span class="text-muted fw-normal">· IRGF M13</span></dt>
+        <dd class="mb-0">
+          {% for record in drift %}
+            <div><a href="{% url 'controlplane:drift_detail' record.pk %}">{{ record.title|truncatechars:80 }}</a>
+              <span class="badge badge-soft text-bg-{{ record.status|drift_status_style }}">{{ record.get_status_display }}</span></div>
+          {% empty %}
+            <span class="text-muted small">None unresolved.</span>
+          {% endfor %}
+        </dd>
+      </div>
+    </dl>
+  </div>
+</div>

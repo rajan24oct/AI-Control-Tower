@@ -1092,6 +1092,96 @@ mark.ct-pii {
 .ct-matrix-key.tone-high { background: #cf9187; }
 .ct-matrix-key.tone-critical { background: #8c3b34; }
 
+/* -- IRGF: tiers, classification and the agent governance chain ------------ */
+
+.ct-irgf-intro {
+  background: var(--ct-row-stripe, #f4f6f5);
+  border: 1px solid var(--ct-rule, #e1e6e3);
+  border-radius: 6px;
+  padding: .75rem 1rem;
+  font-size: .85rem;
+}
+
+.ct-tier-matrix { border-collapse: separate; border-spacing: 4px; font-size: .78rem; }
+.ct-tier-matrix th, .ct-tier-matrix td { text-align: center; padding: 0; }
+.ct-tier-label { color: #6b7771; font-weight: 600; width: 1.4rem; }
+.ct-tier-axis {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: #6b7771;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  width: 1.2rem;
+}
+.ct-tier-axis-x {
+  color: #6b7771;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding-top: .15rem !important;
+}
+.ct-tier-cell {
+  width: 3rem;
+  height: 2rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  transition: box-shadow .15s ease;
+}
+.ct-tier-cell.tone-low { background: #e3f1ea; color: #1f5a41; border-color: #c6e0d3; }
+.ct-tier-cell.tone-moderate { background: #fbefd2; color: #6d4c0f; border-color: #efdcb2; }
+.ct-tier-cell.tone-high { background: #f8dfda; color: #7a2e24; border-color: #eecdc7; }
+.ct-tier-cell.tone-critical { background: #efc2bc; color: #6a1f18; border-color: #e3aaa3; }
+.ct-tier-cell.is-current { outline: 2px solid #1b2a24; outline-offset: 1px; box-shadow: 0 0 0 4px rgba(27, 42, 36, .12); }
+
+.ct-tier-metric.tone-low { background: #f2f8f5; border-color: #d3e6dc; }
+.ct-tier-metric.tone-moderate { background: #fdf7ea; border-color: #efdcb2; }
+.ct-tier-metric.tone-high { background: #fcf0ee; border-color: #eecdc7; }
+.ct-tier-metric.tone-critical { background: #f8e3e1; border-color: #e3aaa3; }
+
+.ct-dimension {
+  border: 1px solid var(--ct-rule, #e1e6e3);
+  border-radius: 6px;
+  padding: .75rem 1rem .5rem;
+  margin-bottom: .75rem;
+}
+.ct-dimension legend { float: none; width: auto; font-size: .92rem; font-weight: 600; margin-bottom: .15rem; padding: 0; }
+.ct-dimension-question { font-size: .8rem; color: #5d6b64; margin-bottom: .5rem; }
+.ct-dimension-rule { display: block; font-style: italic; }
+.ct-dimension .form-check { font-size: .85rem; margin-bottom: .2rem; }
+.ct-dimension-note { font-size: .8rem; color: #5d6b64; margin: .25rem 0 .5rem; }
+
+.ct-sticky-card { position: sticky; top: 1rem; }
+.ct-subrow td { border-top: 0; padding-top: .15rem; padding-bottom: .15rem; }
+
+.ct-chain { list-style: none; padding: 0; margin: 0; }
+.ct-chain-link {
+  display: flex;
+  gap: .6rem;
+  align-items: flex-start;
+  padding: .45rem 0;
+  border-bottom: 1px solid var(--ct-rule, #e1e6e3);
+}
+.ct-chain-link:last-child { border-bottom: 0; }
+.ct-chain-link > i { margin-top: .1rem; }
+.ct-chain-name { font-weight: 600; font-size: .85rem; }
+.ct-chain-detail { font-size: .8rem; color: #5d6b64; }
+
+.ct-checklist, .ct-signatures { list-style: none; padding: 0; margin: 0 0 .5rem; }
+.ct-checklist li, .ct-signatures li {
+  display: flex;
+  gap: .6rem;
+  align-items: flex-start;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--ct-rule, #e1e6e3);
+}
+.ct-checklist li:last-child, .ct-signatures li:last-child { border-bottom: 0; }
+.ct-checklist li > i, .ct-signatures li > i { margin-top: .15rem; }
+.ct-checklist strong, .ct-signatures strong { font-size: .88rem; }
+
 /* -- AJAX affordances ----------------------------------------------------- */
 
 /* A region mid-request dims rather than emptying, so the page does not jump

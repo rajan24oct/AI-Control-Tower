@@ -295,6 +295,15 @@ class MCPTool(OrganizationOwnedModel):
         related_name="reviewed_mcp_tools",
     )
     review_note = models.CharField(max_length=500, blank=True)
+    # Agent chain link 06: which arguments carry what an action limit governs.
+    value_argument = models.CharField(
+        max_length=100, blank=True,
+        help_text="The argument holding a call's monetary value, held to agents' value limits (link 06).",
+    )
+    counterparty_argument = models.CharField(
+        max_length=100, blank=True,
+        help_text="The argument naming who a call acts on or pays, held to agents' allowed counterparties.",
+    )
 
     class Meta:
         ordering = ["server__name", "name"]
@@ -423,6 +432,12 @@ class MCPToolCall(OrganizationOwnedModel):
     latency_ms = models.PositiveIntegerField(null=True, blank=True)
     arguments = models.JSONField(default=dict, blank=True)
     result_preview = models.TextField(blank=True)
+    # What link 06 governs, read from the arguments through the tool's mapping.
+    action_value = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    counterparty = models.CharField(max_length=255, blank=True)
+    limit_breached = models.CharField(
+        max_length=40, blank=True, help_text="The action limit that refused this call, if one did."
+    )
 
     class Meta:
         ordering = ["-created_at"]

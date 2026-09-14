@@ -1,0 +1,41 @@
+{% load control_tower %}
+{% comment %}
+  The subject's current IRGF S2 classification, for agent and application pages.
+  Needs: classification, can_score, kind ("agents" | "applications"), subject.
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-bar-chart-steps me-1"></i> Risk Classification</span>
+    <span class="small text-muted">IRGF S2</span>
+  </div>
+  <div class="ct-card-body">
+    {% if classification %}
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+        <span class="badge fs-6 text-bg-{{ classification.tier|tier_style }}">Tier {{ classification.tier }}</span>
+        <span class="badge badge-soft text-bg-{% if classification.is_confirmed %}success{% else %}warning{% endif %}">{{ classification.get_status_display }}</span>
+        <span class="small text-muted">Evidence for Gate {{ classification.gate_evidence }}</span>
+      </div>
+      <dl class="ct-kv row mb-2">
+        <div class="col-4"><dt>Impact</dt><dd>{{ classification.impact }}</dd></div>
+        <div class="col-4"><dt>Control deficit</dt><dd>{{ classification.control_deficit }}</dd></div>
+        <div class="col-4"><dt>D1–D5</dt><dd class="small">{{ classification.d1_consequence }}·{{ classification.d2_autonomy }}·{{ classification.d3_reversibility }}·{{ classification.d4_exposure }}·{{ classification.d5 }}</dd></div>
+      </dl>
+      <p class="small text-muted mb-2">{{ classification.tier_summary }}</p>
+      {% if classification.rescore_due %}
+        <p class="small text-danger mb-2"><i class="bi bi-arrow-repeat"></i> Re-score due{% if classification.rescore_reasons %}: {{ classification.rescore_reasons|join:" " }}{% endif %}</p>
+      {% elif classification.is_provisional %}
+        <p class="small text-warning-emphasis mb-2"><i class="bi bi-hourglass-split"></i> Awaiting independent countersignature (IRGF M6) before Gate G2.</p>
+      {% endif %}
+      <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'classification:detail' classification.pk %}">View record</a>
+        {% if can_score %}<a class="btn btn-sm btn-outline-primary" href="{% url 'classification:score' kind subject.pk %}">Re-score</a>{% endif %}
+      </div>
+    {% else %}
+      <p class="small mb-2"><strong>Not yet classified.</strong> Stage S2 scores D1–D5 and sets the tier that decides how much
+        governance this system gets. Gate G1 needs provisional scores; Gate G2 a countersigned tier.</p>
+      {% if can_score %}
+        <a class="btn btn-sm btn-primary" href="{% url 'classification:score' kind subject.pk %}"><i class="bi bi-bar-chart-steps"></i> Score now</a>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>

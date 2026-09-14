@@ -54,7 +54,14 @@ class MessagingService:
         """Broker one message, or record why it was refused."""
         cls._same_tenant(organization, request)
 
-        blocked_reason, policies = cls._policy_verdict(organization, request)
+        if request.sender.is_suspended:
+            # The kill-switch stops everything the agent does, messages included.
+            blocked_reason, policies = (
+                f"Agent '{request.sender.name}' is suspended by its kill-switch and cannot send.",
+                [],
+            )
+        else:
+            blocked_reason, policies = cls._policy_verdict(organization, request)
         message = GatewayMessage.objects.create(
             organization=organization,
             sender=request.sender,

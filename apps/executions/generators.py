@@ -64,7 +64,7 @@ class MockExecutionGenerator:
         self.agents = list(
             AIAgent.objects.for_organization(organization).select_related(
                 "primary_model", "provider"
-            )
+            ).prefetch_related("applications")
         )
 
     def _timestamp(self):
@@ -74,12 +74,14 @@ class MockExecutionGenerator:
         day_offset = int(abs(self.random.gauss(0, self.days / 2.5))) % max(self.days, 1)
         hour = self.random.choices(range(24), weights=HOUR_WEIGHTS, k=1)[0]
 
-        return (now - timedelta(days=day_offset)).replace(
+        stamp = (now - timedelta(days=day_offset)).replace(
             hour=hour,
             minute=self.random.randint(0, 59),
             second=self.random.randint(0, 59),
             microsecond=0,
         )
+        # Today's busy hours may still be ahead: no run started in the future.
+        return stamp if stamp <= now else stamp - timedelta(days=1)
 
     def _status(self):
         statuses, weights = zip(*STATUS_WEIGHTS)
@@ -153,7 +155,9 @@ class MockExecutionGenerator:
                     trace_id=f"trace-{index // 3:05d}",
                     metadata={
                         "requires_approval": status
-                        == ExecutionStatusChoices.WAITING_FOR_APPROVAL
+                        == ExecutionStatusChoices.WAITING_FOR_APPROVAL,
+                        # The mock engine calls the tools the agent declares.
+                        "tools": list(agent.allowed_tools or []),
                     },
                 )
             )
@@ -170,8 +174,11 @@ class MockExecutionGenerator:
             latency = self.random.randint(400, 22_000)
             is_terminal = status not in LIVE_STATUSES
 
+            application = next(iter(agent.applications.all()), None)
             fields = {
                 "agent": str(agent.pk),
+                # The run belongs to the application the agent serves, when it serves one.
+                **({"application": str(application.pk)} if application else {}),
                 "trace_id": f"trace-{index // 3:05d}",
                 "status": status,
                 "started_at": started_at,

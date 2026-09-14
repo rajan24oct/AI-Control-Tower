@@ -300,13 +300,27 @@ class Command(BaseCommand):
         applications = self._applications(organization, agents, models, providers, teams, users)
         self._service_account(organization)
         superuser_created = self._superuser(options["superuser"], password)
-        telemetry = self._executions(organization, options["executions"])
-        governance = self._governance(
-            organization, users, teams, applications, agents, models, providers
-        )
-        # MCP traffic runs after governance so the gateway judges it against
-        # the seeded policies: its refusals are the policies' own decisions.
-        mcp = self._mcp(organization, agents, teams, users)
+        from apps.controlplane.signals import deferred
+        from apps.core.demo_irgf import seed_control_plane, seed_gates, seed_irgf, seed_systems
+
+        # The Control Plane verifies each MCP call as it is recorded. The demo
+        # backdates its traffic, so verification waits and runs at the end.
+        with deferred():
+            telemetry = self._executions(organization, options["executions"])
+            governance = self._governance(
+                organization, users, teams, applications, agents, models, providers
+            )
+            # MCP traffic runs after governance so the gateway judges it against
+            # the seeded policies: its refusals are the policies' own decisions.
+            mcp = self._mcp(organization, agents, teams, users)
+
+            # IRGF: S2 classifications, identities and Agent Cards (Phase 1), then
+            # G3 authorizations, a G4 change and an M17 exception (Phase 2), then
+            # the Control Plane over all of it (Phase 3).
+            irgf = seed_irgf(organization, agents, applications, users)
+            gates = seed_gates(organization, agents, users)
+            systems = seed_systems(organization, agents, applications, users)
+            plane = seed_control_plane(organization, agents, users)
 
         self._say()
         self._say(f"Seeded '{organization.name}'", self.style.SUCCESS)
@@ -332,6 +346,17 @@ class Command(BaseCommand):
             f"  {mcp['servers']} MCP servers, {mcp['tools']} MCP tools, "
             f"{mcp['calls']} MCP tool calls"
         )
+        if irgf["classified"]:
+            self._say(f"  {irgf['classified']} IRGF risk classifications (stage S2)")
+        if gates["authorized"]:
+            self._say(f"  {gates['authorized']} agent deployment authorizations in force (IRGF S7, Gate G3)")
+        if systems["authorized"]:
+            self._say(f"  {systems['authorized']} application authorization(s) in force, with composite authority (IRGF chapter 16)")
+        if plane["verified"]:
+            self._say(
+                f"  {plane['verified']} actions verified (IRGF link 07), {plane['drift']} unresolved drift "
+                f"records, {plane['incidents']} incidents (M13)"
+            )
         self._say()
         self._say(f"  Sign in: {USERS[0][0]} / {password}")
         if superuser_created:

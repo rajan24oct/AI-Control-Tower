@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Authorize {{ subject.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{{ subject|system_url }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> {{ subject.name }}</a>
+  <h2 class="h4 mt-1 mb-1">Request deployment authorization · {{ subject.name }}</h2>
+  <div class="d-flex gap-2 flex-wrap">
+    <span class="badge badge-soft text-bg-light text-dark">IRGF S7 · Gate G3</span>
+    {% if kind == "application" %}<span class="badge badge-soft text-bg-light text-dark">Application</span>{% endif %}
+    {% if tier %}<span class="badge text-bg-{{ tier|tier_style }}">Tier {{ tier }}</span>{% endif %}
+    <span class="badge badge-soft text-bg-{{ subject.environment|environment_style }}">{{ subject.get_environment_display }}</span>
+  </div>
+</div>
+
+{% if pending %}
+  <div class="alert alert-info py-2 small">A request is already <a href="{% url 'lifecycle:authorization_detail' pending.pk %}">awaiting a decision</a>.</div>
+{% endif %}
+
+<div class="ct-irgf-intro mb-3">
+  Gate G3 authorizes <strong>this configuration</strong>, at <strong>this tier</strong>, for <strong>this owner</strong>.
+  {% if kind == "application" %}
+    For an application that means its models and providers, its member agents, which of them may invoke which, and the
+    <strong>composite authority</strong> reachable through all of them (IRGF chapter 16). Each acting agent keeps its own
+    authorization; this one covers the whole.
+  {% endif %}
+  The configuration below is recorded as the approved state: later edits are compared with it and classified at Gate G4.
+  {% if tier %}Decision at Tier {{ tier }}: {{ rights }}.{% endif %}
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Entry criteria</span><span class="small text-muted">scaled to Tier {{ tier|default:"—" }}</span></div>
+      <div class="ct-card-body">
+        <ul class="ct-checklist">
+          {% for check in checks %}
+            <li>
+              {% if check.ok %}<i class="bi bi-check-circle-fill text-success"></i>
+              {% elif check.required and check.key in written_keys %}<i class="bi bi-pencil-square text-warning"></i>
+              {% elif check.required %}<i class="bi bi-x-circle-fill text-danger"></i>
+              {% else %}<i class="bi bi-dash-circle text-muted"></i>{% endif %}
+              <div><strong>{{ check.label }}</strong> <span class="text-muted small">· {{ check.irgf }}{% if not check.required %} · not required at this tier{% endif %}</span>
+                <div class="small text-muted">{{ check.detail }}</div></div>
+            </li>
+          {% endfor %}
+        </ul>
+        {% if hard_blocking %}
+          <div class="alert alert-danger py-2 small mb-0">Fix the criteria marked in red before requesting: they cannot be met by a statement.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <form method="post" class="ct-card mb-3">
+      {% csrf_token %}
+      <div class="ct-card-header">Statements and conditions</div>
+      <div class="ct-card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2 small">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+        {% endif %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="{{ form.oversight_point.id_for_label }}">Human oversight point</label>
+          {{ form.oversight_point }}<div class="form-text">{{ form.oversight_point.help_text }}</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="{{ form.monitoring_commitments.id_for_label }}">Monitoring commitments</label>
+          {{ form.monitoring_commitments }}<div class="form-text">{{ form.monitoring_commitments.help_text }}</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="{{ form.assurance_summary.id_for_label }}">Assurance summary</label>
+          {{ form.assurance_summary }}<div class="form-text">{{ form.assurance_summary.help_text }}</div>
+        </div>
+
+        <div class="fw-semibold mb-1">Conditions <span class="text-muted small fw-normal">(optional; each needs an owner and a deadline)</span></div>
+        {% for text, owner, due in form.condition_rows %}
+          <div class="row g-2 mb-2">
+            <div class="col-12 col-md-6">{{ text }}</div>
+            <div class="col-6 col-md-3">{{ owner }}{% for error in owner.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+            <div class="col-6 col-md-3">{{ due }}{% for error in due.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+          </div>
+        {% endfor %}
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-primary" {% if hard_blocking or pending %}disabled{% endif %}>
+            <i class="bi bi-patch-check"></i> Request authorization at Gate G3
+          </button>
+          <a href="{{ subject|system_url }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="ct-card">
+      <div class="ct-card-header"><span>Configuration to be authorized</span><span class="small text-muted">frozen on approval</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for label, value in configuration %}
+              <tr><th class="small fw-semibold text-nowrap">{{ label }}</th><td class="small">{{ value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

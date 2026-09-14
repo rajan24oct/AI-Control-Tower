@@ -40,7 +40,7 @@ access on live model and tool calls, while holding the upstream credentials so a
 | **AI Gateway** | In-path model calls: policy and budget enforcement, cost-aware routing, fallback chains, circuit breakers, streaming, agent-to-agent messaging | `/gateway/`, `/routing/` |
 | **MCP Gateway** | One registry for every MCP server, tool review and re-review, per-agent access grants, and a single governed MCP endpoint for all of them | `/mcp-gateway/` |
 | **AI FinOps** | Spend by period, provider, model and team; budgets with threshold alerts and optional hard stops | `/costs/` |
-| **AI Governance** | Risk register and heat map, human approvals, typed control policies, evaluation suites and red-team runs | `/risks/`, `/approvals/`, `/policies/`, `/evaluations/` |
+| **AI Governance** | IRGF risk classification (Tier 1–4, independently countersigned), deployment authorization of agents and applications with their composite authority (Gate G3), change control (Gate G4) and time-boxed exceptions (M17), the Control Plane comparing what runs with what was authorized (M12), drift records with response windows by tier (M13), action limits enforced before each tool call and every action verified after it (links 06–07), risk register and heat map, human approvals, typed control policies, evaluation suites and red-team runs | `/classification/`, `/lifecycle/`, `/control-plane/`, `/risks/`, `/approvals/`, `/policies/`, `/evaluations/` |
 | **Control & Settings** | Tamper-evident audit trail, users, teams, service accounts and API keys | Profile menu |
 | **Integration Handbook** | The developer guide: onboarding, API reference, both gateways, sample code | `/docs/integration/` |
 
@@ -101,7 +101,9 @@ This runs the whole platform on your machine with SQLite, no Docker and no Redis
 setup — PostgreSQL and Redis without Docker, a clean install without demo data, connecting real
 providers and MCP servers, and production deployment — see **[SETUP.md](SETUP.md)**. For the full
 technical reference — every setting, the integration contracts of the API and both gateways,
-operations, troubleshooting and FAQs — see the **[Technical Guide](docs/technical-guide.md)**.
+operations, troubleshooting and FAQs — see the **[Technical Guide](docs/technical-guide.md)**. How the
+platform applies the IRGF governance framework — risk tiers, agent identity, the kill-switch — is in
+**[IRGF alignment](docs/irgf-alignment.md)**.
 
 **Prerequisites:** Python 3.12 and Git.
 
@@ -318,10 +320,10 @@ Viewer in another.
 | Role | Beyond read access, may… |
 |---|---|
 | Organization Administrator / Super Administrator | Everything. |
-| AI Platform Administrator | Manage the inventory, providers, models, agents and applications; ingest telemetry; manage costs; read prompts; call the AI Gateway; manage and call the MCP Gateway. |
-| AI Developer | Manage agents and applications; ingest telemetry; read prompts; call both gateways. |
-| AI Governance Manager | Approve models; approve MCP servers and review tools; manage policies and risks; decide approvals; read the audit trail and prompts. |
-| Risk Manager | Manage risks; read the audit trail and prompts. |
+| AI Platform Administrator | Manage the inventory, providers, models, agents and applications; ingest telemetry; manage costs; read prompts; call the AI Gateway; manage and call the MCP Gateway; use the agent kill-switch. |
+| AI Developer | Manage agents and applications; score their risk classification; ingest telemetry; read prompts; call both gateways; use the agent kill-switch. |
+| AI Governance Manager | Approve models; approve MCP servers and review tools; manage policies and risks; countersign risk classifications; decide approvals; read the audit trail and prompts; use the agent kill-switch. |
+| Risk Manager | Manage risks; countersign risk classifications; read the audit trail and prompts; use the agent kill-switch. |
 | Approver | Decide approvals; read prompts. |
 | Auditor | Read the audit trail and prompts. |
 | Viewer | Read-only: inventory, executions, costs, risks, approvals, policies. No prompt text. |
@@ -437,6 +439,13 @@ The **Evaluation Centre** runs scored suites and red-team cases against models a
 can require passing evidence before a model may serve.
 
 ![Evaluation Centre](docs/screenshots/22-evaluations.png)
+
+The **Control Plane** (IRGF M12) compares what every agent actually does with what Gate G3 authorized.
+Each divergence becomes a drift record with a response window set by its category and tier (M13).
+Action limits are enforced before each tool call, and every action is verified after it. See
+[IRGF alignment](docs/irgf-alignment.md#11-phase-3-the-control-plane).
+
+![Control Plane](docs/screenshots/40-control-plane.png)
 
 ### Control & Settings
 
@@ -599,6 +608,9 @@ Signed-in browser sessions work too, and the browsable API at `/api/v1/` is enab
 | `/health/` | GET | Liveness | none |
 | `/adapters/` | GET | Adapters this installation can reach | authenticated |
 | `/providers/` `/models/` `/agents/` `/applications/` | GET, POST, PUT, PATCH | The registries | `inventory.view` / the matching `*.manage` |
+| `/agents/{id}/suspend/` `resume/` | POST | Pull or release an agent's kill-switch (people only may resume) | `agent.suspend` |
+| `/deployment-authorizations/` | GET | IRGF Gate G3 authorizations, for deployment pipelines to check before shipping | `inventory.view` |
+| `/drift-records/` | GET | IRGF M13 drift found by the Control Plane, for incident tooling and dashboards | `inventory.view` |
 | `/mcp-servers/` | GET | The MCP registry with tool counts | `inventory.view` |
 | `/executions/` | GET, POST | Read runs; report a run | `execution.view` / `telemetry.ingest` |
 | `/executions/{id}/events/` | POST | Append events to a run | `telemetry.ingest` |
@@ -747,6 +759,8 @@ aig-tower/
 | AI Gateway returns `403 policy_denied` — "No permitted model" | Every candidate model was refused by policy — typically unapproved models, or a model-approval policy with `require_evaluation` and no passing run. Approve or evaluate the model, or adjust the policy. |
 | AI Gateway returns `503 no_route` | No active model of the requested type is eligible: check model status, provider health and your routing policy's filters. |
 | AI Gateway refuses an agent with "requires human approval" | With the default policies, agents at autonomy 3+ in production need approval, which a gateway call cannot wait for. Lower the autonomy or scope the policy. |
+| A gateway returns `403 identity_not_bound` | The key may not act as that agent: it is bound to other agents, or the agent is Tier 3–4 and the key is not bound to it. Use the agent's own service account, or bind this one to it. See [IRGF alignment](docs/irgf-alignment.md#5-agent-identity-chain-link-02). |
+| A gateway returns `403 agent_suspended` | The agent's kill-switch was pulled. A person must resume it from the agent's page. |
 | MCP client gets `401` | Send the key as `Authorization: Bearer act_...` or `X-API-Key: act_...`. |
 | MCP client gets `403` | The key's role lacks `mcp.invoke`, or the request came from a browser origin that is not allowed. |
 | A tool is missing from `tools/list` | The server is not approved, the tool is awaiting review or disabled, the agent has no (unexpired) grant on a restricted server, the tool is on the agent's restricted list, or a deny policy blocks it. |

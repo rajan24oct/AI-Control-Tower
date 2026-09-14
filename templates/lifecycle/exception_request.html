@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Request an Exception{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'lifecycle:exceptions' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Exceptions</a>
+  <h2 class="h4 mt-1 mb-1">{% if renewal %}Renew an exception{% else %}Request an exception{% endif %}</h2>
+  <span class="badge badge-soft text-bg-light text-dark">IRGF M17</span>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <form method="post" class="ct-card">
+      {% csrf_token %}
+      <div class="ct-card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2 small">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+        {% endif %}
+        {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-hourglass-split"></i> Request the exception</button>
+          <a href="{% url 'lifecycle:exceptions' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">The rules</div>
+      <div class="ct-card-body small">
+        <ul class="mb-0">
+          <li>At most <strong>{{ max_days }} days</strong>, at every tier. It ends on its own.</li>
+          <li>Tier 3–4 exceptions need a <strong>compensating control</strong>.</li>
+          <li><strong>Tier 4</strong> exceptions cannot be renewed: the agent goes back through Gate G3.</li>
+          <li>The approvers are told before it lapses, as well as you.</li>
+          <li>An exception is for a requirement that does not apply, or is met another way — not for work that has not been done.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="ct-card">
+      <div class="ct-card-header"><span>Who decides</span><span class="small text-muted">IRGF M16</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for tier, rights in rights_table %}
+              <tr><td class="text-nowrap"><span class="badge text-bg-{{ tier|tier_style }}">Tier {{ tier }}</span></td><td class="small">{{ rights }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

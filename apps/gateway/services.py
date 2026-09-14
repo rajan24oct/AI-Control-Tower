@@ -105,6 +105,24 @@ class AllAttemptsFailed(GatewayError):
     code = "all_attempts_failed"
 
 
+class AgentSuspended(GatewayError):
+    """The agent's kill-switch has been pulled (IRGF agent chain link 06).
+
+    Checked before policy: no policy verdict can make a stopped agent safe to
+    serve, and a suspended agent must not even reach routing.
+    """
+
+    status_code = 403
+    code = "agent_suspended"
+
+
+class AgentInactive(GatewayError):
+    """The agent is inactive or retired; at S10 its access is revoked."""
+
+    status_code = 403
+    code = "agent_inactive"
+
+
 @dataclass
 class GatewayRequest:
     """What an agent asked the gateway to do."""
@@ -258,6 +276,7 @@ class GatewayService:
         started = time.monotonic()
         deadline = started + float(setting("REQUEST_DEADLINE_SECONDS", 60))
 
+        cls._enforce_agent_state(request)
         cls._enforce_policy(organization, request)
         cls._enforce_budget(organization, request)
 
@@ -307,6 +326,7 @@ class GatewayService:
         started = time.monotonic()
         deadline = started + float(setting("REQUEST_DEADLINE_SECONDS", 60))
 
+        cls._enforce_agent_state(request)
         cls._enforce_policy(organization, request)
         cls._enforce_budget(organization, request)
 
@@ -537,6 +557,32 @@ class GatewayService:
         )
 
     # -- Enforcement --------------------------------------------------------
+
+    @staticmethod
+    def _enforce_agent_state(request: GatewayRequest) -> None:
+        """Stop an agent whose kill-switch is pulled, or whose access was revoked.
+
+        IRGF arms a kill-switch for every agent that acts (agent chain link 06)
+        and revokes a retired system's access at S10. Neither is a policy
+        question, so both are checked first and nothing downstream runs.
+        """
+        from apps.core.constants import LifecycleStatus
+
+        agent = request.agent
+        if agent is None:
+            return
+        if agent.is_suspended:
+            raise AgentSuspended(
+                f"Agent '{agent.name}' is suspended by its kill-switch: "
+                f"{agent.suspension_reason or 'no reason recorded'}.",
+                detail={"agent": agent.agent_id, "suspended_at": agent.suspended_at.isoformat()},
+            )
+        if agent.status in (LifecycleStatus.INACTIVE, LifecycleStatus.RETIRED):
+            raise AgentInactive(
+                f"Agent '{agent.name}' is {agent.get_status_display().lower()}; "
+                "its access has been revoked.",
+                detail={"agent": agent.agent_id, "status": agent.status},
+            )
 
     @staticmethod
     def _enforce_policy(organization, request: GatewayRequest) -> None:

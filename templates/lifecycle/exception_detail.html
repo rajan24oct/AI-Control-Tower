@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Exception · {{ exception.agent.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'lifecycle:exceptions' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Exceptions</a>
+  <h2 class="h4 mt-1 mb-1">Exception · {{ exception.agent.name }}</h2>
+  <div class="d-flex gap-2 flex-wrap">
+    <span class="badge text-bg-{{ exception.status|gate_status_style }}">{{ exception.get_status_display }}</span>
+    <span class="badge text-bg-{{ exception.tier|tier_style }}">Tier {{ exception.tier }}</span>
+    <span class="badge badge-soft text-bg-light text-dark">IRGF M17</span>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">The exception</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          {% if exception.policy %}
+            <div class="col-12"><dt>Policy set aside</dt><dd><a href="{% url 'policies:detail' exception.policy.pk %}">{{ exception.policy.name }}</a> · {{ exception.policy.get_policy_type_display }}</dd></div>
+          {% else %}
+            <div class="col-12"><dt>Divergence allowed to stay</dt><dd>{{ exception.divergence }}
+              {% for record in exception.drift_records.all %}<div class="small"><a href="{% url 'controlplane:drift_detail' record.pk %}">Drift record</a> · IRGF M13 “Except”</div>{% endfor %}</dd></div>
+          {% endif %}
+          <div class="col-12"><dt>Agent</dt><dd><a href="{% url 'inventory:agent_detail' exception.agent.pk %}">{{ exception.agent.name }}</a></dd></div>
+          <div class="col-12"><dt>Justification</dt><dd>{{ exception.justification|linebreaksbr }}</dd></div>
+          <div class="col-12"><dt>Compensating control</dt><dd>{{ exception.compensating_control|default:"—"|linebreaksbr }}</dd></div>
+          <div class="col-4"><dt>Duration</dt><dd>{{ exception.duration_days }} days</dd></div>
+          <div class="col-4"><dt>Starts</dt><dd>{{ exception.starts_at|date:"j M Y"|default:"On approval" }}</dd></div>
+          <div class="col-4"><dt>Expires</dt><dd>{{ exception.expires_at|date:"j M Y H:i"|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Requested by</dt><dd>{{ exception.requested_by.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Requested</dt><dd>{{ exception.requested_at|date:"j M Y H:i" }}</dd></div>
+          {% if exception.renewal_of %}<div class="col-12"><dt>Renews</dt><dd><a href="{% url 'lifecycle:exception_detail' exception.renewal_of.pk %}">an earlier exception</a></dd></div>{% endif %}
+          {% if exception.revoke_reason %}<div class="col-12"><dt>Revoked</dt><dd class="mb-0">{{ exception.revoked_at|date:"j M Y" }}: {{ exception.revoke_reason }}</dd></div>{% endif %}
+        </dl>
+      </div>
+    </div>
+    {% if renewals %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">Renewals</div>
+        <div class="ct-card-body small">
+          {% for renewal in renewals %}<div><a href="{% url 'lifecycle:exception_detail' renewal.pk %}">{{ renewal.requested_at|date:"j M Y" }}</a> · {{ renewal.get_status_display }}</div>{% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-xl-5">
+    {% url 'lifecycle:exception_decide' exception.pk as decide_url %}
+    {% if exception.status == "pending" %}
+      {% include "lifecycle/_decision.html" with record=exception open=True gate="M17" decide_url=decide_url sign_value="sign" %}
+    {% else %}
+      {% include "lifecycle/_decision.html" with record=exception open=False gate="M17" decide_url=decide_url sign_value="sign" %}
+    {% endif %}
+
+    {% if can_renew and exception.policy %}
+      <a class="btn btn-sm btn-outline-primary mb-3" href="{% url 'lifecycle:exception_request' %}?renew={{ exception.pk }}"><i class="bi bi-arrow-repeat"></i> Request a renewal</a>
+    {% elif exception.tier >= 4 and exception.status == "active" %}
+      <p class="small text-muted">Tier 4: no renewal. Before it ends, the agent meets the policy or goes back through Gate G3.</p>
+    {% endif %}
+
+    {% if can_revoke %}
+      <div class="ct-card">
+        <div class="ct-card-header">Revoke</div>
+        <div class="ct-card-body">
+          <form method="post" action="{% url 'lifecycle:exception_revoke' exception.pk %}">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <textarea class="form-control form-control-sm mb-2" name="reason" rows="2" required placeholder="Why the exception ends now"></textarea>
+            <button type="submit" class="btn btn-sm btn-outline-danger">Revoke exception</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

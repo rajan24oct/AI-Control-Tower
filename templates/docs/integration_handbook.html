@@ -1599,6 +1599,21 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
               <td>Do not retry. The response names the policies.</td>
             </tr>
             <tr>
+              <td>403</td><td><code>agent_suspended</code></td>
+              <td>The agent's kill-switch is pulled (IRGF agent chain link 06).</td>
+              <td>Stop. A person must resume the agent in the Control Tower.</td>
+            </tr>
+            <tr>
+              <td>403</td><td><code>agent_inactive</code></td>
+              <td>The agent is inactive or retired; its access is revoked (IRGF S10).</td>
+              <td>Do not retry. Reactivate the agent, or call as another one.</td>
+            </tr>
+            <tr>
+              <td>403</td><td><code>identity_not_bound</code></td>
+              <td>This key may not act as that agent. Tier 3–4 agents answer only to service accounts bound to them (IRGF link 02).</td>
+              <td>Use the agent's own key, or bind this service account to it.</td>
+            </tr>
+            <tr>
               <td>503</td><td><code>no_route</code></td>
               <td>No model was eligible &mdash; all excluded.</td>
               <td>Read <code>excluded</code>; usually a registry or health problem.</td>

@@ -5,11 +5,31 @@ from apps.api.models import APIKey, ServiceAccount
 
 @admin.register(ServiceAccount)
 class ServiceAccountAdmin(admin.ModelAdmin):
-    list_display = ("name", "organization", "external_system", "role", "status")
+    list_display = ("name", "organization", "external_system", "role", "bound_agents", "status")
     list_filter = ("organization", "role", "status")
     search_fields = ("name", "external_system")
     readonly_fields = ("id", "created_at", "updated_at")
+    # IRGF agent chain link 02: which agents this identity may act as.
+    filter_horizontal = ("agents",)
     actions = ("action_issue_key",)
+
+    @admin.display(description="Acts as")
+    def bound_agents(self, obj):
+        count = obj.agents.count()
+        return f"{count} agent{'s' if count != 1 else ''}" if count else "Any, up to Tier 2"
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        # Only the account's own organization's agents can be bound.
+        if db_field.name == "agents":
+            from apps.agents.models import AIAgent
+
+            account_id = request.resolver_match.kwargs.get("object_id") if request.resolver_match else None
+            account = ServiceAccount.objects.filter(pk=account_id).first() if account_id else None
+            queryset = AIAgent.objects.all()
+            if account is not None:
+                queryset = queryset.filter(organization=account.organization)
+            kwargs["queryset"] = queryset.order_by("name")
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     @admin.action(description="Issue a new API key")
     def action_issue_key(self, request, queryset):

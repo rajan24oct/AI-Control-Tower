@@ -1,4 +1,4 @@
-﻿from django.contrib import admin
+from django.contrib import admin
 
 from apps.audit.admin import AuditedModelAdmin
 
@@ -14,8 +14,10 @@ class AIAgentAdmin(AuditedModelAdmin):
         "primary_model",
         "environment",
         "risk_level",
+        "risk_tier",
         "autonomy_level",
         "requires_human_approval",
+        "suspended",
         "status",
     )
     list_filter = (
@@ -23,13 +25,26 @@ class AIAgentAdmin(AuditedModelAdmin):
         "framework",
         "environment",
         "risk_level",
+        "risk_tier",
         "autonomy_level",
         "requires_human_approval",
         "status",
     )
     search_fields = ("name", "agent_id", "description")
     autocomplete_fields = ("owner", "team", "provider", "primary_model", "fallback_model")
-    readonly_fields = ("id", "created_at", "updated_at")
+    # The tier comes from the S2 classification record and the kill-switch
+    # state from the suspend and resume actions; both are audited there, so
+    # neither is editable here.
+    readonly_fields = (
+        "id",
+        "risk_tier",
+        "suspended_at",
+        "suspended_by",
+        "suspended_by_label",
+        "suspension_reason",
+        "created_at",
+        "updated_at",
+    )
 
     fieldsets = (
         (None, {"fields": ("id", "organization", "name", "agent_id", "description")}),
@@ -55,6 +70,7 @@ class AIAgentAdmin(AuditedModelAdmin):
                     "status",
                     "environment",
                     "risk_level",
+                    "risk_tier",
                     "autonomy_level",
                     "requires_human_approval",
                     "data_classification",
@@ -72,5 +88,32 @@ class AIAgentAdmin(AuditedModelAdmin):
                 )
             },
         ),
+        (
+            "Agent Card (IRGF S3, required at Gate G3)",
+            {
+                "fields": (
+                    "out_of_scope",
+                    "action_limits",
+                    "escalation_thresholds",
+                    "kill_switch_conditions",
+                    "kill_switch_triggers",
+                )
+            },
+        ),
+        (
+            "Kill-switch",
+            {
+                "fields": (
+                    "suspended_at",
+                    "suspended_by",
+                    "suspended_by_label",
+                    "suspension_reason",
+                )
+            },
+        ),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
+
+    @admin.display(boolean=True, description="Suspended")
+    def suspended(self, obj):
+        return obj.is_suspended

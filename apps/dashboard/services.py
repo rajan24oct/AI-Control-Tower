@@ -305,6 +305,167 @@ class DashboardService:
 
     # -- Needs Attention ----------------------------------------------------
 
+    def _irgf_attention(self) -> list[AttentionItem]:
+        """IRGF items: stopped agents, and systems whose S2 classification needs someone."""
+        from django.db.models import Q
+
+        from apps.classification.models import (
+            CURRENT_STATUSES,
+            ClassificationStatus,
+            RiskClassification,
+        )
+        from apps.core.constants import Environment
+
+        items: list[AttentionItem] = []
+        register = reverse("classification:register")
+
+        suspended = self.agents.filter(suspended_at__isnull=False)
+        if suspended.exists():
+            items.append(AttentionItem(
+                "high", f"{suspended.count()} agent(s) suspended by kill-switch",
+                ", ".join(suspended.values_list("name", flat=True)[:4]),
+                reverse("inventory:agents"), suspended.count(),
+            ))
+
+        unclassified = self.agents.filter(environment=Environment.PRODUCTION, risk_tier__isnull=True)
+        if unclassified.exists():
+            items.append(AttentionItem(
+                "high", f"{unclassified.count()} production agent(s) without a risk classification",
+                "IRGF stage S2 was skipped: Gate G1 needs provisional D1–D5 scores.",
+                register, unclassified.count(),
+            ))
+
+        current = RiskClassification.objects.for_organization(self.organization).filter(
+            status__in=CURRENT_STATUSES
+        )
+        provisional = current.filter(status=ClassificationStatus.PROVISIONAL).count()
+        if provisional:
+            items.append(AttentionItem(
+                "medium", f"{provisional} risk classification(s) awaiting countersignature",
+                "Provisional tiers count for Gate G1; Gate G2 needs an independent "
+                "countersignature (IRGF M6).",
+                f"{register}?status=provisional", provisional,
+            ))
+
+        due = current.filter(Q(rescore_required=True) | Q(review_due__lte=self.today)).count()
+        if due:
+            items.append(AttentionItem(
+                "medium", f"{due} system(s) due for re-scoring",
+                "A re-score trigger fired, or the annual Tier 3–4 review has come round.",
+                f"{register}?due=1", due,
+            ))
+        return items + self._gate_attention() + self._drift_attention()
+
+    def _drift_attention(self) -> list[AttentionItem]:
+        """IRGF M12-M13: boundary incidents, and drift past its response window."""
+        from django.utils import timezone
+
+        from apps.controlplane.models import UNRESOLVED_STATUSES, DriftRecord, DriftStatus
+
+        items: list[AttentionItem] = []
+        records = DriftRecord.objects.for_organization(self.organization)
+        drift = reverse("controlplane:drift")
+
+        incidents = records.filter(status__in=UNRESOLVED_STATUSES, is_incident=True).count()
+        if incidents:
+            items.append(AttentionItem(
+                "high", f"{incidents} agent boundary incident(s)",
+                "The Control Plane saw agents act beyond their authorized boundary or limits (IRGF M13).",
+                f"{drift}?incident=1", incidents,
+            ))
+        overdue = records.filter(status=DriftStatus.OPEN, response_due__lt=timezone.now()).count()
+        if overdue:
+            items.append(AttentionItem(
+                "high", f"{overdue} drift record(s) past their response window",
+                "Escalated to the AI Governance Body: revert, ratify, except or escalate them.",
+                f"{drift}?overdue=1", overdue,
+            ))
+        waiting = records.filter(status=DriftStatus.OPEN, is_incident=False).count()
+        if waiting:
+            items.append(AttentionItem(
+                "medium", f"{waiting} drift record(s) awaiting a decision",
+                "Running state that differs from the authorized configuration (IRGF M12).",
+                f"{drift}?status=open", waiting,
+            ))
+        return items
+
+    def _gate_attention(self) -> list[AttentionItem]:
+        """IRGF gates: G3 decisions and suspensions, G4 changes, M17 exceptions."""
+        from datetime import timedelta
+
+        from apps.core.constants import Environment
+        from apps.lifecycle import irgf
+        from apps.lifecycle.models import (
+            BASELINE_STATUSES,
+            AuthorizationCondition,
+            AuthorizationStatus,
+            ChangeRecord,
+            ChangeStatus,
+            DeploymentAuthorization,
+            ExceptionStatus,
+            GovernanceException,
+        )
+
+        items: list[AttentionItem] = []
+        authorizations = DeploymentAuthorization.objects.for_organization(self.organization)
+        g3 = reverse("lifecycle:authorizations")
+
+        suspended = authorizations.filter(status=AuthorizationStatus.SUSPENDED).select_related("agent", "application")
+        if suspended.exists():
+            items.append(AttentionItem(
+                "high", f"{suspended.count()} deployment authorization(s) suspended",
+                ", ".join(a.subject.name for a in suspended[:4]), f"{g3}?status=suspended", suspended.count(),
+            ))
+
+        changes = ChangeRecord.objects.for_organization(self.organization).filter(
+            status=ChangeStatus.AWAITING_G4
+        )
+        if changes.exists():
+            major = changes.filter(classification=irgf.MAJOR).count()
+            items.append(AttentionItem(
+                "high" if major else "medium", f"{changes.count()} change(s) awaiting Gate G4",
+                f"{major} major" if major else "Material changes to authorized agents.",
+                reverse("lifecycle:changes"), changes.count(),
+            ))
+
+        pending = authorizations.filter(status=AuthorizationStatus.PENDING).count()
+        if pending:
+            items.append(AttentionItem(
+                "medium", f"{pending} deployment authorization(s) awaiting Gate G3",
+                "Tier 4 needs the governance body and the enterprise sponsor.",
+                f"{g3}?status=pending", pending,
+            ))
+
+        covered = authorizations.filter(status__in=BASELINE_STATUSES).values_list("agent_id", flat=True)
+        unauthorized = self.agents.filter(environment=Environment.PRODUCTION).exclude(pk__in=covered)
+        if unauthorized.exists():
+            items.append(AttentionItem(
+                "medium", f"{unauthorized.count()} production agent(s) without a deployment authorization",
+                "IRGF S7 · Gate G3: " + ", ".join(unauthorized.values_list("name", flat=True)[:3]),
+                g3, unauthorized.count(),
+            ))
+
+        overdue = AuthorizationCondition.objects.for_organization(self.organization).filter(
+            met_at__isnull=True, due_date__lt=self.today, authorization__status__in=BASELINE_STATUSES,
+        ).count()
+        if overdue:
+            items.append(AttentionItem(
+                "medium", f"{overdue} G3 condition(s) past their deadline",
+                "Escalated to whoever authorized the system.", g3, overdue,
+            ))
+
+        expiring = GovernanceException.objects.for_organization(self.organization).filter(
+            status=ExceptionStatus.ACTIVE, expires_at__gt=self.now,
+            expires_at__lte=self.now + timedelta(days=irgf.EXCEPTION_WARNING_DAYS),
+        ).count()
+        if expiring:
+            items.append(AttentionItem(
+                "medium", f"{expiring} exception(s) end within {irgf.EXCEPTION_WARNING_DAYS} days",
+                "IRGF M17: renew, or be ready for the policy to apply again.",
+                reverse("lifecycle:exceptions"), expiring,
+            ))
+        return items
+
     def _attention(self) -> list[AttentionItem]:
         items: list[AttentionItem] = []
         executions_url = reverse("executions:list")
@@ -331,6 +492,8 @@ class DashboardService:
                 ", ".join(a.name for a in risky_agents[:4]),
                 reverse("inventory:agents"), len(risky_agents),
             ))
+
+        items.extend(self._irgf_attention())
 
         critical_risks = [r for r in self.open_risks if r.effective_level == RiskLevel.CRITICAL]
         if critical_risks:

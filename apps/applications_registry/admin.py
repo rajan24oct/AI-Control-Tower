@@ -50,6 +50,6 @@ class AIApplicationAdmin(AuditedModelAdmin):
             },
         ),
         ("Lifecycle", {"fields": ("production_date", "review_date")}),
-        ("AI Landscape", {"fields": ("agents", "ai_models", "providers", "tools")}),
+        ("AI Landscape", {"fields": ("agents", "ai_models", "providers", "tools", "delegations")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )

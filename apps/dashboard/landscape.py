@@ -272,6 +272,10 @@ class ControlTowerService:
             self._apply(node, rollup)
             node.health = health_from_failure_rate(node.runs, node.failed)
 
+            if agent.is_suspended:
+                node.flags.append("Suspended")
+            if agent.risk_tier:
+                node.flags.append(f"Tier {agent.risk_tier}")
             node.flags.append(f"L{agent.autonomy_level} autonomy")
             if agent.has_excessive_autonomy:
                 node.flags.append("Excessive autonomy")

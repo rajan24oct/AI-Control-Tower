@@ -101,6 +101,22 @@ class AIAgentSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source="provider.name", read_only=True)
     primary_model_name = serializers.CharField(source="primary_model.model_name", read_only=True)
     approval_required = serializers.BooleanField(read_only=True)
+    is_suspended = serializers.BooleanField(read_only=True)
+    deployment_authorization = serializers.SerializerMethodField()
+
+    def get_deployment_authorization(self, agent):
+        """IRGF S7 · Gate G3: the authorization the agent is measured against, if any."""
+        from apps.lifecycle.services import AuthorizationService
+
+        authorization = AuthorizationService.baseline(agent)
+        if authorization is None:
+            return None
+        return {
+            "id": str(authorization.pk),
+            "status": authorization.status,
+            "environment": authorization.environment,
+            "tier": authorization.tier,
+        }
 
     class Meta:
         model = AIAgent
@@ -132,14 +148,44 @@ class AIAgentSerializer(serializers.ModelSerializer):
             "adapter_key",
             "remote_endpoint",
             "status",
+            # IRGF: the S2 tier, the Agent Card and the kill-switch state.
+            "risk_tier",
+            "out_of_scope",
+            "action_limits",
+            "escalation_thresholds",
+            "kill_switch_conditions",
+            "kill_switch_triggers",
+            "is_suspended",
+            "suspended_at",
+            "suspension_reason",
+            "deployment_authorization",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "risk_tier", "suspended_at", "suspension_reason", "created_at", "updated_at",
+        ]
 
 
 class AIApplicationSerializer(serializers.ModelSerializer):
     agent_count = serializers.IntegerField(source="agents.count", read_only=True)
+    deployment_authorization = serializers.SerializerMethodField()
+
+    def get_deployment_authorization(self, application):
+        """IRGF S7 · Gate G3: the authorization the application is measured against, if any."""
+        from apps.lifecycle.services import AuthorizationService
+
+        authorization = AuthorizationService.baseline(application)
+        if authorization is None:
+            return None
+        return {
+            "id": str(authorization.pk),
+            "status": authorization.status,
+            "in_force": authorization.is_in_force,
+            "environment": authorization.environment,
+            "tier": authorization.tier,
+            "decided_at": authorization.decided_at,
+        }
 
     class Meta:
         model = AIApplication
@@ -160,13 +206,16 @@ class AIApplicationSerializer(serializers.ModelSerializer):
             "risk_level",
             "production_date",
             "review_date",
+            "risk_tier",
             "agents",
             "ai_models",
             "providers",
             "agent_count",
             "tools",
+            "delegations",
+            "deployment_authorization",
             "status",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "slug", "created_at", "updated_at"]
+        read_only_fields = ["id", "slug", "risk_tier", "created_at", "updated_at"]

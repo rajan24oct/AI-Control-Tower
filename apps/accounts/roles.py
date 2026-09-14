@@ -35,6 +35,10 @@ class Perm:
     MODEL_MANAGE = "model.manage"
     MODEL_APPROVE = "model.approve"
     AGENT_MANAGE = "agent.manage"
+    # The kill-switch (IRGF agent chain link 06). Its own grant, because
+    # stopping an agent has to be quick for whoever is watching it, while
+    # changing what the agent is stays with the people who manage it.
+    AGENT_SUSPEND = "agent.suspend"
     APPLICATION_MANAGE = "application.manage"
 
     EXECUTION_VIEW = "execution.view"
@@ -70,6 +74,12 @@ class Perm:
 
     AUDIT_VIEW = "audit.view"
 
+    # IRGF gate decisions (M15, M16). The AI Governance Body decides Tier 3-4
+    # authorizations, changes and exceptions; at Tier 4 the Enterprise
+    # Governance Sponsor adds the second of two signatures.
+    GATE_DECIDE = "gate.decide"
+    GATE_SPONSOR = "gate.sponsor"
+
 
 _READ_ONLY = {
     Perm.INVENTORY_VIEW,
@@ -98,6 +108,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.PROVIDER_MANAGE,
         Perm.MODEL_MANAGE,
         Perm.AGENT_MANAGE,
+        Perm.AGENT_SUSPEND,
         Perm.APPLICATION_MANAGE,
         Perm.TELEMETRY_INGEST,
         Perm.COST_MANAGE,
@@ -110,6 +121,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     | {
         Perm.INVENTORY_MANAGE,
         Perm.AGENT_MANAGE,
+        Perm.AGENT_SUSPEND,
         Perm.APPLICATION_MANAGE,
         Perm.TELEMETRY_INGEST,
         Perm.PROMPT_VIEW,
@@ -125,8 +137,11 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.APPROVAL_DECIDE,
         Perm.AUDIT_VIEW,
         Perm.PROMPT_VIEW,
+        Perm.AGENT_SUSPEND,
+        Perm.GATE_DECIDE,
     },
-    Role.RISK_MANAGER: _READ_ONLY | {Perm.RISK_MANAGE, Perm.AUDIT_VIEW, Perm.PROMPT_VIEW},
+    Role.RISK_MANAGER: _READ_ONLY
+    | {Perm.RISK_MANAGE, Perm.AUDIT_VIEW, Perm.PROMPT_VIEW, Perm.AGENT_SUSPEND},
     # An approver deciding blind is worse than no approval at all.
     Role.APPROVER: _READ_ONLY | {Perm.APPROVAL_DECIDE, Perm.PROMPT_VIEW},
     Role.AUDITOR: _READ_ONLY | {Perm.AUDIT_VIEW, Perm.PROMPT_VIEW},

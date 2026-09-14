@@ -22,6 +22,9 @@ class NotificationCategory(models.TextChoices):
     PROVIDER_HEALTH = "provider_health", "Provider Health"
     EXECUTION_FAILURE = "execution_failure", "Execution Failure"
     RISK_REVIEW = "risk_review", "Risk Review"
+    AGENT_SUSPENDED = "agent_suspended", "Agent Suspended"
+    GATE_DECISION = "gate_decision", "Gate Decision"
+    DRIFT = "drift", "Drift"
     SYSTEM = "system", "System"
 
 
@@ -47,6 +50,9 @@ CATEGORY_PERMISSIONS = {
     NotificationCategory.PROVIDER_HEALTH: Perm.PROVIDER_MANAGE,
     NotificationCategory.EXECUTION_FAILURE: Perm.AGENT_MANAGE,
     NotificationCategory.RISK_REVIEW: Perm.RISK_MANAGE,
+    NotificationCategory.AGENT_SUSPENDED: Perm.AGENT_MANAGE,
+    NotificationCategory.GATE_DECISION: Perm.GATE_DECIDE,
+    NotificationCategory.DRIFT: Perm.RISK_MANAGE,
     NotificationCategory.SYSTEM: Perm.ORG_MANAGE,
 }
 
@@ -61,6 +67,9 @@ DEFAULT_CHANNELS = {
     NotificationCategory.PROVIDER_HEALTH: {"in_app": True, "email": False},
     NotificationCategory.EXECUTION_FAILURE: {"in_app": True, "email": False},
     NotificationCategory.RISK_REVIEW: {"in_app": True, "email": False},
+    NotificationCategory.AGENT_SUSPENDED: {"in_app": True, "email": True},
+    NotificationCategory.GATE_DECISION: {"in_app": True, "email": True},
+    NotificationCategory.DRIFT: {"in_app": True, "email": True},
     NotificationCategory.SYSTEM: {"in_app": True, "email": False},
 }
 

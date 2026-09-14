@@ -1,0 +1,22 @@
+{% for group in dimension_groups %}
+  {% if group.dimension.field == "d5_data_sensitivity" %}
+    <div class="ct-dimension-note">
+      <strong>D5 · Sensitivity and uncertainty</strong> is scored as two sub-scores. The composite is
+      the higher of the two, never the average.
+    </div>
+  {% endif %}
+  <fieldset class="ct-dimension">
+    <legend>{{ group.field.label }}</legend>
+    <p class="ct-dimension-question">
+      {{ group.dimension.question }}
+      {% if group.dimension.rule %}<span class="ct-dimension-rule">{{ group.dimension.rule }}</span>{% endif %}
+    </p>
+    {% for radio in group.field %}
+      <div class="form-check">
+        {{ radio.tag }}
+        <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+      </div>
+    {% endfor %}
+    {% for error in group.field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+  </fieldset>
+{% endfor %}

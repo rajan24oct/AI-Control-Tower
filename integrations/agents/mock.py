@@ -208,7 +208,8 @@ class MockAgentAdapter(BaseAgentAdapter):
 
             tool_calls: list[ToolCall] = []
             if rng.random() < 0.6:
-                tool_name = rng.choice(_TOOLS)
+                # An engine calls the tools its agent is given, when the caller says which.
+                tool_name = rng.choice(run["metadata"].get("tools") or _TOOLS)
                 tool_calls.append(
                     ToolCall(
                         tool_name=tool_name,

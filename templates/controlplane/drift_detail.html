@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Drift · {{ record.subject }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'controlplane:drift' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Drift</a>
+  <h2 class="h4 mt-1 mb-1">{{ record.title }}</h2>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if record.is_incident %}<span class="badge text-bg-danger">Incident</span>{% endif %}
+    <span class="badge badge-soft text-bg-light text-dark">{{ record.category_info.label }}</span>
+    {% if record.tier %}<span class="badge text-bg-{{ record.tier|tier_style }}">Tier {{ record.tier }}</span>
+    {% else %}<span class="badge text-bg-secondary">Unclassified · triaged as Tier {{ record.triage_tier }}</span>{% endif %}
+    <span class="badge badge-soft text-bg-{{ record.status|drift_status_style }}">{{ record.get_status_display }}</span>
+    <span class="badge badge-soft text-bg-light text-dark">IRGF M13</span>
+  </div>
+</div>
+
+{% if record.auto_suspended %}
+  <div class="alert alert-danger py-2 small"><i class="bi bi-power"></i>
+    <strong>The agent was suspended automatically.</strong> This is a kill-switch trigger it pre-approved at Gate G3 (link 06).
+    Only a person can resume it, from <a href="{% url 'inventory:agent_detail' record.agent.pk %}#kill-switch">the agent's page</a>.
+  </div>
+{% endif %}
+{% if record.escalated_at and record.needs_decision %}
+  <div class="alert alert-warning py-2 small"><i class="bi bi-alarm"></i>
+    <strong>Past its response window.</strong> Escalated to the AI Governance Body {{ record.escalated_at|date:"j M Y H:i" }}.
+  </div>
+{% endif %}
+{% if record.recurrence_of %}
+  <div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i>
+    <strong>This recurred.</strong> <a href="{% url 'controlplane:drift_detail' record.recurrence_of.pk %}">The same divergence</a>
+    was resolved ({{ record.recurrence_of.get_resolution_display|lower }}) on {{ record.recurrence_of.resolved_at|date:"j M Y" }}.
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Approved and running state</span><span class="small text-muted">IRGF M12 comparison</span></div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>Approved</dt><dd>{{ expected_text }}</dd></div>
+          <div class="col-12"><dt>Running</dt><dd><strong>{{ observed_text }}</strong></dd></div>
+          {% if record.detail %}<div class="col-12"><dt>Detail</dt><dd>{{ record.detail|linebreaksbr }}</dd></div>{% endif %}
+          <div class="col-12"><dt>{{ record.category_info.label }} drift</dt><dd>{{ record.category_info.meaning }} Owner in IRGF: {{ record.category_info.owner }}.</dd></div>
+          <div class="col-6"><dt>First seen</dt><dd>{{ record.first_seen_at|date:"j M Y H:i" }}</dd></div>
+          <div class="col-6"><dt>Last seen</dt><dd>{{ record.last_seen_at|date:"j M Y H:i" }} · {{ record.occurrences }}×</dd></div>
+          <div class="col-6"><dt>Subject</dt><dd>
+            {% if record.agent %}<a href="{% url 'inventory:agent_detail' record.agent.pk %}">{{ record.agent.name }}</a>
+            {% else %}<a href="{% url 'inventory:application_detail' record.application.pk %}">{{ record.application.name }}</a>{% endif %}</dd></div>
+          <div class="col-6"><dt>Compared with</dt><dd class="mb-0">
+            {% if record.authorization %}<a href="{% url 'lifecycle:authorization_detail' record.authorization.pk %}">{{ record.authorization }}</a>
+            {% else %}No deployment authorization{% endif %}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Evidence</span><span class="small text-muted">latest {{ evidence|length }}</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>What</th><th>When</th><th></th></tr></thead>
+          <tbody>
+            {% for item in evidence %}
+              <tr>
+                <td><span class="small text-muted">{{ item.kind_label }}</span> <code class="small">{{ item.label }}</code></td>
+                <td class="small text-nowrap">{{ item.at|isodate|date:"j M Y H:i" }}</td>
+                <td class="text-end">{% if item.url %}<a class="small" href="{{ item.url }}">Open</a>{% endif %}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="small text-muted">No evidence recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-alarm me-1"></i> Response</span><span class="small text-muted">IRGF chapter 19</span></div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>Route at Tier {{ record.triage_tier }}</dt><dd>{{ response.label|capfirst }}</dd></div>
+          <div class="col-6"><dt>Respond by</dt><dd class="{% if record.is_overdue %}text-danger fw-semibold{% endif %}">
+            {% if record.response_due %}{{ record.response_due|date:"j M Y H:i" }}{% else %}No deadline{% endif %}</dd></div>
+          <div class="col-6"><dt>Told</dt><dd>{% if record.notified_at %}{{ record.notified_at|date:"j M H:i" }}{% else %}Waiting for the digest{% endif %}</dd></div>
+          {% if record.automatic_action %}
+            <div class="col-12"><dt>Done automatically</dt><dd class="mb-0">
+              {% if record.automatic_action == "auto_suspend" %}The agent's kill-switch was pulled (a pre-approved trigger).
+              {% elif record.automatic_action == "rescore" %}The S2 classification is flagged for a re-score.
+              {% else %}{{ record.automatic_action }}{% endif %}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-signpost-split me-1"></i> Resolution</span><span class="small text-muted">IRGF M13 · four endpoints</span></div>
+      <div class="ct-card-body">
+        {% if record.status == "resolved" %}
+          <p class="small mb-1"><span class="badge text-bg-success">{{ record.get_resolution_display }}</span>
+            {% if record.resolved_by %}by {{ record.resolved_by.get_full_name|default:record.resolved_by.email }}{% else %}by the Control Plane{% endif %},
+            {{ record.resolved_at|date:"j M Y H:i" }}</p>
+          {% if record.resolution_note %}<p class="small mb-1">{{ record.resolution_note|linebreaksbr }}</p>{% endif %}
+          {% if record.change_record %}<p class="small mb-0">Change: <a href="{% url 'lifecycle:change_detail' record.change_record.pk %}">{{ record.change_record.change_label }}</a></p>{% endif %}
+        {% elif record.status == "ratifying" %}
+          <p class="small mb-0"><strong>Ratifying.</strong> Waiting for Gate G4 to decide
+            <a href="{% url 'lifecycle:change_detail' record.change_record.pk %}">{{ record.change_record.change_label }}</a>
+            ({{ record.change_record.get_status_display|lower }}). This record closes when the change is approved, and reopens if it is refused.</p>
+        {% elif record.status == "excepting" or record.status == "excepted" %}
+          <p class="small mb-0"><strong>{{ record.get_status_display }}.</strong>
+            <a href="{% url 'lifecycle:exception_detail' record.exception.pk %}">The exception</a> is {{ record.exception.get_status_display|lower }}{% if record.exception.expires_at %} until {{ record.exception.expires_at|date:"j M Y" }}{% endif %}.
+            The divergence needs a decision again when it ends.</p>
+        {% elif can_triage or can_escalate %}
+          {% url 'controlplane:drift_resolve' record.pk as resolve_url %}
+          {% if can_triage %}
+            <form method="post" action="{{ resolve_url }}" class="mb-3 pb-3 border-bottom">
+              {% csrf_token %}<input type="hidden" name="action" value="revert">
+              <div class="fw-semibold small mb-1">Revert <span class="text-muted fw-normal">· the approved state is still right</span></div>
+              <textarea name="note" rows="2" class="form-control form-control-sm mb-2" required placeholder="What was put back, and how"></textarea>
+              <button type="submit" class="btn btn-sm btn-outline-primary">Revert</button>
+            </form>
+
+            <form method="post" action="{{ resolve_url }}" class="mb-3 pb-3 border-bottom">
+              {% csrf_token %}<input type="hidden" name="action" value="ratify">
+              <div class="fw-semibold small mb-1">Ratify <span class="text-muted fw-normal">· the new state should be the approved one</span></div>
+              {% if ratify_by == "authorize" %}
+                <p class="small mb-0">Authorize the agent for production at Gate G3; this record closes by itself once an authorization is in force.
+                  <a href="{{ record.subject|authorize_url }}">Request authorization</a>.</p>
+              {% elif ratify_by == "change" %}
+                <p class="small text-muted mb-2">Record the new state on the {{ record.subject|system_kind }} first. The edit becomes a change record that Gate G4 classifies and decides; choose it here.</p>
+                {% if change_choices %}
+                  <select name="change" class="form-select form-select-sm mb-2" required>
+                    {% for change in change_choices %}<option value="{{ change.pk }}">{{ change.change_label }} · {{ change.get_status_display|lower }} · {{ change.detected_at|date:"j M" }}</option>{% endfor %}
+                  </select>
+                  <textarea name="note" rows="2" class="form-control form-control-sm mb-2" placeholder="Why the new state is right (optional)"></textarea>
+                  <button type="submit" class="btn btn-sm btn-outline-primary">Ratify through Gate G4</button>
+                {% else %}
+                  <p class="small mb-0">No change to this {{ record.subject|system_kind }} is recorded yet.</p>
+                {% endif %}
+              {% else %}
+                <textarea name="note" rows="2" class="form-control form-control-sm mb-2" required placeholder="Why the new state is right"></textarea>
+                <button type="submit" class="btn btn-sm btn-outline-primary">Ratify</button>
+              {% endif %}
+            </form>
+          {% endif %}
+
+          {% if can_escalate %}
+            {% if record.agent %}
+              <form method="post" action="{{ resolve_url }}" class="mb-3 pb-3 border-bottom">
+                {% csrf_token %}<input type="hidden" name="action" value="except">
+                <div class="fw-semibold small mb-1">Except <span class="text-muted fw-normal">· it must stay for now (M17)</span></div>
+                <textarea name="justification" rows="2" class="form-control form-control-sm mb-2" required placeholder="Why it cannot be reverted or ratified yet"></textarea>
+                <textarea name="compensating_control" rows="2" class="form-control form-control-sm mb-2" {% if tier_requires_control %}required{% endif %}
+                          placeholder="Compensating control{% if tier_requires_control %} (required at Tier 3–4){% endif %}"></textarea>
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="number" name="duration_days" min="1" max="{{ max_days }}" value="30" class="form-control form-control-sm" style="max-width: 7rem" aria-label="Days">
+                  <span class="small text-muted">days (at most {{ max_days }})</span>
+                  <button type="submit" class="btn btn-sm btn-outline-primary ms-auto">Request exception</button>
+                </div>
+              </form>
+            {% endif %}
+
+            <form method="post" action="{{ resolve_url }}">
+              {% csrf_token %}<input type="hidden" name="action" value="escalate">
+              <div class="fw-semibold small mb-1">Escalate <span class="text-muted fw-normal">· the tier or the approval was wrong</span></div>
+              <textarea name="reason" rows="2" class="form-control form-control-sm mb-2" required placeholder="What the divergence says about the tier or the approval"></textarea>
+              {% if record.authorization %}
+                <div class="form-check small mb-2">
+                  <input class="form-check-input" type="checkbox" name="suspend_authorization" id="suspend-authorization">
+                  <label class="form-check-label" for="suspend-authorization">Also suspend the deployment authorization until the {{ record.subject|system_kind }} is authorized again (G3)</label>
+                </div>
+              {% endif %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">Escalate to S2</button>
+            </form>
+          {% endif %}
+        {% else %}
+          <p class="small text-muted mb-0">Revert and ratify: the system owner, the risk function or the AI Governance Body.
+            Except and escalate: the risk function or the AI Governance Body.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

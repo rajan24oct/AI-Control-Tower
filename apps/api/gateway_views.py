@@ -19,6 +19,7 @@ from rest_framework.response import Response
 
 from apps.accounts.roles import Perm
 from apps.api.execution_views import caller_organization, caller_service_account
+from apps.api.identity import IdentityRefused, acting_agent
 from apps.api.permissions import IsAuthenticatedOrganizationMember
 from apps.core.constants import Environment
 from apps.executions.services import AssetResolver
@@ -61,6 +62,12 @@ def _denied(request, organization, permission):
     return not request.user.has_org_permission(organization, permission)
 
 
+def _identity_refused(exc: IdentityRefused) -> Response:
+    return Response(
+        {"error": exc.code, "detail": exc.message}, status=http_status.HTTP_403_FORBIDDEN
+    )
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticatedOrganizationMember])
 def chat(request):
@@ -81,8 +88,14 @@ def chat(request):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
+    service_account = caller_service_account(request)
     resolver = AssetResolver(organization)
-    agent = resolver.agent(data.get("agent"))
+    try:
+        agent = acting_agent(
+            service_account, resolver.agent(data.get("agent")), requested=bool(data.get("agent"))
+        )
+    except IdentityRefused as exc:
+        return _identity_refused(exc)
 
     gateway_request = GatewayRequest(
         agent=agent,
@@ -100,8 +113,6 @@ def chat(request):
         external_id=data.get("execution_id", ""),
         metadata=data.get("metadata") or {},
     )
-
-    service_account = caller_service_account(request)
 
     if data.get("stream"):
         return _stream_response(organization, gateway_request, service_account)
@@ -204,12 +215,21 @@ def send_message(request):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
+    service_account = caller_service_account(request)
     resolver = AssetResolver(organization)
+    sender = resolver.agent(data["sender"])
+    if sender is not None:
+        # The sender is the agent acting, so it is the one the identity must hold.
+        try:
+            acting_agent(service_account, sender, requested=True)
+        except IdentityRefused as exc:
+            return _identity_refused(exc)
+
     try:
         message = MessagingService.send(
             organization,
             MessageRequest(
-                sender=resolver.agent(data["sender"]),
+                sender=sender,
                 recipient=resolver.agent(data["recipient"]),
                 body=data["body"],
                 subject=data.get("subject", ""),
@@ -217,7 +237,7 @@ def send_message(request):
                 environment=data.get("environment") or Environment.PRODUCTION,
                 metadata=data.get("metadata") or {},
             ),
-            service_account=caller_service_account(request),
+            service_account=service_account,
         )
     except MessageBlocked as exc:
         return Response(
@@ -253,6 +273,18 @@ def collect_messages(request, agent_id):
     agent = AssetResolver(organization).agent(agent_id)
     if agent is None:
         return Response({"detail": "Unknown agent."}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        acting_agent(caller_service_account(request), agent, requested=True)
+    except IdentityRefused as exc:
+        return _identity_refused(exc)
+    if agent.is_suspended:
+        return Response(
+            {
+                "error": "agent_suspended",
+                "detail": f"Agent '{agent.name}' is suspended by its kill-switch.",
+            },
+            status=http_status.HTTP_403_FORBIDDEN,
+        )
 
     messages = MessagingService.collect(organization, agent)
     return Response(

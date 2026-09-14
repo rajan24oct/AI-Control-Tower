@@ -9,6 +9,7 @@
     <a href="{% url 'inventory:applications' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Applications</a>
     <h2 class="h4 mt-1 mb-1">{{ application.name }}</h2>
     <div class="d-flex gap-2 flex-wrap">
+      {% if application.risk_tier %}<span class="badge text-bg-{{ application.risk_tier|tier_style }}">Tier {{ application.risk_tier }}</span>{% endif %}
       <span class="badge badge-soft text-bg-{{ application.environment|environment_style }}">{{ application.get_environment_display }}</span>
       <span class="badge badge-soft text-bg-{{ application.risk_level|risk_style }}">{{ application.get_risk_level_display }} risk</span>
       <span class="badge badge-soft text-bg-{{ application.status|status_style }}">{{ application.get_status_display }}</span>
@@ -23,7 +24,7 @@
 
 <div class="row g-3">
   <div class="col-12 col-lg-5">
-    <div class="ct-card">
+    <div class="ct-card mb-3">
       <div class="ct-card-header">Details</div>
       <div class="ct-card-body">
         <dl class="ct-kv row mb-0">
@@ -45,6 +46,10 @@
         </dl>
       </div>
     </div>
+
+    {% include "classification/_subject_panel.html" with classification=classification kind="applications" subject=application %}
+    {% include "inventory/_authorization_panel.html" with subject=application kind="application" exceptions=None %}
+    {% include "inventory/_composition_panel.html" %}
   </div>
 
   <div class="col-12 col-lg-7">
@@ -55,8 +60,8 @@
           {% for agent in application.agents.all %}
             <div class="col-12 col-md-6">
               <a class="ct-node border-risk-{{ agent.risk_level }}" href="{% url 'inventory:agent_detail' agent.pk %}">
-                <p class="ct-node-name">{{ agent.name }}</p>
-                <p class="ct-node-meta">{{ agent.get_framework_display }} &middot; L{{ agent.autonomy_level }} autonomy</p>
+                <p class="ct-node-name">{{ agent.name }}{% if agent.is_suspended %} <span class="badge text-bg-danger">Suspended</span>{% endif %}</p>
+                <p class="ct-node-meta">{{ agent.get_framework_display }} &middot; L{{ agent.autonomy_level }} autonomy{% if agent.risk_tier %} &middot; Tier {{ agent.risk_tier }}{% endif %}</p>
               </a>
             </div>
           {% empty %}

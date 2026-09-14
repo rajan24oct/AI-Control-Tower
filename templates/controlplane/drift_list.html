@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Drift{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>IRGF M13 · Drift.</strong> Each record is one way the running state differs from the approved state, in one of IRGF's
+  eight categories. It stays one record while it recurs. Each ends one of four ways: <strong>revert</strong> it,
+  <strong>ratify</strong> it through Gate G4, <strong>except</strong> it for a while under M17, or <strong>escalate</strong> it
+  to S2 and possibly Gate G3. <a href="{% url 'controlplane:overview' %}">Control Plane overview</a>.
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><a href="?status=open" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Needs a decision</span><div class="ct-metric-value {% if needs_decision %}text-warning{% endif %}">{{ needs_decision }}</div>
+  </div></a></div>
+  <div class="col-6 col-md-3"><a href="?incident=1" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Incidents</span><div class="ct-metric-value {% if incidents %}text-danger{% endif %}">{{ incidents }}</div>
+    <div class="ct-metric-hint">Agent boundary divergence</div>
+  </div></a></div>
+  <div class="col-6 col-md-3"><a href="?overdue=1" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Past its response window</span><div class="ct-metric-value {% if overdue %}text-danger{% endif %}">{{ overdue }}</div>
+  </div></a></div>
+  <div class="col-6 col-md-3"><a href="?status=excepted" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Excepted</span><div class="ct-metric-value">{{ excepted }}</div>
+    <div class="ct-metric-hint">Allowed to stay for a while (M17)</div>
+  </div></a></div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header"><span>Drift Records</span><span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span></div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm" placeholder="Agent, application or drift">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Unresolved</option>
+          {% for value, label in statuses %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          <option value="all" {% if request.GET.status == "all" %}selected{% endif %}>All</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Category</label>
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in categories %}<option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Tier</label>
+        <select name="tier" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for tier in tiers %}<option value="{{ tier }}" {% if request.GET.tier == tier|stringformat:"s" %}selected{% endif %}>Tier {{ tier }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1"><button type="submit" class="btn btn-sm btn-primary w-100">Filter</button></div>
+      {% if request.GET.incident %}<input type="hidden" name="incident" value="1">{% endif %}
+      {% if request.GET.overdue %}<input type="hidden" name="overdue" value="1">{% endif %}
+      {% if request.GET.agent %}<input type="hidden" name="agent" value="{{ request.GET.agent }}">{% endif %}
+      {% if request.GET.route %}<input type="hidden" name="route" value="{{ request.GET.route }}">{% endif %}
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "Subject" "subject" %}<th>Drift</th>{% sort_th "Category" "category" %}{% sort_th "Tier" "tier" first="desc" %}
+          {% sort_th "Status" "status" %}{% sort_th "Seen" "seen" first="desc" %}{% sort_th "Response" "due" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td class="fw-semibold">{{ record.subject }}</td>
+            <td>
+              <a class="text-decoration-none" href="{% url 'controlplane:drift_detail' record.pk %}">{{ record.title|truncatechars:90 }}</a>
+              {% if record.is_incident %}<span class="badge text-bg-danger ms-1">Incident</span>{% endif %}
+              {% if record.auto_suspended %}<span class="badge badge-soft text-bg-danger ms-1">Suspended automatically</span>{% endif %}
+            </td>
+            <td class="small">{{ record.category_info.label }}</td>
+            <td>{% if record.tier %}<span class="badge text-bg-{{ record.tier|tier_style }}">T{{ record.tier }}</span>{% else %}<span class="badge text-bg-secondary" title="Triaged as Tier 3">—</span>{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ record.status|drift_status_style }}">{{ record.get_status_display }}</span>
+              {% if record.resolution %}<div class="small text-muted">{{ record.get_resolution_display }}</div>{% endif %}</td>
+            <td class="small text-nowrap">{{ record.last_seen_at|date:"j M H:i" }}<div class="text-muted">{{ record.occurrences }}×</div></td>
+            <td class="small">
+              {{ record.response.label|capfirst }}
+              {% if record.response_due and record.needs_decision %}
+                <div class="{% if record.is_overdue %}text-danger fw-semibold{% else %}text-muted{% endif %}">by {{ record.response_due|date:"j M H:i" }}</div>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-radar"></i><p class="mb-0">No drift matches these filters.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

@@ -259,6 +259,33 @@ class MCPRegistryService:
         )
 
     @staticmethod
+    def set_limit_arguments(tool: MCPTool, *, value_argument: str, counterparty_argument: str, actor) -> None:
+        """Agent chain link 06: which arguments carry a call's value and its counterparty.
+
+        The MCP Gateway reads them from every call and holds the calling agent
+        to its action limits before the call goes out.
+        """
+        properties = set(((tool.input_schema or {}).get("properties") or {}).keys())
+        for name in (value_argument, counterparty_argument):
+            if name and properties and name not in properties:
+                raise ValueError(f"'{tool.name}' has no argument named '{name}'.")
+        before = snapshot(tool, ["value_argument", "counterparty_argument"])
+        tool.value_argument = (value_argument or "")[:100]
+        tool.counterparty_argument = (counterparty_argument or "")[:100]
+        tool.save(update_fields=["value_argument", "counterparty_argument", "updated_at"])
+        AuditService.log(
+            action=AuditAction.CONFIG_CHANGE,
+            resource_type=tool._meta.label,
+            resource_id=tool.pk,
+            resource_label=tool.qualified_name,
+            organization=tool.organization,
+            actor=actor,
+            old_value=before,
+            new_value=snapshot(tool, ["value_argument", "counterparty_argument"]),
+            metadata={"irgf": "agent chain link 06: action-limit arguments"},
+        )
+
+    @staticmethod
     def set_approval(server: MCPServer, *, approved: bool, actor) -> None:
         fields = ["is_approved", "approved_at", "approved_by"]
         before = snapshot(server, fields)

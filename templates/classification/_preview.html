@@ -1,0 +1,71 @@
+{% comment %}
+  Live tier preview for the score and countersign forms. The server applies the
+  same rule on save (apps/classification/irgf.py); this only shows it early.
+{% endcomment %}
+<div class="ct-card ct-sticky-card">
+  <div class="ct-card-header">
+    <span>Tier preview</span>
+    <span class="small text-muted">IRGF M5</span>
+  </div>
+  <div class="ct-card-body">
+    <dl class="ct-kv row mb-2">
+      <div class="col-6"><dt>Impact</dt><dd><span id="preview-impact">—</span> <span class="small text-muted">⌈avg D1, D4, D5⌉</span></dd></div>
+      <div class="col-6"><dt>Control deficit</dt><dd><span id="preview-deficit">—</span> <span class="small text-muted">⌈avg D2, D3⌉</span></dd></div>
+    </dl>
+    <p class="mb-2">Resulting tier <span id="preview-tier" class="badge text-bg-secondary ms-1">—</span></p>
+    <p id="preview-floor" class="small text-danger mb-2" hidden>
+      Safety floor applied: D1 = 4, or D2 = 4 with D3 = 4, holds a system at Tier {{ floor_tier }} or above.
+    </p>
+    {% include "classification/_matrix.html" %}
+    <p id="preview-summary" class="small text-muted mt-3 mb-0"></p>
+  </div>
+</div>
+<script id="irgf-matrix" type="application/json">{{ matrix_json|safe }}</script>
+<script id="irgf-summaries" type="application/json">{{ summaries_json|safe }}</script>
+<script>
+  (function () {
+    var form = document.getElementById("irgf-score-form");
+    if (!form) { return; }
+    var matrix = JSON.parse(document.getElementById("irgf-matrix").textContent);
+    var summaries = JSON.parse(document.getElementById("irgf-summaries").textContent);
+    var floorTier = {{ floor_tier }};
+    var styles = {1: "success", 2: "info", 3: "warning", 4: "danger"};
+
+    function score(name) {
+      var input = form.querySelector('input[name="' + name + '"]:checked');
+      return input ? parseInt(input.value, 10) : null;
+    }
+
+    function update() {
+      var d1 = score("d1_consequence"), d2 = score("d2_autonomy"), d3 = score("d3_reversibility"),
+          d4 = score("d4_exposure"), d5a = score("d5_data_sensitivity"), d5b = score("d5_model_uncertainty");
+      if ([d1, d2, d3, d4, d5a, d5b].indexOf(null) !== -1) { return; }
+
+      var d5 = Math.max(d5a, d5b);
+      var impact = Math.ceil((d1 + d4 + d5) / 3);
+      var deficit = Math.ceil((d2 + d3) / 2);
+      var tier = matrix[impact][deficit];
+      var floor = d1 === 4 || (d2 === 4 && d3 === 4);
+      var floored = floor && tier < floorTier;
+      if (floored) { tier = floorTier; }
+
+      document.getElementById("preview-impact").textContent = impact;
+      document.getElementById("preview-deficit").textContent = deficit;
+      var badge = document.getElementById("preview-tier");
+      badge.className = "badge ms-1 text-bg-" + styles[tier];
+      badge.textContent = "Tier " + tier;
+      document.getElementById("preview-floor").hidden = !floored;
+      document.getElementById("preview-summary").textContent = summaries[tier] || "";
+
+      form.parentNode.parentNode.querySelectorAll(".ct-tier-cell").forEach(function (cell) {
+        cell.classList.toggle(
+          "is-current",
+          parseInt(cell.dataset.impact, 10) === impact && parseInt(cell.dataset.deficit, 10) === deficit
+        );
+      });
+    }
+
+    form.addEventListener("change", update);
+    update();
+  })();
+</script>

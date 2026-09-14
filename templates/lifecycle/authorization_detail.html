@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Authorization · {{ authorization.subject.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{{ authorization.subject|system_url }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> {{ authorization.subject.name }}</a>
+  <h2 class="h4 mt-1 mb-1">Deployment authorization · {{ authorization.subject.name }}</h2>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if authorization.application_id %}<span class="badge badge-soft text-bg-light text-dark">Application</span>{% endif %}
+    <span class="badge text-bg-{{ authorization.status|gate_status_style }}">{{ authorization.get_status_display }}</span>
+    <span class="badge text-bg-{{ authorization.tier|tier_style }}">Tier {{ authorization.tier }}</span>
+    <span class="badge badge-soft text-bg-{{ authorization.environment|environment_style }}">{{ authorization.get_environment_display }}</span>
+    <span class="badge badge-soft text-bg-light text-dark">IRGF S7 · Gate G3</span>
+  </div>
+</div>
+
+{% if authorization.status == "suspended" %}
+  <div class="alert alert-danger py-2 small"><i class="bi bi-pause-circle-fill"></i>
+    <strong>Suspended {{ authorization.suspended_at|date:"j M Y H:i" }}.</strong> {{ authorization.suspension_reason }}
+    {% if authorization.suspended_for_changes %}It is restored once the changes are decided at <a href="{% url 'lifecycle:changes' %}">Gate G4</a> or reverted.{% endif %}
+  </div>
+{% endif %}
+{% if drift %}
+  <div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill"></i>
+    {% if authorization.is_pending %}
+      <strong>The {{ authorization.subject_kind }} has changed since this request</strong> ({{ drift|join:", " }}). Request again so the configuration signed is the one that runs.
+    {% else %}
+      <strong>The {{ authorization.subject_kind }} differs from its authorized configuration</strong> in: {{ drift|join:", " }}. See the changes below.
+    {% endif %}
+  </div>
+{% endif %}
+{% if authorization.status == "superseded" and authorization.superseded_by %}
+  <div class="alert alert-secondary py-2 small">Superseded by <a href="{% url 'lifecycle:authorization_detail' authorization.superseded_by.pk %}">a later authorization</a>.</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Authorized configuration</span><span class="small text-muted">the approved state</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for label, value in configuration %}
+              <tr><th class="small fw-semibold text-nowrap" style="width:14rem">{{ label }}</th><td class="small">{{ value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Evidence relied on</span><span class="small text-muted">G3 entry criteria at request</span></div>
+      <div class="ct-card-body">
+        <ul class="ct-checklist">
+          {% for check in authorization.evidence %}
+            <li>
+              <i class="bi {% if check.ok %}bi-check-circle-fill text-success{% elif check.required %}bi-x-circle-fill text-danger{% else %}bi-dash-circle text-muted{% endif %}"></i>
+              <div><strong>{{ check.label }}</strong> <span class="text-muted small">· {{ check.irgf }}</span>
+                <div class="small text-muted">{{ check.detail }}</div></div>
+            </li>
+          {% endfor %}
+        </ul>
+        {% if authorization.classification %}
+          <p class="small mb-0">Tier from the <a href="{% url 'classification:detail' authorization.classification.pk %}">S2 classification</a>
+            confirmed {{ authorization.classification_confirmed_at|date:"j M Y" }}.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Statements</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>Human oversight point</dt><dd>{{ authorization.oversight_point|default:"—"|linebreaksbr }}</dd></div>
+          <div class="col-12"><dt>Monitoring commitments</dt><dd>{{ authorization.monitoring_commitments|default:"—"|linebreaksbr }}</dd></div>
+          <div class="col-12"><dt>Assurance summary</dt><dd>{{ authorization.assurance_summary|default:"—"|linebreaksbr }}</dd></div>
+          {% if authorization.dissent %}<div class="col-12"><dt>Dissent recorded</dt><dd class="mb-0">{{ authorization.dissent|linebreaksbr }}</dd></div>{% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Conditions</span><span class="small text-muted">escalate at their deadline, never lapse</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0 align-middle">
+          <thead><tr><th>Condition</th><th>Owner</th><th>Due</th><th>State</th></tr></thead>
+          <tbody>
+            {% for condition in conditions %}
+              <tr>
+                <td class="small">{{ condition.description }}</td>
+                <td class="small">{{ condition.owner.get_full_name|default:"—" }}</td>
+                <td class="small text-nowrap">{{ condition.due_date|date:"j M Y" }}</td>
+                <td class="small">
+                  {% if condition.is_met %}
+                    <span class="badge badge-soft text-bg-success">Met</span> {{ condition.met_at|date:"j M" }}
+                  {% else %}
+                    {% if condition.is_overdue %}<span class="badge badge-soft text-bg-danger">Overdue</span>{% else %}<span class="badge badge-soft text-bg-warning">Open</span>{% endif %}
+                    {% if condition.owner_id == request.user.pk or can_manage_conditions %}
+                      <form method="post" action="{% url 'lifecycle:condition_met' condition.pk %}" class="d-inline">
+                        {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="btn btn-link btn-sm p-0 ms-1">Mark met</button>
+                      </form>
+                    {% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="small text-muted">No conditions attached.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    {% url 'lifecycle:authorization_decide' authorization.pk as decide_url %}
+    {% include "lifecycle/_decision.html" with record=authorization open=authorization.is_pending gate="G3" decide_url=decide_url sign_value="sign" %}
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Record</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Accountable owner</dt><dd>{{ authorization.accountable_owner.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Requested by</dt><dd>{{ authorization.requested_by.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Requested</dt><dd>{{ authorization.requested_at|date:"j M Y H:i" }}</dd></div>
+          <div class="col-6"><dt>Decided</dt><dd>{{ authorization.decided_at|date:"j M Y H:i"|default:"—" }}</dd></div>
+          <div class="col-12"><dt>Re-authorization triggers</dt>
+            <dd class="small mb-0">A higher tier, a different environment, or a change G4 cannot approve. Major changes suspend it until G4 decides.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Changes since authorization</span><span class="small text-muted">IRGF S9 · Gate G4</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for change in changes %}
+              <tr>
+                <td class="small"><a href="{% url 'lifecycle:change_detail' change.pk %}">{{ change.description|truncatechars:70 }}</a></td>
+                <td><span class="badge badge-soft text-bg-{{ change.classification|change_class_style }}">{{ change.classification|title }}</span></td>
+                <td><span class="badge badge-soft text-bg-{{ change.status|gate_status_style }}">{{ change.get_status_display }}</span></td>
+              </tr>
+            {% empty %}
+              <tr><td class="small text-muted">No changes: the {{ authorization.subject_kind }} runs as authorized.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if can_revoke %}
+      <div class="ct-card">
+        <div class="ct-card-header">Revoke</div>
+        <div class="ct-card-body">
+          <form method="post" action="{% url 'lifecycle:authorization_revoke' authorization.pk %}">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <textarea class="form-control form-control-sm mb-2" name="reason" rows="2" required placeholder="Why the authorization is withdrawn"></textarea>
+            <button type="submit" class="btn btn-sm btn-outline-danger">Revoke authorization</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

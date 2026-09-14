@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Verifications{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>IRGF agent chain link 07 · Verification.</strong> Every action is checked after it happens against the agent's authorized
+  state: every MCP tool call, and every run an engine reports. IRGF's point is timing: a check that runs weekly does not constrain an
+  agent that acts hourly. Each tier has a ceiling, and a verification that misses it is marked late.
+</div>
+
+<div class="row g-3 mb-3">
+  {% for row in stats %}
+    <div class="col-6 col-md-3"><div class="ct-metric h-100">
+      <span class="ct-metric-label">Tier {{ row.tier }} · ceiling {{ row.ceiling_seconds|duration_s }}</span>
+      <div class="ct-metric-value">{{ row.count }}</div>
+      <div class="ct-metric-hint">p95 {{ row.p95_ms|duration_ms }}{% if row.late %} · <span class="text-danger">{{ row.late }} late</span>{% endif %}{% if row.diverged %} · {{ row.diverged }} diverged{% endif %}</div>
+    </div></div>
+  {% endfor %}
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header"><span>Verifications</span><span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span></div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Agent</label>
+        <input type="search" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm" placeholder="Agent name">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Outcome</label>
+        <select name="outcome" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in outcomes %}<option value="{{ value }}" {% if request.GET.outcome == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Tier</label>
+        <select name="tier" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for tier in tiers %}<option value="{{ tier }}" {% if request.GET.tier == tier|stringformat:"s" %}selected{% endif %}>Tier {{ tier }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Action</label>
+        <select name="kind" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="tool_call" {% if request.GET.kind == "tool_call" %}selected{% endif %}>Tool calls</option>
+          <option value="execution" {% if request.GET.kind == "execution" %}selected{% endif %}>Runs</option>
+          <option value="message" {% if request.GET.kind == "message" %}selected{% endif %}>Delegations</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" name="late" value="1" id="late-only" {% if request.GET.late %}checked{% endif %}>
+          <label class="form-check-label small" for="late-only">Late only</label>
+        </div>
+      </div>
+      <div class="col-6 col-md-1"><button type="submit" class="btn btn-sm btn-primary w-100">Filter</button></div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "Verified" "verified" first="desc" %}<th>Action</th><th>Agent</th>{% sort_th "Tier" "tier" first="desc" %}
+          {% sort_th "Outcome" "outcome" %}<th>Findings</th>{% sort_th "Latency" "latency" first="desc" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for verification in verifications %}
+          <tr>
+            <td class="small text-nowrap">{{ verification.verified_at|date:"j M H:i:s" }}</td>
+            <td class="small">
+              {% if verification.tool_call %}
+                <span class="text-muted">Tool call</span> <code>{{ verification.tool_call.tool_name }}</code>
+              {% elif verification.message %}
+                <span class="text-muted">Delegation</span> <code>{{ verification.message.sender.agent_id }} → {{ verification.message.recipient.agent_id }}</code>
+              {% else %}
+                <span class="text-muted">Run</span> <a href="{% url 'executions:detail' verification.execution.pk %}"><code>{{ verification.execution.external_id|default:verification.execution.pk|truncatechars:24 }}</code></a>
+              {% endif %}
+            </td>
+            <td class="small">{% if verification.agent %}<a href="{% url 'inventory:agent_detail' verification.agent.pk %}">{{ verification.agent.name }}</a>{% else %}<span class="text-muted">No agent</span>{% endif %}</td>
+            <td>{% if verification.tier %}<span class="badge text-bg-{{ verification.tier|tier_style }}">T{{ verification.tier }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ verification.outcome|verification_style }}">{{ verification.get_outcome_display }}</span></td>
+            <td class="small">{% for finding in verification.findings %}<div>{{ finding.title|truncatechars:90 }}</div>{% empty %}<span class="text-muted">—</span>{% endfor %}</td>
+            <td class="small text-nowrap {% if verification.late %}text-danger fw-semibold{% endif %}">
+              {{ verification.latency_ms|duration_ms }}<div class="text-muted fw-normal">of {{ verification.ceiling_seconds|duration_s }}</div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-shield-check"></i><p class="mb-0">No verifications match these filters.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

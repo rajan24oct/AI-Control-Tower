@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Governance Exceptions{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+  <div class="ct-irgf-intro flex-grow-1">
+    <strong>IRGF module M17.</strong> An exception sets one policy aside for one agent, for at most {{ max_days }} days,
+    with a stated justification and — at Tier 3–4 — a compensating control. It expires on its own; the approvers are warned
+    first. Tier 4 exceptions cannot be renewed: the agent goes back through Gate G3.
+  </div>
+  <a class="btn btn-sm btn-primary text-nowrap" href="{% url 'lifecycle:exception_request' %}"><i class="bi bi-plus-lg"></i> Request an exception</a>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-4"><a href="?status=active" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Active</span><div class="ct-metric-value">{{ active }}</div></div></a></div>
+  <div class="col-4"><a href="?status=pending" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Awaiting decision</span><div class="ct-metric-value {% if pending %}text-warning{% endif %}">{{ pending }}</div></div></a></div>
+  <div class="col-4"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Ending within 7 days</span><div class="ct-metric-value {% if expiring %}text-danger{% endif %}">{{ expiring }}</div></div></div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header"><span>Exception Register</span><span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span></div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-6">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm" placeholder="Agent, policy or justification">
+      </div>
+      <div class="col-6 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in statuses %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2"><button type="submit" class="btn btn-sm btn-primary w-100">Filter</button></div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "Agent" "agent" %}{% sort_th "Set aside" "policy" %}{% sort_th "Tier" "tier" first="desc" %}
+          {% sort_th "Status" "status" %}{% sort_th "Expires" "expires" %}{% sort_th "Requested" "requested" first="desc" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for exception in exceptions %}
+          <tr>
+            <td><a class="fw-semibold text-decoration-none" href="{% url 'lifecycle:exception_detail' exception.pk %}">{{ exception.agent.name }}</a></td>
+            <td class="small">{% if exception.policy %}{{ exception.policy.name }}{% else %}<span class="text-muted">Drift ·</span> {{ exception.divergence|truncatechars:70 }}{% endif %}</td>
+            <td><span class="badge text-bg-{{ exception.tier|tier_style }}">T{{ exception.tier }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ exception.status|gate_status_style }}">{{ exception.get_status_display }}</span></td>
+            <td class="small text-nowrap">{{ exception.expires_at|date:"j M Y"|default:"—" }}</td>
+            <td class="small text-nowrap">{{ exception.requested_at|date:"j M Y" }}<div class="text-muted">{{ exception.requested_by.get_full_name|default:"" }}</div></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="ct-empty"><i class="bi bi-hourglass-split"></i><p class="mb-0">No exceptions match these filters.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

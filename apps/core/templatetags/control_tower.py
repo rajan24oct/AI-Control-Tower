@@ -81,6 +81,132 @@ def autonomy_style(value) -> str:
     return {0: "success", 1: "success", 2: "info", 3: "warning", 4: "danger"}.get(level, "secondary")
 
 
+@register.filter
+def tier_style(value) -> str:
+    """Badge tone for an IRGF risk tier; Tier 4 reads as critical."""
+    try:
+        tier = int(value)
+    except (TypeError, ValueError):
+        return "secondary"
+    return {1: "success", 2: "info", 3: "warning", 4: "danger"}.get(tier, "secondary")
+
+
+@register.filter
+def tier_tone(value) -> str:
+    """Card tone for an IRGF risk tier, matching the Control Tower's risk colours."""
+    try:
+        tier = int(value)
+    except (TypeError, ValueError):
+        return "low"
+    return {1: "low", 2: "moderate", 3: "high", 4: "critical"}.get(tier, "low")
+
+
+_GATE_STATUS_STYLES = {
+    "authorized": "success", "active": "success", "approved": "success", "accepted": "success",
+    "pending": "warning", "awaiting_g4": "warning", "awaiting_confirmation": "warning",
+    "suspended": "danger", "rejected": "danger",
+    "revoked": "secondary", "expired": "secondary", "superseded": "secondary", "reverted": "secondary",
+}
+
+_CHANGE_CLASS_STYLES = {"cosmetic": "secondary", "minor": "info", "material": "warning", "major": "danger"}
+
+
+@register.filter
+def gate_status_style(value: str) -> str:
+    """Badge tone for IRGF G3, G4 and M17 record statuses."""
+    return _GATE_STATUS_STYLES.get(value, "secondary")
+
+
+@register.filter
+def change_class_style(value: str) -> str:
+    return _CHANGE_CLASS_STYLES.get(value, "secondary")
+
+
+_DRIFT_STATUS_STYLES = {
+    "open": "warning", "ratifying": "info", "excepting": "info", "excepted": "secondary", "resolved": "success",
+}
+_VERIFICATION_STYLES = {"conforms": "success", "diverges": "danger", "ungoverned": "secondary"}
+
+
+@register.filter
+def drift_status_style(value: str) -> str:
+    """Badge tone for an IRGF M13 drift record's status."""
+    return _DRIFT_STATUS_STYLES.get(value, "secondary")
+
+
+@register.filter
+def verification_style(value: str) -> str:
+    return _VERIFICATION_STYLES.get(value, "secondary")
+
+
+@register.filter
+def duration_ms(value) -> str:
+    """Milliseconds as the unit a person would say: 850 ms, 4.2 s, 3 min, 2 h."""
+    try:
+        ms = int(value)
+    except (TypeError, ValueError):
+        return "—"
+    if ms < 1000:
+        return f"{ms} ms"
+    seconds = ms / 1000
+    if seconds < 60:
+        return f"{seconds:.1f} s"
+    if seconds < 3600:
+        return f"{seconds / 60:.0f} min"
+    return f"{seconds / 3600:.1f} h"
+
+
+@register.filter
+def duration_s(value) -> str:
+    try:
+        return duration_ms(int(value) * 1000)
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _is_agent(subject) -> bool:
+    return hasattr(subject, "agent_id") and hasattr(subject, "autonomy_level")
+
+
+@register.filter
+def system_kind(subject) -> str:
+    """IRGF governs systems: an agent, or an application and its agents."""
+    return "agent" if _is_agent(subject) else "application"
+
+
+@register.filter
+def system_url(subject) -> str:
+    """The inventory page of an agent or an application."""
+    from django.urls import reverse
+
+    if subject is None:
+        return ""
+    name = "inventory:agent_detail" if _is_agent(subject) else "inventory:application_detail"
+    return reverse(name, args=[subject.pk])
+
+
+@register.filter
+def authorize_url(subject) -> str:
+    """Where to ask Gate G3 to authorize an agent or an application."""
+    from django.urls import reverse
+
+    if subject is None:
+        return ""
+    name = "lifecycle:authorization_request" if _is_agent(subject) else "lifecycle:application_authorization_request"
+    return reverse(name, args=[subject.pk])
+
+
+@register.filter
+def isodate(value):
+    """An ISO timestamp stored in JSON, as a datetime the date filter can format."""
+    from datetime import datetime
+
+    try:
+        return datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
 _EXECUTION_STATUS_STYLES = {
     "queued": "secondary",
     "running": "primary",

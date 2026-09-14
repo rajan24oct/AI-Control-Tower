@@ -36,6 +36,18 @@ class ServiceAccount(OrganizationScopedModel):
         max_length=200, blank=True, help_text="The engine or platform this identity represents."
     )
     role = models.CharField(max_length=40, choices=Role.choices, default=Role.AI_DEVELOPER)
+    # IRGF agent chain link 02: an agent acts under an identity registered to
+    # it. Without bindings an identity may act for agents up to Tier 2, as it
+    # always could; Tier 3-4 agents answer only to identities bound to them.
+    agents = models.ManyToManyField(
+        "agents.AIAgent",
+        blank=True,
+        related_name="service_accounts",
+        help_text=(
+            "Agents this identity may act as. Empty: any agent up to Tier 2. "
+            "Tier 3-4 agents only accept identities bound to them."
+        ),
+    )
 
     class Meta:
         ordering = ["name"]

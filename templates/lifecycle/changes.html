@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}AI Changes{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>IRGF stage S9 · Gate G4.</strong> Once an agent is authorized, every edit to it is compared with the authorized
+  configuration and classified by IRGF's change table. <strong>Minor</strong> changes are recorded. <strong>Material</strong>
+  ones wait for Gate G4. <strong>Major</strong> ones wait for G4 with the authorization suspended, and some — a higher
+  tier, a new environment — need the agent authorized again at G3.
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><a href="?status=awaiting_g4" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Awaiting Gate G4</span><div class="ct-metric-value {% if awaiting %}text-warning{% endif %}">{{ awaiting }}</div>
+  </div></a></div>
+  <div class="col-6 col-md-3"><a href="?status=awaiting_g4&classification=major" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Major</span><div class="ct-metric-value {% if major %}text-danger{% endif %}">{{ major }}</div>
+    <div class="ct-metric-hint">Authorization suspended meanwhile</div>
+  </div></a></div>
+  <div class="col-6 col-md-3"><a href="?status=awaiting_confirmation" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Awaiting confirmation</span><div class="ct-metric-value">{{ confirming }}</div>
+    <div class="ct-metric-hint">A lower class claimed at Tier 3–4</div>
+  </div></a></div>
+  <div class="col-6 col-md-3"><a href="?status=rejected" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Rejected, not yet reverted</span><div class="ct-metric-value {% if rejected %}text-danger{% endif %}">{{ rejected }}</div>
+  </div></a></div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header"><span>Change Records</span><span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span></div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm" placeholder="System or change">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Open</option>
+          <option value="all" {% if request.GET.status == "all" %}selected{% endif %}>All</option>
+          {% for value, label in statuses %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Class</label>
+        <select name="classification" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in classes %}<option value="{{ value }}" {% if request.GET.classification == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1"><button type="submit" class="btn btn-sm btn-primary w-100">Filter</button></div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "System" "agent" %}{% sort_th "Change" "change" %}<th>What moved</th>
+          {% sort_th "Class" "class" first="desc" %}<th>Tier</th>{% sort_th "Status" "status" %}{% sort_th "Detected" "detected" first="desc" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for change in changes %}
+          <tr>
+            <td><a class="fw-semibold text-decoration-none" href="{% url 'lifecycle:change_detail' change.pk %}">{{ change.subject.name }}</a>
+              {% if change.application_id %}<span class="badge badge-soft text-bg-light text-dark ms-1">Application</span>{% endif %}</td>
+            <td class="small">{{ change.change_label }}</td>
+            <td class="small">{{ change.description|truncatechars:80 }}</td>
+            <td><span class="badge badge-soft text-bg-{{ change.classification|change_class_style }}">{{ change.classification|title }}</span></td>
+            <td><span class="badge text-bg-{{ change.tier_at_change|tier_style }}">T{{ change.tier_at_change }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ change.status|gate_status_style }}">{{ change.get_status_display }}</span></td>
+            <td class="small text-nowrap">{{ change.detected_at|date:"j M Y H:i" }}<div class="text-muted">{{ change.changed_by_label }}</div></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-arrow-left-right"></i><p class="mb-0">No changes match these filters.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

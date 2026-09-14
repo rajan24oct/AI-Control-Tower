@@ -12,6 +12,8 @@ Related documents:
 
 - [README](../README.md) — product overview and a tour of every screen.
 - [SETUP.md](../SETUP.md) — step-by-step installation walkthroughs with screenshots.
+- [IRGF alignment](irgf-alignment.md) — how the platform applies the Intent-to-Runtime Governance
+  Framework: risk tiers, agent identity and the kill-switch.
 - **Integration Handbook** — `/docs/integration/` in a running instance, with sample code for Python,
   TypeScript and common agent frameworks.
 
@@ -184,6 +186,9 @@ local memory.
 | `apps.risks` | Risk register and heat map |
 | `apps.approvals` | Approval rules, approval requests and the Approval Centre |
 | `apps.policies` | Control policies and the policy engine |
+| `apps.classification` | IRGF S2 risk classification: D1–D5 scores, tiers, M6 countersignature and re-score triggers |
+| `apps.lifecycle` | IRGF Gates G3 and G4 and M17 exceptions: deployment authorizations, change records, exceptions and decision rights |
+| `apps.controlplane` | IRGF Control Plane (M12): drift records (M13), action-limit checks (link 06) and verification of every action (link 07) |
 | `apps.evaluations` | Evaluation suites, cases, scorers and runs |
 | `apps.notifications` | In-app and email notifications |
 | `apps.audit` | Append-only, hash-verified audit trail |
@@ -244,6 +249,9 @@ Every role holds the six read permissions: `inventory.view`, `execution.view`, `
 | `inventory.manage` | ✓ | ✓ | ✓ | | | | | |
 | `provider.manage`, `model.manage` | ✓ | ✓ | | | | | | |
 | `agent.manage`, `application.manage` | ✓ | ✓ | ✓ | | | | | |
+| `agent.suspend` (the kill-switch) | ✓ | ✓ | ✓ | ✓ | ✓ | | | |
+| `gate.decide` (the AI Governance Body: Tier 3–4 gate decisions) | ✓ | | | ✓ | | | | |
+| `gate.sponsor` (the Enterprise Governance Sponsor: Tier 4's second signature) | ✓ | | | | | | | |
 | `model.approve` | ✓ | | | ✓ | | | | |
 | `telemetry.ingest` | ✓ | ✓ | ✓ | | | | | |
 | `prompt.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -761,6 +769,7 @@ These have no environment variable. Change them in `aig_tower/settings.py` or `a
 | `LOGGING` | Console, root level `INFO` | `django.db.backends` is held at `WARNING` |
 | Celery serializers | JSON only | Task arguments must be JSON-serializable |
 | `app.conf.beat_schedule` | See [8.2](#82-scheduled-jobs) | The periodic job cadence |
+| `CONTROL_PLANE["VERIFICATION_CEILING_SECONDS"]` | Not set: `{1: 86400, 2: 3600, 3: 900, 4: 300}` | IRGF link 07: seconds from recording an action to verifying it, per tier. A verification after its ceiling is marked late |
 
 ### 4.9 Credentials
 
@@ -891,6 +900,11 @@ Code authenticates as a **service account** with an API key ([3.3](#33-service-a
 - **Organization.** A service account belongs to one organization, and every request it makes is
   scoped to it. A signed-in person (browser session) acts in their active organization, or their
   default one.
+- **Agent identity (IRGF link 02).** A service account can be bound to the agents it runs. A bound
+  account may act only as its own agents, and is taken to act as its agent when it is bound to
+  exactly one and names none. An unbound account may act for agents up to Tier 2; Tier 3–4 agents
+  answer only to accounts bound to them. A refusal is `403` with `error: identity_not_bound`. See
+  [IRGF alignment](irgf-alignment.md#5-agent-identity-chain-link-02).
 - **Sessions.** The API also accepts Django session authentication, which is what the browsable API
   uses. Unsafe methods then need a CSRF token.
 - **Attribution.** Each authenticated call updates the key's `last_used_at`, and audit entries record
@@ -945,6 +959,10 @@ unknown agent.
 | `/adapters/` | GET | Adapters this installation has loaded | authenticated |
 | `/organizations/` | GET | The caller's organizations | organization member |
 | `/providers/` `/models/` `/agents/` `/applications/` | GET, POST, PUT, PATCH, DELETE | The registries | `inventory.view`; writes need the matching `*.manage` |
+| `/agents/{id}/suspend/` | POST | Pull an agent's kill-switch (IRGF link 06) | `agent.suspend` |
+| `/agents/{id}/resume/` | POST | Release it: people only, never service accounts | `agent.suspend` |
+| `/deployment-authorizations/` | GET | Deployment authorizations of agents and applications (IRGF S7 · Gate G3) with their authorized `configuration` and `in_force`; filter by `agent`, `application`, `status`, `environment`, `tier`. Deciding stays in the web UI | `inventory.view` |
+| `/drift-records/` | GET | Drift found by the Control Plane (IRGF M13); filter by `agent`, `application`, `category`, `status`, `is_incident`, `signal`, `tier`. Resolving stays in the web UI | `inventory.view` |
 | `/mcp-servers/` | GET | The MCP registry, with tool counts | `inventory.view` |
 | `/executions/` | GET, POST | Read runs; report or update a run | `execution.view` / `telemetry.ingest` |
 | `/executions/{id}/events/` | GET, POST | Read or append the timeline | `execution.view` / `telemetry.ingest` |
@@ -1336,6 +1354,9 @@ caller what to do:
 | 502 | `empty_stream` | — | Streaming only: the provider produced no output. |
 | 400 | — | field errors | Invalid request; neither `messages` nor `prompt`; or no organization for the caller. |
 | 403 | — | `detail` | The role lacks `gateway.invoke`. |
+| 403 | `agent_suspended` | `agent`, `suspended_at` | The agent's kill-switch is pulled (IRGF link 06). Do not retry; a person must resume it. |
+| 403 | `agent_inactive` | `agent`, `status` | The agent is inactive or retired, so its access is revoked (IRGF S10). |
+| 403 | `identity_not_bound` | — | This key may not act as that agent ([IRGF alignment](irgf-alignment.md#5-agent-identity-chain-link-02)). |
 
 **Streaming.** With `"stream": true` the gateway runs every check first. A refusal is a normal HTTP
 status with a JSON body; only a call that is actually being served opens the stream
@@ -1747,6 +1768,12 @@ cannot quietly switch a control off.
 | `cost_limit` | `max_cost_per_execution` | No cost ceiling |
 | `tool_access` | `blocked_tools`, `environments` | No tools blocked |
 | `human_approval` | — | Delegates to the approval rules |
+| `risk_classification` | `environments`, `require_countersignature`, `block_when_rescore_due` | The agent and application must carry a countersigned IRGF S2 classification |
+| `deployment_authorization` | `environments`, `block_pending_changes` | The agent must hold a deployment authorization in force (IRGF S7 · Gate G3); a suspended one counts as none |
+
+Every type also accepts `tiers`: a list of IRGF risk tiers (1–4). The policy then applies only when
+the higher of the agent's and application's tier is listed, and an unclassified system matches no
+tier-scoped policy. See [IRGF alignment](irgf-alignment.md#4-tier-scoped-controls).
 
 | Effect | In reporting mode | In the gateways |
 |---|---|---|
@@ -1794,6 +1821,11 @@ record the rules that matched. People holding `approval.decide` approve or rejec
 **Approval Centre**. Requests expire after `expires_in_hours` (24 by default); a scheduled job
 expires stale requests every 10 minutes and another reminds approvers every 30 minutes of requests
 about to expire.
+
+**IRGF tiers.** A rule can also match on tier (`tiers`, whole numbers 1–4); an unclassified system
+matches no tier condition. When a request concerns a Tier 3 or 4 system, the person who raised it
+and the system's owners cannot approve or reject it: IRGF takes Tier 3–4 decisions out of the
+delivery line. See [IRGF alignment](irgf-alignment.md#4-tier-scoped-controls).
 
 ### 6.3 Routing and fallback
 
@@ -1985,6 +2017,8 @@ Defined in [`aig_tower/celery.py`](../aig_tower/celery.py):
 | Expire stale approvals | `apps.approvals.tasks.expire_stale_approvals` | 10 minutes | Expires approval requests past their deadline |
 | Expiring-approval reminders | `apps.notifications.tasks.notify_expiring_approvals` | 30 minutes | Warns approvers before a request expires |
 | Overdue risk reviews | `apps.notifications.tasks.notify_overdue_risk_reviews` | day | Reminds owners of risks past their review date |
+| IRGF lifecycle sweep | `apps.lifecycle.tasks.sweep_lifecycle` | hour | Expires M17 exceptions and warns seven days ahead; escalates overdue G3 conditions to whoever signed |
+| IRGF Control Plane sweep | `apps.controlplane.tasks.sweep_control_plane` | minute | Verifies runs and any tool call the post-save hook missed (link 07); looks for evaluation, policy, budget and tool-definition drift; escalates drift past its response window; sends the daily digest |
 
 Change the cadence by editing `app.conf.beat_schedule` and restarting beat.
 
@@ -2128,6 +2162,13 @@ To refresh only the demo telemetry: `python manage.py generate_executions --purg
 | `403 policy_denied` naming policies | Those policies deny the request. Read them under *AI Governance → Policies*. |
 | `202 approval_required` | With the default policies, agents at autonomy level 3 or above in production need approval, which a gateway call cannot wait for. Lower the autonomy or scope the policy. |
 | `402 budget_exceeded` | A hard-stop budget is spent. Raise it, wait for the period, switch it to advisory, or set `GATEWAY_ENFORCE_BUDGETS=0`. |
+| `403 identity_not_bound` | The key's service account is bound to other agents, or the agent is Tier 3–4 and the account is not bound to it. Use the agent's own account, or bind this one ([5.2](#52-authentication)). The MCP endpoint answers the same refusal as a JSON-RPC error with HTTP 403. |
+| `403 agent_suspended` | The agent's kill-switch was pulled. A person resumes it from the agent's page; the MCP Gateway blocks its tool calls with the same reason. |
+| `403 agent_inactive` | The agent is inactive or retired. Reactivate it, or call as another agent. |
+| `403 policy_denied` — *has no deployment authorization* | A `deployment_authorization` policy is active and the agent holds no authorization in force. Request one from the agent's page, or narrow the policy's `environments`. *Awaits a decision at Gate G3* means a request is waiting for its signatures. |
+| `403 policy_denied` — *authorized for staging, not production* | The authorization covers another environment. Changing environment is a major change: request a new G3 authorization. |
+| `403 policy_denied` — *deployment authorization is suspended* | A major change is waiting at Gate G4, or G4 rejected a change. Decide it under *AI Governance → Changes · G4*, or revert the agent to its authorized configuration. |
+| `403 policy_denied` — *changes awaiting Gate G4* | The policy sets `block_pending_changes` and a material change is still open. Decide it at G4. |
 | `503 no_route` | No eligible model. The `excluded` list says why each was left out: model status, provider health, open breaker, routing filters or the `model_type`. |
 | `502 all_attempts_failed` | Read `attempts[].error`. Typical causes: a **Missing** credential, the `openai` package absent, an upstream outage, or every provider's breaker open. |
 | A stream ends with `stream_interrupted` | The upstream broke after output began. The gateway does not splice in another model; retry the whole request. |
@@ -2149,6 +2190,9 @@ To refresh only the demo telemetry: `python manage.py generate_executions --purg
 | A result says the tool *changed … and is awaiting review again* | The upstream definition changed after review. Review it again on the server's page. |
 | `unavailable` — *taken out of rotation* | The server's breaker is open. Fix the server; one probe goes through after the cool-off. |
 | A server shows **Missing** credential | The variable named by its `credential_ref` is not set for the web processes. |
+| `blocked` — *Action limit (link 06): … above the agent's limit* | The call's value, the day's total, the hourly rate or the counterparty breaks the agent's action limits. Nothing reached the server. If the agent pre-approved the `action_limit_breach` trigger, it is now suspended: a person resumes it from its page. |
+| `blocked` — *… is not a number* | The tool's value argument carries something that cannot be read as an amount, so the call cannot be held to the agent's value limits. |
+| A value limit never refuses anything | Nobody told the gateway which argument carries the value. Set the tool's action-limit arguments on its server's page. |
 
 ### 9.5 Web UI
 
@@ -2160,6 +2204,12 @@ To refresh only the demo telemetry: `python manage.py generate_executions --purg
 | No notification emails arrive | The default backend prints them to the console ([4.4](#44-email)). |
 | `seed_demo` replaced my execution history | It regenerates mock executions each run. Use `--executions 0`. |
 | *No organization selected* | The user has no membership, or none marked default. |
+| Signing refused: *the agent has changed since this request was made* | The agent was edited after the G3 request, so the configuration signed would not be the one that runs. Request authorization again. |
+| Cannot sign a gate decision | The next signature needs a seat you do not hold (`gate.decide`, `gate.sponsor`, `risk.manage`, or the owner at Tier 1–2); you already signed a Tier 4 decision; or, from Tier 3, you own the agent or made the request. Nobody decides a change they made or an exception they requested. At Tier 4 the only Enterprise Governance Sponsor signs second: someone else signs as the AI Governance Body first. |
+| *G4 cannot approve it* | The change moves the agent to another environment or raises its tier. Request a new G3 authorization: it supersedes the old one and closes the change. |
+| *Re-score the agent at S2* when approving a change | A major change re-enters S2. Score the agent again, have the tier countersigned, then approve at G4. |
+| An application's request shows *Every acting agent authorized* in red | Authorize its acting agents for the application's environment first; each keeps its own authorization. |
+| *S2 scored against the composite authority* is red | The application's D2 is lower than the autonomy one of its agents reaches. Score the application again at S2 against what its agents can reach together. |
 
 ---
 
@@ -2288,6 +2338,65 @@ Traffic outside the gateway can only be alerted on.
 **How do we know the audit trail has not been altered?**
 Run `python manage.py verify_audit_log`. Schedule it with `--fail-on-tamper` to alert.
 
+**Does the platform follow a governance framework?**
+It applies the Intent-to-Runtime Governance Framework (IRGF). Every system gets a risk tier from its
+stage S2 classification, independently countersigned, and the tier is put to work in policies,
+approval rules and agent identity, alongside an agent kill-switch. See
+[IRGF alignment](irgf-alignment.md).
+
+**Who can countersign a risk classification?**
+Anyone holding `risk.manage` — AI Governance Managers, Risk Managers and Organization
+Administrators — except the person who scored it and the system's owners.
+
+**Who signs a deployment authorization, a change or an exception?**
+It depends on the agent's tier (IRGF M15, M16). At Tier 1–2 one signature is enough: the system
+owner for a G3 authorization, the Risk and Compliance Lead for a change or an exception, or the AI
+Governance Body (`gate.decide`) for any of them. Tier 3 needs the AI Governance Body. Tier 4 needs two
+different people: the AI Governance Body, then the Enterprise Governance Sponsor (`gate.sponsor`).
+From Tier 3 the agent's owner and the requester cannot sign, and at every tier nobody decides a change
+they made or an exception they requested. See
+[IRGF alignment](irgf-alignment.md#10-phase-2-gates-g3-and-g4-and-m17-exceptions).
+
+**Do deployment authorizations block anything by default?**
+No. Gate G3 is recorded and shown on every agent, but only a `deployment_authorization` policy
+refuses unauthorized agents at the gateways. None is seeded: create one under *AI Governance →
+Policies* when you are ready to enforce it.
+
+**Why was an agent's deployment authorization suspended?**
+A major change was detected: for example a new model family or provider, more autonomy, human
+approval removed, or a tool added at Tier 3–4. The authorization stays suspended until Gate G4
+approves the change, or the agent is reverted to its authorized configuration. The authorization's
+page lists the change.
+
+**How long can an exception last?**
+At most 90 days, at every tier, with a hard expiry. Tier 4 exceptions cannot be renewed. An hourly
+job expires them and warns the requester and the approvers seven days ahead.
+
+**What does the Control Plane compare?**
+What each agent actually does with what Gate G3 authorized. It checks where every tool call and every
+reported run happened, the model that served it, the identity it acted under, the tools it reached and
+the data classification behind them. It also watches evaluations, policies, budgets and tool
+definitions. Each divergence becomes a drift record in one of IRGF's eight categories. See
+[IRGF alignment](irgf-alignment.md#11-phase-3-the-control-plane).
+
+**Does the Control Plane change anything by itself?**
+Only one thing. It pulls an agent's kill-switch when a trigger that the agent pre-approved at Gate G3
+fires: `action_limit_breach`, `boundary_divergence` or `unbound_identity`. IRGF allows no other
+automatic correction at Tier 3–4. Everything else waits for a person to revert, ratify, except or
+escalate it.
+
+**Can an application be authorized, or only an agent?**
+Both. An application's authorization records its models, providers and member agents, which of its
+agents may invoke which (its delegation graph, set on the application), and the composite authority
+reachable through all of them. Each acting agent needs its own authorization first. Adding an agent
+or a delegation, or widening a member agent, is a change for Gate G4. See
+[IRGF alignment](irgf-alignment.md#12-phase-4-applications-and-composite-authority).
+
+**Why does a drift record have no deadline?**
+IRGF sets deadlines only for some categories and tiers. Where it sets none, the record goes to the
+owner directly, into a daily digest, or to a batch review. Where it does set one, a missed deadline
+escalates to the AI Governance Body.
+
 **What do the card colours on the Control Tower mean?**
 Each card takes the worse of its risk rating and its availability: green for low risk and
 available, amber for moderate risk or degraded, rose for high risk, red for critical risk or
@@ -2312,23 +2421,44 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 | Term | Meaning |
 |---|---|
 | Access grant | Permission for one agent to use a restricted MCP server, optionally limited to some tools and given an expiry |
+| Action-limit arguments | The tool arguments carrying a call's value and counterparty, which the MCP Gateway holds to agents' action limits (IRGF link 06) |
 | Adapter | A class that translates one vendor, engine or transport into the platform's normalized types |
+| Agent Card | The IRGF record, produced at S3 and required at Gate G3, of what an acting agent may do: scope, owner, tools, action limits, escalation thresholds and kill-switch conditions |
 | API key | A service account's secret, `act_<prefix>_<secret>`; stored only as a hash |
 | Approval request | A recorded request for a human decision, with the rules that matched |
 | Approval rule | A rule deciding which actions need a person, and at what risk |
+| Authorized configuration | The agent's configuration as approved at Gate G3; every later change is compared with it and classified at Gate G4 |
+| Bound identity | A service account bound to the agents it runs (IRGF link 02); Tier 3–4 agents answer only to bound identities |
+| Change record | IRGF S9: one detected difference from the authorized configuration, classified minor, material or major |
 | Circuit breaker | Per-provider or per-server state that takes a failing upstream out of rotation |
+| Composite reachable authority | IRGF chapter 16: what a system can reach through all of its agents; an application's D2 is scored against it |
+| Control Plane | IRGF M12: comparing what runs with what was authorized, continuously rather than at reviews |
+| Countersignature | IRGF M6: a person outside the delivery line confirming an S2 classification, turning a provisional tier into a confirmed one |
 | `credential_ref` | The name of the environment variable holding an upstream credential |
+| Decision rights | IRGF M15–M16: who may sign a G3, G4 or M17 decision at each tier; Tier 4 needs two different people |
+| Delegation graph | Which of an application's agents may invoke which, and whether with their own or their caller's authority (IRGF chapter 16) |
+| Delta assurance scope | For a change: what was re-run, what was not, and why. Required to approve it at Gate G4 |
+| Deployment authorization | IRGF S7 · Gate G3: approval to run one configuration, at one tier, for one owner, in one environment |
+| Drift record | IRGF M13: one way the running state differs from the approved state, in one of eight categories; it ends as revert, ratify, except or escalate |
+| Exception | IRGF M17: one policy set aside for one agent, with a justification, a compensating control and an expiry of at most 90 days |
 | Execution | One run of an agent or application, with its events, tokens, cost and latency |
 | Fallback chain | The ordered models the AI Gateway will try for one request |
 | Gateway mode | Integration where calls go through the gateways, which enforce governance |
 | Hard stop | A budget enforcement setting that refuses gateway requests once the budget is spent |
+| IRGF | The Intent-to-Runtime Governance Framework the platform applies; see [IRGF alignment](irgf-alignment.md) |
+| Kill-switch | Suspending an agent so both gateways refuse it until a person resumes it (IRGF link 06) |
+| Kill-switch trigger | A kill-switch condition a machine can evaluate, pre-approved at Gate G3; the Control Plane pulls the switch when it fires. Tier 3–4 needs one |
 | Policy effect | What a matching policy does: `deny`, `require_approval` or `warn` |
 | Qualified tool name | `<server-slug>__<tool>`: a tool's name in the MCP Gateway's single namespace |
 | Reporting mode | Integration where engines call upstreams directly and report runs as telemetry |
+| Response window | How fast drift must be answered, by category and tier (IRGF chapter 19): from a daily digest at Tier 1 to the same business day at Tier 4 |
+| Risk tier | IRGF Tier 1–4, resolved from the D1–D5 scores of a system's S2 classification; it scopes policies, approval rules and identity rules |
 | Routing decision | The record of how the gateway ranked candidate models for one request |
 | Service account | A non-human identity for an application or engine, with a role in one organization |
+| Stage and gate | IRGF's lifecycle steps (S0–S10) and the decision points between them (G1–G5) |
 | Tool review | The governance step that enables a newly discovered or changed MCP tool |
 | Trace | A group of executions sharing a `trace_id` |
+| Verification | IRGF link 07: one action checked against the authorized state after it happened, within a ceiling set per tier |
 
 ---
 
@@ -2360,3 +2490,13 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 | Adapter contracts and types | [`integrations/base/`](../integrations/base/) |
 | Adapter registry and discovery | [`integrations/registry.py`](../integrations/registry.py), [`integrations/bootstrap.py`](../integrations/bootstrap.py) |
 | Reference adapters | [`integrations/providers/mock.py`](../integrations/providers/mock.py), [`integrations/webhooks/generic.py`](../integrations/webhooks/generic.py) |
+| IRGF tier rule and S2 records | [`apps/classification/irgf.py`](../apps/classification/irgf.py), [`apps/classification/models.py`](../apps/classification/models.py), [`apps/classification/services.py`](../apps/classification/services.py) |
+| IRGF re-score triggers | [`apps/classification/signals.py`](../apps/classification/signals.py) |
+| Agent identity binding (IRGF link 02) | [`apps/api/identity.py`](../apps/api/identity.py) |
+| Kill-switch and governance chain (IRGF link 06, M10) | [`apps/agents/services.py`](../apps/agents/services.py) |
+| IRGF demo data | [`apps/core/demo_irgf.py`](../apps/core/demo_irgf.py) |
+| IRGF gates G3, G4 and M17: rules and decision rights | [`apps/lifecycle/irgf.py`](../apps/lifecycle/irgf.py), [`apps/lifecycle/decisions.py`](../apps/lifecycle/decisions.py) |
+| Authorization, change detection and exceptions | [`apps/lifecycle/services.py`](../apps/lifecycle/services.py), [`apps/lifecycle/signals.py`](../apps/lifecycle/signals.py) |
+| IRGF M12–M13: drift categories, response windows, verification ceilings | [`apps/controlplane/irgf.py`](../apps/controlplane/irgf.py) |
+| Control Plane: verification, drift, resolution, observers | [`apps/controlplane/services.py`](../apps/controlplane/services.py) |
+| Action limits at the MCP Gateway (link 06) | [`apps/controlplane/limits.py`](../apps/controlplane/limits.py) |

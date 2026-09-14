@@ -90,6 +90,31 @@ class ApplicationDetailView(ScopedDetailMixin, DetailView):
     def get_queryset(self):
         return super().get_queryset().prefetch_related("agents", "ai_models", "providers")
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.classification.services import ClassificationService
+        from apps.classification.views import can_score
+
+        context["classification"] = ClassificationService.current(self.object)
+        context["can_score"] = can_score(self.request, self.object)
+
+        from apps.controlplane.models import UNRESOLVED_STATUSES
+        from apps.lifecycle.models import OPEN_CHANGE_STATUSES
+        from apps.lifecycle.services import AuthorizationService, composite_authority, display
+        from apps.lifecycle.views import can_request
+
+        application = self.object
+        context.update(
+            {
+                "authorization": AuthorizationService.current(application),
+                "open_changes": application.change_records.filter(status__in=OPEN_CHANGE_STATUSES)[:5],
+                "can_request_authorization": can_request(self.request, application),
+                "composite_text": display("composite", composite_authority(application)),
+                "drift": application.drift_records.filter(status__in=UNRESOLVED_STATUSES)[:5],
+            }
+        )
+        return context
+
 
 # -- Agents -----------------------------------------------------------------
 
@@ -147,8 +172,48 @@ class AgentDetailView(ScopedDetailMixin, DetailView):
             super()
             .get_queryset()
             .select_related("provider", "primary_model", "fallback_model", "team", "owner")
-            .prefetch_related("applications")
+            .prefetch_related("applications", "service_accounts")
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.accounts.roles import Perm
+        from apps.agents.services import governance_chain
+        from apps.classification.services import ClassificationService
+        from apps.classification.views import can_score
+
+        agent = self.object
+        context.update(
+            {
+                "classification": ClassificationService.current(agent),
+                "can_score": can_score(self.request, agent),
+                "governance_chain": governance_chain(agent),
+                "card_gaps": agent.agent_card_gaps() if agent.acts else [],
+                "can_suspend": self.request.user.has_org_permission(
+                    self.request.organization, Perm.AGENT_SUSPEND
+                ),
+            }
+        )
+
+        from apps.lifecycle.models import OPEN_CHANGE_STATUSES, ExceptionStatus
+        from apps.lifecycle.services import AuthorizationService
+        from apps.lifecycle.views import can_request
+
+        context.update(
+            {
+                "authorization": AuthorizationService.current(agent),
+                "open_changes": agent.change_records.filter(status__in=OPEN_CHANGE_STATUSES)[:5],
+                "exceptions": agent.governance_exceptions.select_related("policy").filter(
+                    status__in=[ExceptionStatus.PENDING, ExceptionStatus.ACTIVE]
+                ),
+                "can_request_authorization": can_request(self.request, agent),
+            }
+        )
+
+        from apps.controlplane.services import ControlPlane
+
+        context["control_plane"] = ControlPlane.agent_summary(agent)
+        return context
 
 
 # -- Models -----------------------------------------------------------------

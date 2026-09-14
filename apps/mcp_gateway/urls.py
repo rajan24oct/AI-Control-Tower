@@ -13,5 +13,6 @@ urlpatterns = [
     path("servers/<uuid:pk>/approval/", views.ServerApprovalView.as_view(), name="server_approval"),
     path("tools/", views.MCPToolListView.as_view(), name="tools"),
     path("tools/<uuid:pk>/review/", views.ToolReviewView.as_view(), name="tool_review"),
+    path("tools/<uuid:pk>/limits/", views.ToolLimitsView.as_view(), name="tool_limits"),
     path("calls/", views.MCPToolCallListView.as_view(), name="calls"),
 ]

@@ -1,7 +1,15 @@
 from django.urls import include, path, re_path
 from rest_framework.routers import DefaultRouter
 
-from apps.api import approval_views, execution_views, gateway_views, mcp_views, views
+from apps.api import (
+    approval_views,
+    controlplane_views,
+    execution_views,
+    gateway_views,
+    lifecycle_views,
+    mcp_views,
+    views,
+)
 
 app_name = "api"
 
@@ -16,6 +24,11 @@ router.register(
     "approval-requests", approval_views.ApprovalRequestViewSet, basename="approval-request"
 )
 router.register("mcp-servers", mcp_views.MCPServerViewSet, basename="mcp-server")
+router.register("drift-records", controlplane_views.DriftRecordViewSet, basename="drift-record")
+router.register(
+    "deployment-authorizations", lifecycle_views.DeploymentAuthorizationViewSet,
+    basename="deployment-authorization",
+)
 
 urlpatterns = [
     path("health/", views.health, name="health"),

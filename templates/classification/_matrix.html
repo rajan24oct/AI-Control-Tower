@@ -1,0 +1,28 @@
+{% load control_tower %}
+{% comment %}
+  IRGF M5 tiering matrix. Impact rises upwards, control deficit to the right.
+  Pass `impact` and `deficit` to highlight a cell; the score form's script moves
+  the highlight as scores change.
+{% endcomment %}
+<table class="ct-tier-matrix" aria-label="IRGF tiering matrix">
+  <tbody>
+    {% for impact_value, row in matrix_rows %}
+      <tr>
+        {% if forloop.first %}
+          <th class="ct-tier-axis" rowspan="4"><span>Impact</span></th>
+        {% endif %}
+        <th class="ct-tier-label">{{ impact_value }}</th>
+        {% for tier in row %}
+          <td class="ct-tier-cell tone-{{ tier|tier_tone }}{% if impact_value == impact and forloop.counter == deficit %} is-current{% endif %}"
+              data-impact="{{ impact_value }}" data-deficit="{{ forloop.counter }}">T{{ tier }}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    <tr>
+      <td></td><td></td>
+      <th class="ct-tier-label">1</th><th class="ct-tier-label">2</th>
+      <th class="ct-tier-label">3</th><th class="ct-tier-label">4</th>
+    </tr>
+    <tr><td></td><td></td><th class="ct-tier-axis-x" colspan="4">Control deficit</th></tr>
+  </tbody>
+</table>

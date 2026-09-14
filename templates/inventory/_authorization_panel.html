@@ -1,0 +1,62 @@
+{% load control_tower %}
+{% comment %}
+  A system's IRGF S7 · Gate G3 authorization, its open G4 changes and, for an
+  agent, its M17 exceptions. Needs: subject, kind ("agent" | "application"),
+  authorization, open_changes, exceptions, can_request_authorization.
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-patch-check me-1"></i> Deployment Authorization</span>
+    <span class="small text-muted">IRGF S7 · Gate G3</span>
+  </div>
+  <div class="ct-card-body">
+    {% if authorization %}
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+        <span class="badge text-bg-{{ authorization.status|gate_status_style }}">{{ authorization.get_status_display }}</span>
+        <span class="small text-muted">{{ authorization.get_environment_display }} · Tier {{ authorization.tier }}</span>
+      </div>
+      {% if authorization.status == "suspended" %}
+        <p class="small text-danger mb-2">{{ authorization.suspension_reason }}</p>
+      {% elif authorization.status == "pending" %}
+        <p class="small mb-2">Awaiting a decision: {{ authorization.signatures|length }} signature{{ authorization.signatures|length|pluralize }} given.</p>
+      {% elif authorization.status == "authorized" %}
+        <p class="small mb-2">Signed by {% for entry in authorization.signatures %}{{ entry.name }} ({{ entry.seat_label }}){% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+      {% endif %}
+    {% else %}
+      <p class="small mb-2"><strong>Not authorized.</strong> Gate G3 records this configuration{% if kind == "application" %}, its agents and their composite authority{% endif %},
+        at its confirmed tier, as the approved state.</p>
+    {% endif %}
+
+    {% if open_changes %}
+      <div class="small fw-semibold mb-1">Changes awaiting a decision <span class="text-muted fw-normal">· Gate G4</span></div>
+      <ul class="small ps-3 mb-2">
+        {% for change in open_changes %}
+          <li><a href="{% url 'lifecycle:change_detail' change.pk %}">{{ change.change_label }}</a>
+            <span class="badge badge-soft text-bg-{{ change.classification|change_class_style }}">{{ change.classification }}</span></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if exceptions %}
+      <div class="small fw-semibold mb-1">Exceptions <span class="text-muted fw-normal">· M17</span></div>
+      <ul class="small ps-3 mb-2">
+        {% for exception in exceptions %}
+          <li><a href="{% url 'lifecycle:exception_detail' exception.pk %}">{% firstof exception.policy.name exception.divergence %}</a>
+            · {{ exception.get_status_display|lower }}{% if exception.expires_at %} until {{ exception.expires_at|date:"j M" }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <div class="d-flex gap-2 flex-wrap">
+      {% if authorization %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'lifecycle:authorization_detail' authorization.pk %}">View record</a>{% endif %}
+      {% if can_request_authorization %}
+        {% if not authorization or authorization.status == "rejected" or authorization.status == "revoked" or authorization.status == "suspended" %}
+          <a class="btn btn-sm btn-primary" href="{{ subject|authorize_url }}"><i class="bi bi-patch-plus"></i> Request authorization</a>
+        {% endif %}
+        {% if kind == "agent" %}
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'lifecycle:exception_request' %}?agent={{ subject.pk }}">Request an exception</a>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>

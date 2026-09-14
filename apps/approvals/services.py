@@ -57,6 +57,19 @@ class ApprovalContext:
             or ""
         )
 
+    @property
+    def effective_tier(self) -> int | None:
+        """The higher IRGF tier of the agent and application, if either is classified."""
+        tiers = [
+            tier
+            for tier in (
+                getattr(self.agent, "risk_tier", None),
+                getattr(self.application, "risk_tier", None),
+            )
+            if tier
+        ]
+        return max(tiers) if tiers else None
+
 
 @dataclass
 class RuleDecision:
@@ -117,6 +130,10 @@ class ApprovalRuleEngine:
         if rule.match_unapproved_model:
             model = context.model or getattr(context.agent, "primary_model", None)
             checks.append(model is not None and not model.approved_for_use)
+
+        if rule.tiers:
+            wanted = {int(tier) for tier in rule.tiers if str(tier).strip().isdigit()}
+            checks.append(context.effective_tier in wanted)
 
         return bool(checks) and all(checks)
 
@@ -260,6 +277,29 @@ class ApprovalService:
             raise ValueError(
                 f"{request.request_id} is already {request.get_status_display().lower()}."
             )
+
+        # IRGF moves Tier 3-4 decisions out of the delivery line: whoever raised
+        # the request and the system's own owners cannot decide it.
+        if status in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED) and user is not None:
+            tier = max(
+                (getattr(asset, "risk_tier", None) or 0 for asset in (request.agent, request.application)),
+                default=0,
+            )
+            owners = {
+                pk
+                for pk in (
+                    getattr(request.agent, "owner_id", None),
+                    getattr(request.application, "business_owner_id", None),
+                    getattr(request.application, "technical_owner_id", None),
+                )
+                if pk
+            }
+            if tier >= 3 and (user.pk == request.requested_by_id or user.pk in owners):
+                raise ValueError(
+                    f"{request.request_id} concerns a Tier {tier} system. IRGF takes Tier 3-4 "
+                    "decisions out of the delivery line, so the person who raised it and the "
+                    "system's owners cannot decide it."
+                )
 
         request.status = status
         request.decision_at = timezone.now()

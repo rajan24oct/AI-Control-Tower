@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Score {{ subject.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{{ subject_url }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> {{ subject.name }}</a>
+  <h2 class="h4 mt-1 mb-1">Risk classification · {{ subject.name }}</h2>
+  <div class="d-flex gap-2 flex-wrap">
+    <span class="badge badge-soft text-bg-light text-dark">IRGF stage S2</span>
+    <span class="badge badge-soft text-bg-light text-dark">Modules M4 · M5</span>
+    <span class="badge badge-soft text-bg-light text-dark">Evidence for Gate G1</span>
+  </div>
+</div>
+
+<div class="ct-irgf-intro mb-3">
+  Score each dimension from 1 to 4. <strong>Impact</strong> is the rounded-up average of D1, D4 and D5;
+  <strong>control deficit</strong> the rounded-up average of D2 and D3; the matrix turns the two into a tier.
+  The result is <strong>provisional</strong> — evidence for Gate G1 — until someone outside the delivery
+  line countersigns it, which Gate G2 requires.
+  {% if current %}
+    <div class="mt-2">
+      Current classification:
+      <a href="{% url 'classification:detail' current.pk %}">Tier {{ current.tier }}, {{ current.get_status_display|lower }}</a>.
+      Scoring again supersedes it; the history is kept.
+      {% if current.rescore_reasons %}<br><span class="text-danger">Re-score triggered: {{ current.rescore_reasons|join:"; " }}</span>{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="row g-3" id="irgf-score-root">
+  <div class="col-12 col-xl-8">
+    <form method="post" id="irgf-score-form" class="ct-card">
+      {% csrf_token %}
+      <div class="ct-card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2 small">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+        {% endif %}
+
+        {% include "classification/_dimension_fields.html" %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="{{ form.rationale.id_for_label }}">Rationale</label>
+          {{ form.rationale }}
+          <div class="form-text">{{ form.rationale.help_text }}</div>
+          {% for error in form.rationale.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <details class="mb-3">
+          <summary class="small fw-semibold">Override the computed tier</summary>
+          <div class="row g-2 mt-1">
+            <div class="col-12 col-md-4">
+              {{ form.tier_override }}
+              <div class="form-text">{{ form.tier_override.help_text }}</div>
+              {% for error in form.tier_override.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12 col-md-8">
+              {{ form.override_rationale }}
+              <div class="form-text">{{ form.override_rationale.help_text }}</div>
+              {% for error in form.override_rationale.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+        </details>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check2-square"></i> Record provisional classification</button>
+          <a href="{{ subject_url }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    {% include "classification/_preview.html" %}
+  </div>
+</div>
+{% endblock %}

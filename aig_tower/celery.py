@@ -39,4 +39,16 @@ app.conf.beat_schedule = {
         "task": "apps.notifications.tasks.notify_overdue_risk_reviews",
         "schedule": 86400.0,
     },
+    # IRGF M17 and G3: expire exceptions, warn before they lapse, and escalate
+    # authorization conditions past their deadline.
+    "lifecycle-sweep": {
+        "task": "apps.lifecycle.tasks.sweep_lifecycle",
+        "schedule": 3600.0,
+    },
+    # IRGF M12: verify actions the post-save hook missed (link 07), observe
+    # evaluations, policies, budgets and tool definitions, escalate overdue drift.
+    "control-plane-sweep": {
+        "task": "apps.controlplane.tasks.sweep_control_plane",
+        "schedule": 60.0,
+    },
 }

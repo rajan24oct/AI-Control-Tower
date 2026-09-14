@@ -17,6 +17,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from apps.core.constants import DataClassification, Environment, RiskLevel
 from apps.core.models import OrganizationOwnedModel, OrganizationScopedModel
@@ -30,6 +31,8 @@ class PolicyType(models.TextChoices):
     COST_LIMIT = "cost_limit", "Cost Limit Policy"
     TOOL_ACCESS = "tool_access", "Tool Access Policy"
     HUMAN_APPROVAL = "human_approval", "Human Approval Policy"
+    RISK_CLASSIFICATION = "risk_classification", "Risk Classification Policy"
+    DEPLOYMENT_AUTHORIZATION = "deployment_authorization", "Deployment Authorization Policy"
 
 
 class PolicyEffect(models.TextChoices):
@@ -72,7 +75,20 @@ POLICY_SCHEMA: dict[str, set[str]] = {
     PolicyType.COST_LIMIT: {"max_cost_per_execution"},
     PolicyType.TOOL_ACCESS: {"blocked_tools", "environments"},
     PolicyType.HUMAN_APPROVAL: set(),
+    # IRGF S2: the system acting must carry a current risk classification.
+    PolicyType.RISK_CLASSIFICATION: {
+        "environments",
+        "require_countersignature",
+        "block_when_rescore_due",
+    },
+    # IRGF S7 · Gate G3: the agent must hold an authorization in force.
+    PolicyType.DEPLOYMENT_AUTHORIZATION: {"environments", "block_pending_changes"},
 }
+
+#: Keys every policy type accepts. `tiers` scopes a policy to IRGF risk tiers
+#: (1-4), taken from the agent's and application's S2 classification. An
+#: unclassified system matches no tier-scoped policy.
+COMMON_POLICY_KEYS = {"tiers"}
 
 
 #: What each type checks with no settings at all. Several types are meaningful
@@ -85,6 +101,8 @@ INHERENT_CHECKS = {
     PolicyType.COST_LIMIT: "no cost ceiling configured",
     PolicyType.TOOL_ACCESS: "no tools blocked",
     PolicyType.HUMAN_APPROVAL: "delegates to the configured approval rules",
+    PolicyType.RISK_CLASSIFICATION: "a countersigned S2 risk classification is required",
+    PolicyType.DEPLOYMENT_AUTHORIZATION: "the agent needs a deployment authorization in force (S7 · G3)",
 }
 
 
@@ -107,6 +125,12 @@ class Policy(OrganizationScopedModel):
     #: Free-text pointer to the control framework this implements, e.g.
     #: "EU AI Act Art. 14" -- mapping frameworks properly is a future module.
     reference = models.CharField(max_length=255, blank=True)
+    #: When what the policy does last changed, as opposed to how it is named or
+    #: described. The Control Plane compares it with authorizations (IRGF M13).
+    content_changed_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    #: The fields that decide what a policy does.
+    SUBSTANCE_FIELDS = ("policy_type", "effect", "severity", "priority", "status", "configuration")
 
     class Meta:
         ordering = ["priority", "name"]
@@ -119,8 +143,21 @@ class Policy(OrganizationScopedModel):
     def __str__(self) -> str:
         return self.name
 
+    def save(self, *args, **kwargs):
+        # A save that changes nothing a policy does -- a re-import, a reworded
+        # description -- must not look like a new policy to everything it governs.
+        if self._state.adding:
+            self.content_changed_at = self.content_changed_at or timezone.now()
+        else:
+            previous = type(self).objects.filter(pk=self.pk).values(*self.SUBSTANCE_FIELDS).first()
+            if previous is None or any(previous[field] != getattr(self, field) for field in self.SUBSTANCE_FIELDS):
+                self.content_changed_at = timezone.now()
+                if kwargs.get("update_fields") is not None:
+                    kwargs["update_fields"] = {*kwargs["update_fields"], "content_changed_at"}
+        super().save(*args, **kwargs)
+
     def clean(self):
-        allowed = POLICY_SCHEMA.get(self.policy_type, set())
+        allowed = POLICY_SCHEMA.get(self.policy_type, set()) | COMMON_POLICY_KEYS
         unknown = set(self.configuration or {}) - allowed
         if unknown:
             raise ValidationError(
@@ -131,6 +168,18 @@ class Policy(OrganizationScopedModel):
                         f"{', '.join(sorted(allowed)) or 'none'}."
                     )
                 }
+            )
+
+        tiers = (self.configuration or {}).get("tiers")
+        if tiers is not None and (
+            not isinstance(tiers, list)
+            or not all(
+                isinstance(tier, int) and not isinstance(tier, bool) and 1 <= tier <= 4
+                for tier in tiers
+            )
+        ):
+            raise ValidationError(
+                {"configuration": "tiers must be a list of IRGF tiers: whole numbers from 1 to 4."}
             )
 
     def option(self, key: str, default=None):

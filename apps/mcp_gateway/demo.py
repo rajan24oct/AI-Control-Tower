@@ -104,9 +104,14 @@ SERVERS = [
                   read_only=False, destructive=False),
             _tool("export_accounts", "Export every account in a segment as CSV.",
                   {"segment": "string"}, ["segment"]),
+            _tool("issue_credit", "Apply a goodwill credit to a customer's account.",
+                  {"account": "string", "amount": "number", "reason": "string"}, ["account", "amount"],
+                  read_only=False, destructive=False),
         ],
         "disabled": {"export_accounts": "Bulk export is not an agent task; use the reporting warehouse."},
-        "grants": [("Customer Support Agent", ["crm_lookup", "update_contact"], None)],
+        # Agent chain link 06: the arguments the gateway holds to agents' action limits.
+        "limits": {"issue_credit": ("amount", "account")},
+        "grants": [("Customer Support Agent", ["crm_lookup", "update_contact", "issue_credit"], None)],
     },
     {
         "name": "Core Banking Ledger", "slug": "core-banking",
@@ -125,6 +130,7 @@ SERVERS = [
                   ["from_account", "to_account", "amount"], destructive=True),
         ],
         "notes": {"transfer_funds": "Enabled for treasury reconciliation; the prohibited-tools policy still applies to agents."},
+        "limits": {"transfer_funds": ("amount", "to_account")},
         "grants": [
             ("Fraud Detection Agent", [], None),
             ("Claims Triage Agent", ["list_transactions"], -10),
@@ -189,6 +195,8 @@ TRAFFIC = [
     ("Customer Support Agent", "servicenow__close_incident", {"number": "INC0012873"}, 1),
     ("Claims Triage Agent", "servicenow__search_incidents", {"query": "claims upload"}, 2),
     ("Customer Support Agent", "salesforce__crm_lookup", {"email": "j.doe@example.com"}, 4),
+    ("Customer Support Agent", "salesforce__issue_credit",
+     {"account": "AC-20931", "amount": 40, "reason": "Late card delivery"}, 2),
     ("Customer Support Agent", "salesforce__export_accounts", {"segment": "retail"}, 1),
     ("Internal Knowledge Assistant", "salesforce__crm_lookup", {"account": "AC-20931"}, 1),
     ("Fraud Detection Agent", "core-banking__get_balance", {"account": "GB29NWBK60161331926819"}, 2),
@@ -240,6 +248,7 @@ def seed_mcp(organization, agents: dict, teams: dict, users: dict) -> dict:
         if spec.get("tools"):
             MCPRegistryService.sync(server, actor=reviewer)
             _review(server, spec, reviewer)
+            _limit_arguments(server, spec, reviewer)
         _grants(server, spec, agents)
         servers[spec["slug"]] = server
 
@@ -275,6 +284,15 @@ def _review(server, spec, reviewer) -> None:
             MCPRegistryService.review(tool, enable=False, actor=reviewer, note=disabled[tool.name])
         else:
             MCPRegistryService.review(tool, enable=True, actor=reviewer, note=notes.get(tool.name, ""))
+
+
+def _limit_arguments(server, spec, reviewer) -> None:
+    for name, (value, counterparty) in spec.get("limits", {}).items():
+        tool = server.tools.filter(name=name).first()
+        if tool is not None and (tool.value_argument, tool.counterparty_argument) != (value, counterparty):
+            MCPRegistryService.set_limit_arguments(
+                tool, value_argument=value, counterparty_argument=counterparty, actor=reviewer
+            )
 
 
 def _grants(server, spec, agents) -> None:

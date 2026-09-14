@@ -3,11 +3,37 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
 from apps.core.constants import Criticality, DataClassification, Environment, RiskLevel
 from apps.core.models import OrganizationScopedModel
+
+#: IRGF chapter 16: does an invoked agent act within its own boundary, or with
+#: its caller's authority -- the case where authority compounds?
+DELEGATION_AUTHORITY = {
+    "own": "Within its own boundary",
+    "caller": "With the caller's authority",
+}
+
+
+def validate_delegations(value) -> None:
+    """A delegation graph: [{"from": agent_id, "to": agent_id, "authority": "own" | "caller"}]."""
+    if value in (None, "", []):
+        return
+    if not isinstance(value, list):
+        raise ValidationError("Delegations must be a list of {from, to, authority}.")
+    for edge in value:
+        if not isinstance(edge, dict) or not edge.get("from") or not edge.get("to"):
+            raise ValidationError("Each delegation names the agent id it goes from and the one it goes to.")
+        unknown = sorted(set(edge) - {"from", "to", "authority"})
+        if unknown:
+            raise ValidationError(f"Unknown delegation key(s): {', '.join(unknown)}.")
+        if edge["from"] == edge["to"]:
+            raise ValidationError("An agent does not delegate to itself.")
+        if edge.get("authority", "own") not in DELEGATION_AUTHORITY:
+            raise ValidationError("authority is 'own' or 'caller'.")
 
 
 class AIApplication(OrganizationScopedModel):
@@ -61,6 +87,10 @@ class AIApplication(OrganizationScopedModel):
     production_date = models.DateField(null=True, blank=True)
     review_date = models.DateField(null=True, blank=True)
 
+    # IRGF risk tier (M5), cached from the current S2 classification. Written
+    # only by the classification service.
+    risk_tier = models.PositiveSmallIntegerField(null=True, blank=True, editable=False, db_index=True)
+
     # Relationships that make the inventory navigable in both directions.
     ai_models = models.ManyToManyField(
         "models_registry.AIModel", blank=True, related_name="applications"
@@ -71,6 +101,12 @@ class AIApplication(OrganizationScopedModel):
     )
     tools = models.JSONField(
         default=list, blank=True, help_text="Tool identifiers until the tool registry lands."
+    )
+    #: IRGF chapter 16: which of its agents may invoke which others, and with
+    #: whose authority. Declared, not inferred from traffic.
+    delegations = models.JSONField(
+        default=list, blank=True, validators=[validate_delegations],
+        help_text='Which agents may invoke which: [{"from": agent_id, "to": agent_id, "authority": "own" or "caller"}].',
     )
 
     class Meta:

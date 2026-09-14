@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Risk Classification{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>IRGF stage S2.</strong> Every AI system is scored on five dimensions (D1–D5, module M4). The matrix (M5)
+  resolves them into Tier 1–4, and someone outside the delivery line countersigns (M6). A provisional tier is
+  evidence for Gate G1; a countersigned one for Gate G2. The tier then scopes policies and approval rules, and
+  decides which identities may act for an agent.
+</div>
+
+<div class="row g-3 mb-3">
+  {% for tier, count, summary in tier_counts %}
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="?tier={{ tier }}" class="text-decoration-none text-reset">
+        <div class="ct-metric ct-tier-metric tone-{{ tier|tier_tone }} h-100" title="{{ summary }}">
+          <span class="ct-metric-label">Tier {{ tier }}</span>
+          <div class="ct-metric-value">{{ count }}</div>
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <a href="?status=provisional" class="text-decoration-none text-reset">
+      <div class="ct-metric h-100">
+        <span class="ct-metric-label">Awaiting countersignature</span>
+        <div class="ct-metric-value {% if awaiting_countersignature %}text-warning{% endif %}">{{ awaiting_countersignature }}</div>
+        <div class="ct-metric-hint">IRGF M6 · before Gate G2</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <a href="?due=1" class="text-decoration-none text-reset">
+      <div class="ct-metric h-100">
+        <span class="ct-metric-label">Re-score due</span>
+        <div class="ct-metric-value {% if rescore_due %}text-danger{% endif %}">{{ rescore_due }}</div>
+        <div class="ct-metric-hint">Triggers and annual reviews</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+{% if unclassified_agent_count or unclassified_application_count %}
+  <div class="ct-card mb-3">
+    <div class="ct-card-header">
+      <span><i class="bi bi-question-circle me-1"></i> Not yet classified</span>
+      <span class="small text-muted">Gate G1 needs provisional D1–D5</span>
+    </div>
+    <div class="ct-card-body">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <div class="small fw-semibold mb-1">Agents <span class="badge text-bg-secondary">{{ unclassified_agent_count }}</span></div>
+          {% for agent in unclassified_agents %}
+            <a class="badge badge-soft text-bg-light text-dark text-decoration-none me-1 mb-1"
+               href="{% url 'classification:score' 'agents' agent.pk %}"><i class="bi bi-plus-circle"></i> {{ agent.name }}</a>
+          {% empty %}<span class="small text-muted">All agents are classified.</span>{% endfor %}
+          {% if unclassified_agent_count > 8 %}<span class="small text-muted">and {{ unclassified_agent_count|add:"-8" }} more</span>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="small fw-semibold mb-1">Applications <span class="badge text-bg-secondary">{{ unclassified_application_count }}</span></div>
+          {% for application in unclassified_applications %}
+            <a class="badge badge-soft text-bg-light text-dark text-decoration-none me-1 mb-1"
+               href="{% url 'classification:score' 'applications' application.pk %}"><i class="bi bi-plus-circle"></i> {{ application.name }}</a>
+          {% empty %}<span class="small text-muted">All applications are classified.</span>{% endfor %}
+          {% if unclassified_application_count > 8 %}<span class="small text-muted">and {{ unclassified_application_count|add:"-8" }} more</span>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Classification Register</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm"
+               placeholder="System name or rationale">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Kind</label>
+        <select name="kind" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="agent" {% if request.GET.kind == "agent" %}selected{% endif %}>Agents</option>
+          <option value="application" {% if request.GET.kind == "application" %}selected{% endif %}>Applications</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Tier</label>
+        <select name="tier" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in tiers %}
+            <option value="{{ value }}" {% if request.GET.tier == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Current (provisional and confirmed)</option>
+          {% for value, label in statuses %}
+            <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "System" "subject" %}<th>Kind</th>{% sort_th "Tier" "tier" first="desc" %}
+          {% sort_th "Impact" "impact" css="text-center" first="desc" %}
+          {% sort_th "Control deficit" "control" css="text-center" first="desc" %}
+          <th class="text-center">D1–D5</th>{% sort_th "Status" "status" %}<th>Countersigned</th>
+          {% sort_th "Scored" "scored" first="desc" %}{% sort_th "Review due" "review" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in classifications %}
+          <tr>
+            <td>
+              <a href="{% url 'classification:detail' record.pk %}" class="fw-semibold text-decoration-none">{{ record.subject.name }}</a>
+              {% if record.rescore_due %}<div class="small text-danger"><i class="bi bi-arrow-repeat"></i> Re-score due</div>{% endif %}
+            </td>
+            <td class="small">{% if record.agent_id %}Agent{% else %}Application{% endif %}</td>
+            <td class="text-nowrap">
+              <span class="badge text-bg-{{ record.tier|tier_style }}">Tier {{ record.tier }}</span>
+              {% if record.floor_applied %}<span class="small text-muted" title="Safety floor applied">floor</span>{% endif %}
+            </td>
+            <td class="text-center small">{{ record.impact }}</td>
+            <td class="text-center small">{{ record.control_deficit }}</td>
+            <td class="text-center small font-monospace">{{ record.d1_consequence }}·{{ record.d2_autonomy }}·{{ record.d3_reversibility }}·{{ record.d4_exposure }}·{{ record.d5 }}</td>
+            <td>
+              <span class="badge badge-soft text-bg-{% if record.is_confirmed %}success{% elif record.is_provisional %}warning{% else %}secondary{% endif %}">{{ record.get_status_display }}</span>
+            </td>
+            <td class="small">
+              {% if record.countersigned_by %}
+                {{ record.countersigned_by.get_full_name|default:record.countersigned_by }}
+              {% elif record.is_provisional and can_countersign %}
+                <a href="{% url 'classification:countersign' record.pk %}">Countersign</a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="small text-nowrap">{{ record.scored_at|date:"j M Y" }}</td>
+            <td class="small text-nowrap">{{ record.review_due|date:"j M Y"|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="10">
+            <div class="ct-empty"><i class="bi bi-bar-chart-steps"></i>
+              <p class="mb-0">No classifications match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

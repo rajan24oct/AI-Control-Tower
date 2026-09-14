@@ -85,6 +85,8 @@ class ToolCallOutcome:
     latency_ms: int = 0
     dispatched: bool = False
     call: MCPToolCall | None = None
+    #: The agent chain link 06 limit that refused the call, if one did.
+    limit: str = ""
 
     @property
     def reached_server(self) -> bool:
@@ -294,13 +296,25 @@ class MCPGateway:
         re-reading the policy table for every tool.
         """
         from apps.policies.models import PolicyEffect, PolicyType
-        from apps.policies.services import EVALUATORS, PolicyContext, PolicyEngine
+        from apps.policies.services import (
+            EVALUATORS,
+            PolicyContext,
+            PolicyEngine,
+            excepted_policy_ids,
+            in_tier_scope,
+        )
 
-        policies = list(
-            PolicyEngine.policies_for(organization).filter(
+        tier = getattr(agent, "risk_tier", None)
+        excepted = excepted_policy_ids(organization, agent)
+        policies = [
+            policy
+            for policy in PolicyEngine.policies_for(organization).filter(
                 policy_type=PolicyType.TOOL_ACCESS, effect=PolicyEffect.DENY
             )
-        )
+            # The catalog and the call must agree, so IRGF tier scoping and M17
+            # exceptions hold here too.
+            if in_tier_scope(policy, tier) and policy.pk not in excepted
+        ]
         evaluator = EVALUATORS[PolicyType.TOOL_ACCESS]
 
         def denied(tool_name: str) -> bool:
@@ -388,6 +402,12 @@ class MCPGateway:
                 decision.policy_names,
             )
 
+        breach = cls._limits(tool, request)
+        if breach is not None:
+            outcome = blocked(breach.reason)
+            outcome.limit = breach.limit
+            return outcome
+
         if not ServerBreaker.available(server):
             return ToolCallOutcome(
                 CallStatus.UNAVAILABLE, server, tool,
@@ -397,6 +417,18 @@ class MCPGateway:
                 ),
             )
         return None
+
+    @staticmethod
+    def _limits(tool: MCPTool, request: ToolCallRequest):
+        """Agent chain link 06: the calling agent's value, rate and counterparty limits.
+
+        Preventive: a call over a limit is refused here, before it goes out.
+        """
+        if request.agent is None:
+            return None
+        from apps.controlplane import limits
+
+        return limits.check(request.agent, tool, request.arguments)
 
     @staticmethod
     def _registry_denial(server: MCPServer, tool: MCPTool) -> str:
@@ -425,6 +457,11 @@ class MCPGateway:
     @staticmethod
     def _access_denial(server: MCPServer, tool: MCPTool, agent, grant) -> str:
         if agent is not None:
+            if agent.is_suspended:
+                return (
+                    f"Agent '{agent.name}' is suspended by its kill-switch: "
+                    f"{agent.suspension_reason or 'no reason recorded'}."
+                )
             if not agent.is_active:
                 return f"Agent '{agent.name}' is {agent.get_status_display().lower()}."
             # `restricted_tools` is an explicit prohibition, so it is enforced.
@@ -518,6 +555,9 @@ class MCPGateway:
         record_content = setting("RECORD_ARGUMENTS", True)
         limit = int(setting("MAX_RECORDED_CHARS", 2000))
         execution = cls._execution(organization, request.execution_id)
+        from apps.controlplane.limits import action_facts
+
+        value, counterparty, _ = action_facts(outcome.tool, request.arguments)
 
         call = MCPToolCall.objects.create(
             organization=organization,
@@ -538,6 +578,9 @@ class MCPGateway:
                 if record_content and outcome.result is not None
                 else ""
             ),
+            action_value=value,
+            counterparty=counterparty,
+            limit_breached=outcome.limit,
         )
         if execution is not None:
             cls._append_to_run(execution, call, outcome)

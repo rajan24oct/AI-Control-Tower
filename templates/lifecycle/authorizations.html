@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Deployment Authorizations{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>IRGF stage S7 · Gate G3.</strong> A system — an agent, or an application with the agents it composes — is
+  authorized for deployment as a specific configuration, at a confirmed tier, with a named owner. From then on every change to it is compared with that configuration and
+  classified at <a href="{% url 'lifecycle:changes' %}">Gate G4</a>. Who decides scales with the tier; the gate
+  itself does not.
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <a href="?status=authorized" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+      <span class="ct-metric-label">In force</span><div class="ct-metric-value text-success">{{ counts.in_force }}</div>
+    </div></a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="?status=pending" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+      <span class="ct-metric-label">Awaiting decision</span>
+      <div class="ct-metric-value {% if counts.pending %}text-warning{% endif %}">{{ counts.pending }}</div>
+    </div></a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="?status=suspended" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+      <span class="ct-metric-label">Suspended</span>
+      <div class="ct-metric-value {% if counts.suspended %}text-danger{% endif %}">{{ counts.suspended }}</div>
+      <div class="ct-metric-hint">Major change awaiting G4, or re-authorization due</div>
+    </div></a>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="ct-metric h-100">
+      <span class="ct-metric-label">Production systems not authorized</span>
+      <div class="ct-metric-value {% if unauthorized_count %}text-danger{% endif %}">{{ unauthorized_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-7">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">
+        <span><i class="bi bi-question-circle me-1"></i> Production systems without an authorization</span>
+        <span class="small text-muted">Gate G3</span>
+      </div>
+      <div class="ct-card-body">
+        {% for subject in unauthorized %}
+          <a class="badge badge-soft text-bg-light text-dark text-decoration-none me-1 mb-1" href="{{ subject|authorize_url }}">
+            <i class="bi {% if subject|system_kind == 'application' %}bi-window-stack{% else %}bi-robot{% endif %}"></i> {{ subject.name }}</a>
+        {% empty %}
+          <p class="small text-muted mb-0">Every production agent and application holds an authorization.</p>
+        {% endfor %}
+        {% if unauthorized_count > 12 %}<span class="small text-muted">and {{ unauthorized_count|add:"-12" }} more</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span>Who decides at Gate G3</span><span class="small text-muted">IRGF M16</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <tbody>
+            {% for tier, rights in rights_table %}
+              <tr><td class="text-nowrap"><span class="badge text-bg-{{ tier|tier_style }}">Tier {{ tier }}</span></td><td class="small">{{ rights }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Authorization Register</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }}</span>
+  </div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm" placeholder="Agent or application">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Current</option>
+          {% for value, label in statuses %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Tier</label>
+        <select name="tier" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in tiers %}<option value="{{ value }}" {% if request.GET.tier == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Environment</label>
+        <select name="environment" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in environments %}<option value="{{ value }}" {% if request.GET.environment == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1"><button type="submit" class="btn btn-sm btn-primary w-100">Filter</button></div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "System" "agent" %}{% sort_th "Environment" "environment" %}{% sort_th "Tier" "tier" first="desc" %}
+          {% sort_th "Status" "status" %}<th>Signatures</th>{% sort_th "Requested" "requested" first="desc" %}{% sort_th "Decided" "decided" first="desc" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for authorization in authorizations %}
+          <tr>
+            <td><a class="fw-semibold text-decoration-none" href="{% url 'lifecycle:authorization_detail' authorization.pk %}">{{ authorization.subject.name }}</a>
+              {% if authorization.application_id %}<span class="badge badge-soft text-bg-light text-dark ms-1">Application</span>{% endif %}</td>
+            <td class="small">{{ authorization.get_environment_display }}</td>
+            <td><span class="badge text-bg-{{ authorization.tier|tier_style }}">Tier {{ authorization.tier }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ authorization.status|gate_status_style }}">{{ authorization.get_status_display }}</span></td>
+            <td class="small">
+              {% for entry in authorization.signatures %}<div>{{ entry.seat_label }} · {{ entry.name }}</div>{% empty %}—{% endfor %}
+            </td>
+            <td class="small text-nowrap">{{ authorization.requested_at|date:"j M Y" }}<div class="text-muted">{{ authorization.requested_by.get_full_name|default:"" }}</div></td>
+            <td class="small text-nowrap">{{ authorization.decided_at|date:"j M Y"|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-patch-check"></i><p class="mb-0">No authorizations match these filters.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

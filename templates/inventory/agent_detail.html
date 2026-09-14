@@ -9,6 +9,8 @@
     <a href="{% url 'inventory:agents' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Agents</a>
     <h2 class="h4 mt-1 mb-1">{{ agent.name }}</h2>
     <div class="d-flex gap-2 flex-wrap">
+      {% if agent.is_suspended %}<span class="badge text-bg-danger"><i class="bi bi-power"></i> Suspended</span>{% endif %}
+      {% if agent.risk_tier %}<span class="badge text-bg-{{ agent.risk_tier|tier_style }}">Tier {{ agent.risk_tier }}</span>{% endif %}
       <span class="badge badge-soft text-bg-light text-dark">{{ agent.get_framework_display }}</span>
       <span class="badge badge-soft text-bg-{{ agent.environment|environment_style }}">{{ agent.get_environment_display }}</span>
       <span class="badge badge-soft text-bg-{{ agent.risk_level|risk_style }}">{{ agent.get_risk_level_display }} risk</span>
@@ -20,6 +22,17 @@
     <i class="bi bi-pencil"></i> Edit
   </a>
 </div>
+
+{% if agent.is_suspended %}
+  <div class="alert alert-danger d-flex gap-2 align-items-center py-2">
+    <i class="bi bi-power"></i>
+    <div class="small">
+      <strong>Suspended by its kill-switch</strong> on {{ agent.suspended_at|date:"j M Y H:i" }} by
+      {{ agent.suspended_by_label|default:"the platform" }}: {{ agent.suspension_reason }}
+      Both gateways refuse this agent until a person <a href="#kill-switch">resumes it</a>.
+    </div>
+  </div>
+{% endif %}
 
 {% if agent.has_excessive_autonomy %}
   <div class="alert alert-danger d-flex gap-2 align-items-center py-2">
@@ -55,7 +68,12 @@
       </div>
     </div>
 
-    <div class="ct-card">
+    {% include "classification/_subject_panel.html" with classification=classification kind="agents" subject=agent %}
+
+    {% include "inventory/_authorization_panel.html" with subject=agent kind="agent" %}
+    {% include "inventory/_control_plane_panel.html" %}
+
+    <div class="ct-card mb-3">
       <div class="ct-card-header">Boundaries</div>
       <div class="ct-card-body">
         <dt class="small text-uppercase text-muted fw-semibold mb-1" style="font-size:.7rem">Allowed Tools</dt>
@@ -80,6 +98,8 @@
         </div>
       </div>
     </div>
+
+    {% include "inventory/_agent_governance.html" %}
   </div>
 
   <div class="col-12 col-lg-7">
@@ -124,7 +144,7 @@
               <a class="ct-node border-risk-{{ application.risk_level }}"
                  href="{% url 'inventory:application_detail' application.pk %}">
                 <p class="ct-node-name">{{ application.name }}</p>
-                <p class="ct-node-meta">{{ application.get_environment_display }}</p>
+                <p class="ct-node-meta">{{ application.get_environment_display }}{% if application.risk_tier %} &middot; Tier {{ application.risk_tier }}{% endif %}</p>
               </a>
             </div>
           {% empty %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Risk classification · {{ subject.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 gap-2 flex-wrap">
+  <div>
+    <a href="{{ subject_url }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> {{ subject.name }}</a>
+    <h2 class="h4 mt-1 mb-1">Risk classification · {{ subject.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge text-bg-{{ record.tier|tier_style }}">Tier {{ record.tier }}</span>
+      <span class="badge badge-soft text-bg-{% if record.is_confirmed %}success{% elif record.is_provisional %}warning{% else %}secondary{% endif %}">{{ record.get_status_display }}</span>
+      <span class="badge badge-soft text-bg-light text-dark">IRGF stage S2</span>
+      {% if record.is_current %}<span class="badge badge-soft text-bg-light text-dark">Evidence for Gate {{ record.gate_evidence }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    {% if can_countersign and not independence_problem %}
+      <a class="btn btn-sm btn-success" href="{% url 'classification:countersign' record.pk %}"><i class="bi bi-patch-check"></i> Countersign</a>
+    {% endif %}
+    {% if can_score and record.is_current %}
+      <a class="btn btn-sm btn-outline-primary" href="{{ score_url }}"><i class="bi bi-arrow-repeat"></i> Re-score</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if record.rescore_due %}
+  <div class="alert alert-warning d-flex gap-2 align-items-start py-2">
+    <i class="bi bi-arrow-repeat mt-1"></i>
+    <div class="small">
+      <strong>Re-score due.</strong>
+      {% if record.rescore_reasons %}{{ record.rescore_reasons|join:" " }}{% endif %}
+      {% if record.review_overdue %}The annual review for Tier 3–4 systems was due {{ record.review_due|date:"j M Y" }}.{% endif %}
+    </div>
+  </div>
+{% endif %}
+{% if record.is_provisional %}
+  <div class="alert alert-info d-flex gap-2 align-items-start py-2">
+    <i class="bi bi-hourglass-split mt-1"></i>
+    <div class="small">
+      <strong>Awaiting independent countersignature (IRGF M6).</strong>
+      Until someone outside this system's delivery line countersigns, the tier is provisional: it can stand as
+      evidence for Gate G1, but Gate G2 needs it confirmed.
+      {% if independence_problem and can_countersign %}<br>{{ independence_problem }}{% endif %}
+    </div>
+  </div>
+{% endif %}
+{% if record.status == "superseded" %}
+  <div class="alert alert-secondary py-2 small">
+    Superseded {{ record.superseded_at|date:"j M Y" }}
+    {% if record.superseded_by %}by <a href="{% url 'classification:detail' record.superseded_by.pk %}">a later scoring</a>{% endif %}.
+    Kept as score history.
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Dimensions</span><span class="small text-muted">IRGF M4</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <thead><tr><th style="width:4.5rem">Code</th><th>Dimension</th><th style="width:4rem">Score</th><th>Meaning</th></tr></thead>
+          <tbody>
+            {% for row in record.dimension_rows %}
+              <tr>
+                <td><strong>{{ row.code }}</strong></td>
+                <td>{{ row.name }}</td>
+                <td><span class="badge text-bg-{{ row.score|tier_style }}">{{ row.score }}</span></td>
+                <td class="small">{{ row.anchor }}</td>
+              </tr>
+              {% for part in row.parts %}
+                <tr class="ct-subrow">
+                  <td></td>
+                  <td class="small ps-4">{{ part.name }}</td>
+                  <td><span class="badge badge-soft text-bg-light text-dark">{{ part.score }}</span></td>
+                  <td class="small text-muted">{{ part.anchor }}</td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Rationale</div>
+      <div class="ct-card-body">
+        <p class="mb-0">{{ record.rationale|linebreaksbr }}</p>
+        {% if record.tier_override %}
+          <hr>
+          <p class="small mb-0"><strong>Tier overridden</strong> from {{ record.matrix_tier }}{% if record.floor_applied %} (floored){% endif %}
+            to {{ record.tier_override }}: {{ record.override_rationale }}</p>
+        {% endif %}
+        {% if record.countersign_note %}
+          <hr>
+          <p class="small mb-0"><strong>Countersignature note:</strong> {{ record.countersign_note|linebreaksbr }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if record.was_adjusted %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">Adjusted at countersignature</div>
+        <div class="ct-card-body">
+          <p class="small text-muted mb-2">The countersigner changed scores. The scorer's originals, kept as IRGF M6 asks:</p>
+          <dl class="ct-kv row mb-0">
+            {% for field, value in record.scorer_scores.items %}
+              <div class="col-6 col-md-4"><dt>{{ field|cut:"_"|upper|slice:":2" }} · {{ field|slice:"3:" }}</dt><dd>{{ value }}</dd></div>
+            {% endfor %}
+          </dl>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Tier</span><span class="small text-muted">IRGF M5</span></div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-2">
+          <div class="col-4"><dt>Impact</dt><dd>{{ record.impact }}</dd></div>
+          <div class="col-4"><dt>Control deficit</dt><dd>{{ record.control_deficit }}</dd></div>
+          <div class="col-4"><dt>Matrix</dt><dd>Tier {{ record.matrix_tier }}</dd></div>
+        </dl>
+        {% if record.floor_applied %}
+          <p class="small text-danger mb-2">Safety floor applied: D1 = 4, or D2 = 4 with D3 = 4, holds this system at Tier {{ floor_tier }} or above.</p>
+        {% endif %}
+        {% include "classification/_matrix.html" with impact=record.impact deficit=record.control_deficit %}
+        <p class="small text-muted mt-3 mb-0"><strong>Tier {{ record.tier }}:</strong> {{ record.tier_summary }}</p>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Record</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Scored by</dt><dd>{{ record.scored_by.get_full_name|default:record.scored_by|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Scored</dt><dd>{{ record.scored_at|date:"j M Y H:i" }}</dd></div>
+          <div class="col-6"><dt>Countersigned by</dt><dd>{{ record.countersigned_by.get_full_name|default:record.countersigned_by|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Countersigned</dt><dd>{{ record.countersigned_at|date:"j M Y H:i"|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Annual review due</dt><dd>{{ record.review_due|date:"j M Y"|default:"Not required below Tier 3" }}</dd></div>
+          <div class="col-6"><dt>Subject</dt><dd><a href="{{ subject_url }}">{{ subject.name }}</a></dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Score history <span class="badge text-bg-secondary">{{ history|length }}</span></div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0">
+          <thead><tr><th>Scored</th><th>Tier</th><th>Status</th><th>Countersigned</th></tr></thead>
+          <tbody>
+            {% for item in history %}
+              <tr{% if item.pk == record.pk %} class="table-active"{% endif %}>
+                <td><a href="{% url 'classification:detail' item.pk %}">{{ item.scored_at|date:"j M Y" }}</a></td>
+                <td><span class="badge text-bg-{{ item.tier|tier_style }}">T{{ item.tier }}</span></td>
+                <td class="small">{{ item.get_status_display }}</td>
+                <td class="small">{{ item.countersigned_by.get_full_name|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

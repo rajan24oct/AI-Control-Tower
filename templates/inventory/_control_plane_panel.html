@@ -1,0 +1,52 @@
+{% load control_tower %}
+{% comment %}
+  The agent under the IRGF Control Plane: its unresolved drift (M13), where it
+  stands against its action limits (link 06), and its last verification (link 07).
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-activity me-1"></i> Control Plane</span>
+    <span class="small text-muted">IRGF M12 · M13 · links 06–07</span>
+  </div>
+  <div class="ct-card-body">
+    {% with summary=control_plane %}
+      {% if summary.drift_count %}
+        <div class="small fw-semibold mb-1">
+          {{ summary.drift_count }} unresolved drift record{{ summary.drift_count|pluralize }}
+          {% if summary.incidents %}· <span class="text-danger">{{ summary.incidents }} incident{{ summary.incidents|pluralize }}</span>{% endif %}
+        </div>
+        <ul class="small ps-3 mb-2">
+          {% for record in summary.drift %}
+            <li><a href="{% url 'controlplane:drift_detail' record.pk %}">{{ record.title|truncatechars:80 }}</a>
+              <span class="badge badge-soft text-bg-{{ record.status|drift_status_style }}">{{ record.get_status_display }}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="small mb-2">No drift: what runs matches what was authorized.</p>
+      {% endif %}
+
+      {% if summary.usage %}
+        <div class="small fw-semibold mb-1">Action limits in use <span class="text-muted fw-normal">· link 06</span></div>
+        <dl class="ct-kv row mb-1">
+          {% if agent.action_limits.max_actions_per_hour %}
+            <div class="col-6"><dt>Actions, last hour</dt><dd>{{ summary.usage.actions_last_hour }} of {{ agent.action_limits.max_actions_per_hour }}</dd></div>
+          {% endif %}
+          {% if agent.action_limits.max_value_per_day %}
+            <div class="col-6"><dt>Value today</dt><dd>{{ summary.usage.value_today }} of {{ agent.action_limits.max_value_per_day }} {{ agent.action_limits.currency }}</dd></div>
+          {% endif %}
+        </dl>
+      {% endif %}
+
+      <p class="small text-muted mb-2">
+        {% if summary.last_verification %}
+          Last action verified {{ summary.last_verification.verified_at|timesince }} ago:
+          <span class="badge badge-soft text-bg-{{ summary.last_verification.outcome|verification_style }}">{{ summary.last_verification.get_outcome_display }}</span>
+        {% else %}No action verified yet (link 07).{% endif %}
+      </p>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'controlplane:drift' %}?agent={{ agent.pk }}&status=all">Drift history</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'controlplane:verifications' %}?q={{ agent.name|urlencode }}">Verifications</a>
+      </div>
+    {% endwith %}
+  </div>
+</div>

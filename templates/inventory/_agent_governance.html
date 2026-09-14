@@ -1,0 +1,110 @@
+{% load control_tower %}
+{% comment %}
+  IRGF agent governance: the eight-link chain (M10), the Agent Card (S3, required
+  at Gate G3) and the kill-switch (link 06).
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-link-45deg me-1"></i> Agent Governance Chain</span>
+    <span class="small text-muted">IRGF M10</span>
+  </div>
+  <div class="ct-card-body py-2">
+    <ol class="ct-chain">
+      {% for link in governance_chain %}
+        <li class="ct-chain-link is-{{ link.state }}">
+          <i class="bi {{ link.icon }}"></i>
+          <div>
+            <div class="ct-chain-name">{{ link.number }} · {{ link.name }}</div>
+            <div class="ct-chain-detail">{{ link.detail }}</div>
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-person-vcard me-1"></i> Agent Card</span>
+    <span class="small text-muted">IRGF S3 · required at Gate G3</span>
+  </div>
+  <div class="ct-card-body">
+    {% if agent.acts and card_gaps %}
+      <div class="alert alert-warning py-2 small mb-3">
+        <strong>Incomplete.</strong> This agent can act, so Gate G3 needs a complete Agent Card. Missing:
+        <ul class="mb-0 mt-1">{% for gap in card_gaps %}<li>{{ gap }}</li>{% endfor %}</ul>
+      </div>
+    {% elif not agent.acts %}
+      <p class="small text-muted">Advisory only: IRGF's minimum viable framework asks for an Agent Card only
+        where an agent has tool access or autonomy.</p>
+    {% endif %}
+    <dl class="ct-kv row mb-0">
+      <div class="col-12"><dt>Not for</dt><dd>{{ agent.out_of_scope|default:"—"|linebreaksbr }}</dd></div>
+      <div class="col-12">
+        <dt>Action limits</dt>
+        <dd>
+          {% for label, value in agent.action_limit_items %}
+            <div>{{ label }}: <strong>{{ value }}</strong></div>
+          {% empty %}—{% endfor %}
+        </dd>
+      </div>
+      <div class="col-12"><dt>Escalation thresholds</dt><dd>{{ agent.escalation_thresholds|default:"—"|linebreaksbr }}</dd></div>
+      <div class="col-12"><dt>Kill-switch conditions</dt><dd>{{ agent.kill_switch_conditions|default:"—"|linebreaksbr }}</dd></div>
+      <div class="col-12">
+        <dt>Automatic kill-switch triggers</dt>
+        <dd>
+          {% for label in agent.kill_switch_trigger_labels %}<div>{{ label }}</div>
+          {% empty %}<span class="text-muted small">None: a person pulls the switch. Tier 3–4 needs at least one at Gate G3.</span>{% endfor %}
+        </dd>
+      </div>
+      <div class="col-12">
+        <dt>Acts under</dt>
+        <dd class="mb-0">
+          {% for account in agent.service_accounts.all %}
+            <span class="badge badge-soft text-bg-light text-dark me-1"><i class="bi bi-key"></i> {{ account.name }}</span>
+          {% empty %}<span class="text-muted small">No identity of its own (link 02)</span>{% endfor %}
+        </dd>
+      </div>
+    </dl>
+  </div>
+</div>
+
+<div class="ct-card mb-3" id="kill-switch">
+  <div class="ct-card-header">
+    <span><i class="bi bi-power me-1"></i> Kill-switch</span>
+    <span class="small text-muted">IRGF link 06</span>
+  </div>
+  <div class="ct-card-body">
+    {% if agent.is_suspended %}
+      <p class="small mb-2">
+        <span class="badge text-bg-danger">Suspended</span>
+        {{ agent.suspended_at|date:"j M Y H:i" }} by {{ agent.suspended_by_label|default:"the platform" }}.
+      </p>
+      <p class="small mb-3"><strong>Reason:</strong> {{ agent.suspension_reason }}</p>
+      {% if can_suspend %}
+        <form method="post" action="{% url 'inventory:agent_resume' agent.pk %}" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="form-label small" for="resume-note">Note (optional)</label>
+          <textarea class="form-control form-control-sm mb-2" id="resume-note" name="note" rows="2"
+                    placeholder="What was fixed, and who agreed it may run again"></textarea>
+          <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-play-circle"></i> Resume agent</button>
+        </form>
+        <p class="small text-muted mt-2 mb-0">Only a person can resume an agent; machines may only stop one.</p>
+      {% endif %}
+    {% else %}
+      <p class="small mb-3">Armed. Suspending stops this agent at once: both gateways refuse its calls and it cannot send
+        messages, until a person resumes it.</p>
+      {% if can_suspend %}
+        <form method="post" action="{% url 'inventory:agent_suspend' agent.pk %}" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="form-label small" for="suspend-reason">Reason</label>
+          <textarea class="form-control form-control-sm mb-2" id="suspend-reason" name="reason" rows="2" required
+                    placeholder="What was observed, and which kill-switch condition it meets"></textarea>
+          <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-power"></i> Suspend agent</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>

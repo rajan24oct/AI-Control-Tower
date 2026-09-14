@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Control Plane{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>IRGF M12 · Control Plane.</strong> Every tool call and every run is compared with the configuration Gate G3
+  <a href="{% url 'lifecycle:authorizations' %}">authorized</a>: the models that served it, the tools it reached, the identity it
+  acted under, and where it ran. Evaluations, policies, budgets and tool definitions are watched as well. Each divergence becomes a
+  <a href="{% url 'controlplane:drift' %}">drift record</a> (M13), routed and timed by category and tier. The only thing the
+  Control Plane corrects on its own is a kill-switch trigger the agent pre-approved at G3.
+</div>
+
+{% if can_run %}
+  <div class="d-flex justify-content-end mb-2">
+    <form method="post" action="{% url 'controlplane:run' %}" class="m-0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Run the Control Plane now</button>
+    </form>
+  </div>
+{% endif %}
+
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 mb-3">
+  <div class="col"><a href="{% url 'controlplane:drift' %}?status=open" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Needs a decision</span>
+    <div class="ct-metric-value {% if needs_decision %}text-warning{% endif %}">{{ needs_decision }}</div>
+    <div class="ct-metric-hint">Revert, ratify, except or escalate</div>
+  </div></a></div>
+  <div class="col"><a href="{% url 'controlplane:drift' %}?incident=1" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Incidents</span>
+    <div class="ct-metric-value {% if incidents %}text-danger{% endif %}">{{ incidents }}</div>
+    <div class="ct-metric-hint">Agent boundary divergence, any tier</div>
+  </div></a></div>
+  <div class="col"><a href="{% url 'controlplane:drift' %}?overdue=1" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Past its response window</span>
+    <div class="ct-metric-value {% if overdue %}text-danger{% endif %}">{{ overdue }}</div>
+    <div class="ct-metric-hint">Escalated to the AI Governance Body</div>
+  </div></a></div>
+  <div class="col"><a href="{% url 'controlplane:verifications' %}" class="text-decoration-none text-reset"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Actions verified · 24 h</span>
+    <div class="ct-metric-value">{{ verified }}</div>
+    <div class="ct-metric-hint">{% if late %}<span class="text-danger">{{ late }} past the ceiling</span>{% else %}All within the ceiling (link 07){% endif %}</div>
+  </div></a></div>
+  <div class="col"><div class="ct-metric h-100">
+    <span class="ct-metric-label">Automatic suspensions · 30 days</span>
+    <div class="ct-metric-value {% if auto_suspended %}text-danger{% endif %}">{{ auto_suspended }}</div>
+    <div class="ct-metric-hint">Pre-approved kill-switch triggers (link 06)</div>
+  </div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Unresolved drift by category and tier</span><span class="small text-muted">IRGF M13</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Category</th>
+              {% for tier in tiers %}<th class="text-center">T{{ tier }}</th>{% endfor %}
+              <th class="text-center">Unclassified</th><th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in matrix %}
+              <tr>
+                <td>
+                  <a class="text-decoration-none fw-semibold" href="{% url 'controlplane:drift' %}?category={{ row.category.key }}">{{ row.category.label }}</a>
+                  <div class="small text-muted">{{ row.category.meaning }} <span class="text-nowrap">Owner: {{ row.category.owner }}.</span></div>
+                </td>
+                {% for tier, count in row.cells %}
+                  <td class="text-center">
+                    {% if count %}
+                      <a class="badge text-bg-{% if tier %}{{ tier|tier_style }}{% else %}secondary{% endif %} text-decoration-none"
+                         href="{% url 'controlplane:drift' %}?category={{ row.category.key }}{% if tier %}&tier={{ tier }}{% endif %}">{{ count }}</a>
+                    {% else %}<span class="text-muted">·</span>{% endif %}
+                  </td>
+                {% endfor %}
+                <td class="text-end fw-semibold">{{ row.total }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="ct-card-body small text-muted border-top">An unclassified system is triaged as Tier 3 until it has an S2 classification.</div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Response windows</span><span class="small text-muted">IRGF chapter 19 · by category and tier</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Drift</th>{% for tier in tiers %}<th>Tier {{ tier }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in responses %}
+              <tr>
+                <td class="small fw-semibold">{% if row.incident %}<i class="bi bi-exclamation-octagon text-danger"></i> {% endif %}{{ row.label }}</td>
+                {% for cell in row.cells %}<td class="small">{{ cell|capfirst }}</td>{% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="ct-card-body small text-muted border-top">
+        Working days skip weekends, and a window closes at 18:00. A missed window escalates to the AI Governance Body.
+        Digest and review routes tell nobody at once: they collect into a daily digest.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-exclamation-octagon me-1"></i> Incidents</span><span class="small text-muted">unresolved</span></div>
+      <div class="ct-card-body">
+        <ul class="ct-checklist mb-0">
+          {% for record in incident_list %}
+            <li>
+              <i class="bi bi-exclamation-octagon-fill text-danger"></i>
+              <div>
+                <a class="text-decoration-none" href="{% url 'controlplane:drift_detail' record.pk %}"><strong>{{ record.subject }}</strong></a>
+                <div class="small">{{ record.title }}</div>
+                <div class="small text-muted">{{ record.last_seen_at|date:"j M H:i" }} · seen {{ record.occurrences }}×{% if record.auto_suspended %} · <span class="text-danger">suspended automatically</span>{% endif %}</div>
+              </div>
+            </li>
+          {% empty %}
+            <li class="small text-muted">No open incidents.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-shield-check me-1"></i> Verification</span><span class="small text-muted">agent chain link 07 · last 24 h</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Tier</th><th>Ceiling</th><th class="text-end">Verified</th><th class="text-end">Diverged</th><th class="text-end">p95</th><th class="text-end">Late</th></tr></thead>
+          <tbody>
+            {% for row in stats %}
+              <tr>
+                <td><span class="badge text-bg-{{ row.tier|tier_style }}">Tier {{ row.tier }}</span></td>
+                <td class="small">{{ row.ceiling_seconds|duration_s }}</td>
+                <td class="text-end">{{ row.count }}</td>
+                <td class="text-end">{% if row.diverged %}<span class="text-warning fw-semibold">{{ row.diverged }}</span>{% else %}0{% endif %}</td>
+                <td class="text-end small">{{ row.p95_ms|duration_ms }}</td>
+                <td class="text-end">{% if row.late %}<span class="text-danger fw-semibold">{{ row.late }}</span>{% else %}0{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="ct-card-body small text-muted border-top">
+        Latency runs from when the platform records an action to its verification. The ceilings are the platform's defaults;
+        IRGF asks for one per tier and leaves the values to you.
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Latest drift needing a decision</span><a class="small" href="{% url 'controlplane:drift' %}?status=open">All</a></div>
+      <div class="ct-card-body">
+        <ul class="ct-checklist mb-0">
+          {% for record in recent %}
+            <li>
+              <i class="bi bi-circle-fill text-{{ record.triage_tier|tier_style }} small"></i>
+              <div>
+                <a class="text-decoration-none" href="{% url 'controlplane:drift_detail' record.pk %}">{{ record.title }}</a>
+                <div class="small text-muted">{{ record.category_info.label }} · Tier {{ record.triage_tier }} · {{ record.response.label }}</div>
+              </div>
+            </li>
+          {% empty %}
+            <li class="small text-muted">Nothing is waiting for a decision.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

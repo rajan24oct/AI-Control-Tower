@@ -379,3 +379,33 @@ class ToolReviewView(LoginRequiredMixin, View):
         return action_response(
             request, message=f"{verb} {tool.qualified_name}.", redirect_to=redirect_to
         )
+
+
+class ToolLimitsView(LoginRequiredMixin, View):
+    """Agent chain link 06: which arguments carry a call's value and counterparty."""
+
+    def post(self, request, pk, *args, **kwargs):
+        redirect_to = request.POST.get("next") or reverse("mcp_gateway:tools")
+        if not _can(request, Perm.MCP_APPROVE):
+            return action_response(
+                request, message="Your role does not allow reviewing MCP tools.",
+                tone="danger", redirect_to=redirect_to, status=403,
+            )
+        tool = get_object_or_404(
+            MCPTool.objects.for_organization(request.organization).select_related("server"), pk=pk
+        )
+        try:
+            MCPRegistryService.set_limit_arguments(
+                tool,
+                value_argument=request.POST.get("value_argument", "").strip(),
+                counterparty_argument=request.POST.get("counterparty_argument", "").strip(),
+                actor=request.user,
+            )
+        except ValueError as exc:
+            return action_response(
+                request, message=str(exc), tone="warning", redirect_to=redirect_to, status=409
+            )
+        return action_response(
+            request, message=f"Action-limit arguments saved for {tool.qualified_name}.",
+            redirect_to=redirect_to,
+        )

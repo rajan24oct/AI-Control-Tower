@@ -105,9 +105,22 @@
           </li>
 
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'risks approvals policies evaluations' %}active{% endif %}"
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'risks approvals policies evaluations classification lifecycle controlplane' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Governance</a>
             <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'classification:register' %}">
+                <i class="bi bi-bar-chart-steps"></i> Risk Classification <span class="text-muted small">· S2</span></a></li>
+              <li><a class="dropdown-item" href="{% url 'lifecycle:authorizations' %}">
+                <i class="bi bi-patch-check"></i> Deployment Authorizations <span class="text-muted small">· G3</span></a></li>
+              <li><a class="dropdown-item" href="{% url 'lifecycle:changes' %}">
+                <i class="bi bi-arrow-left-right"></i> Changes <span class="text-muted small">· G4</span></a></li>
+              <li><a class="dropdown-item" href="{% url 'lifecycle:exceptions' %}">
+                <i class="bi bi-hourglass-split"></i> Exceptions <span class="text-muted small">· M17</span></a></li>
+              <li><a class="dropdown-item" href="{% url 'controlplane:overview' %}">
+                <i class="bi bi-activity"></i> Control Plane <span class="text-muted small">· M12</span></a></li>
+              <li><a class="dropdown-item" href="{% url 'controlplane:drift' %}">
+                <i class="bi bi-radar"></i> Drift <span class="text-muted small">· M13</span></a></li>
+              <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="{% url 'risks:list' %}">
                 <i class="bi bi-clipboard-data"></i> Risks</a></li>
               <li><a class="dropdown-item" href="{% url 'risks:matrix' %}">

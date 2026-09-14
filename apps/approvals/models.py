@@ -71,6 +71,10 @@ class ApprovalRule(OrganizationScopedModel):
     )
     match_unapproved_provider = models.BooleanField(default=False)
     match_unapproved_model = models.BooleanField(default=False)
+    tiers = models.JSONField(
+        default=list, blank=True,
+        help_text="Match assets at these IRGF risk tiers (1-4). Unclassified assets never match.",
+    )
 
     severity = models.CharField(
         max_length=20, choices=RiskLevel.choices, default=RiskLevel.MODERATE
@@ -112,6 +116,8 @@ class ApprovalRule(OrganizationScopedModel):
             parts.append("provider not approved")
         if self.match_unapproved_model:
             parts.append("model not approved")
+        if self.tiers:
+            parts.append(f"IRGF tier in {', '.join(str(tier) for tier in self.tiers)}")
         return parts
 
 

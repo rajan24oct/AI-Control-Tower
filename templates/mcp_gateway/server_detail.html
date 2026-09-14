@@ -184,6 +184,31 @@
                   {% if tool.is_read_only %}<span class="badge badge-soft text-bg-success ms-1">Read-only</span>
                   {% elif tool.is_destructive %}<span class="badge badge-soft text-bg-danger ms-1">Destructive</span>{% endif %}
                   <div class="small text-muted">{{ tool.description|truncatechars:120 }}</div>
+                  {% if tool.value_argument or tool.counterparty_argument %}
+                    <div class="small mt-1"><span class="badge badge-soft text-bg-light text-dark">Link 06</span>
+                      {% if tool.value_argument %}value <code>{{ tool.value_argument }}</code>{% endif %}
+                      {% if tool.counterparty_argument %}{% if tool.value_argument %} · {% endif %}counterparty <code>{{ tool.counterparty_argument }}</code>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if can_approve and tool.input_schema.properties and tool.status != "removed" %}
+                    <details class="small mt-1">
+                      <summary class="text-muted">Action-limit arguments</summary>
+                      <form method="post" action="{% url 'mcp_gateway:tool_limits' tool.pk %}"
+                            class="d-flex gap-1 flex-wrap align-items-center mt-1" data-ajax-action data-ajax-refresh="#server-detail">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <select name="value_argument" class="form-select form-select-sm w-auto" aria-label="Value argument">
+                          <option value="">No value</option>
+                          {% for name in tool.input_schema.properties %}<option value="{{ name }}" {% if name == tool.value_argument %}selected{% endif %}>value: {{ name }}</option>{% endfor %}
+                        </select>
+                        <select name="counterparty_argument" class="form-select form-select-sm w-auto" aria-label="Counterparty argument">
+                          <option value="">No counterparty</option>
+                          {% for name in tool.input_schema.properties %}<option value="{{ name }}" {% if name == tool.counterparty_argument %}selected{% endif %}>counterparty: {{ name }}</option>{% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                      </form>
+                    </details>
+                  {% endif %}
                 </td>
                 <td><span class="badge badge-soft text-bg-{{ tool.risk_level|risk_style }}">{{ tool.get_risk_level_display }}</span></td>
                 <td class="text-nowrap">

@@ -71,6 +71,23 @@ class PolicyContext:
             or ""
         )
 
+    @property
+    def effective_tier(self) -> int | None:
+        """The IRGF risk tier in play: the higher of the agent's and application's.
+
+        None when neither is classified. Read from the tier cached on each asset,
+        so scoping a policy by tier costs no query on the gateway's path.
+        """
+        tiers = [
+            tier
+            for tier in (
+                getattr(self.agent, "risk_tier", None),
+                getattr(self.application, "risk_tier", None),
+            )
+            if tier
+        ]
+        return max(tiers) if tiers else None
+
     def to_approval_context(self):
         from apps.approvals.services import ApprovalContext
 
@@ -112,6 +129,8 @@ class PolicyDecision:
     requires_approval: bool = False
     matches: list[PolicyMatch] = field(default_factory=list)
     severity: str = RiskLevel.LOW
+    #: Policies an active IRGF M17 exception set aside for this agent.
+    excepted: list[Policy] = field(default_factory=list)
 
     @property
     def denials(self) -> list[PolicyMatch]:
@@ -144,6 +163,8 @@ class PolicyDecision:
             "severity": self.severity,
             "denied_by": [m.policy.name for m in self.denials],
             "warnings": [m.reason for m in self.warnings],
+            # Set aside for this agent by an active IRGF M17 exception.
+            "excepted": [policy.name for policy in self.excepted],
         }
 
 
@@ -362,7 +383,108 @@ def _check_human_approval(policy: Policy, context: PolicyContext) -> str | None:
     return None
 
 
+def _subject_label(subject) -> str:
+    kind = "Agent" if hasattr(subject, "agent_id") else "Application"
+    return f"{kind} '{subject.name}'"
+
+
+def _check_risk_classification(policy: Policy, context: PolicyContext) -> str | None:
+    """IRGF S2: whatever is acting must carry a current risk classification.
+
+    Gate G1 wants provisional D1-D5 and Gate G2 a confirmed tier. A system
+    serving traffic with neither skipped the stage that decides how much
+    governance it gets, so every tier-scoped control is silently off for it.
+    """
+    subjects = [subject for subject in (context.agent, context.application) if subject is not None]
+    if not subjects:
+        return None
+
+    environments = policy.option("environments", []) or []
+    if environments and context.effective_environment not in environments:
+        return None
+
+    from apps.classification.services import ClassificationService
+
+    for subject in subjects:
+        record = ClassificationService.current(subject)
+        label = _subject_label(subject)
+        if record is None:
+            return (
+                f"{label} has no IRGF risk classification. Score it on D1-D5 (stage S2) "
+                "before it serves traffic."
+            )
+        if policy.option("require_countersignature", True) and not record.is_confirmed:
+            return (
+                f"{label} is provisionally Tier {record.tier}; its classification awaits an "
+                "independent countersignature (IRGF M6), which Gate G2 requires."
+            )
+        if policy.option("block_when_rescore_due", False) and record.rescore_due:
+            reasons = "; ".join(record.rescore_reasons) or "the annual Tier 3-4 review is due"
+            return f"{label} needs a re-score: {reasons}"
+    return None
+
+
+def _check_deployment_authorization(policy: Policy, context: PolicyContext) -> str | None:
+    """IRGF S7 · Gate G3: the agent must hold an authorization in force here.
+
+    A suspended authorization -- a major change awaiting Gate G4, or a change
+    G4 rejected -- counts as none. Material changes still awaiting G4 pass
+    unless the policy says otherwise.
+    """
+    # An agent answers for itself, and an application for the system it makes up.
+    for subject in (context.agent, context.application):
+        if subject is None:
+            continue
+        environment = context.environment or getattr(subject, "environment", "") or ""
+        environments = policy.option("environments", []) or []
+        if environments and environment not in environments:
+            continue
+        reason = _authorization_denial(policy, subject, environment)
+        if reason:
+            return reason
+    return None
+
+
+def _authorization_denial(policy: Policy, subject, environment: str) -> str | None:
+    from apps.lifecycle import decisions
+    from apps.lifecycle.models import OPEN_CHANGE_STATUSES, AuthorizationStatus
+    from apps.lifecycle.services import AuthorizationService
+
+    label = _subject_label(subject)
+    authorization = AuthorizationService.baseline(subject)
+    if authorization is None:
+        pending = AuthorizationService.pending(subject)
+        if pending is not None:
+            return (
+                f"{label} awaits a decision at Gate G3 "
+                f"({decisions.remaining(pending)} signature(s) to go)."
+            )
+        return f"{label} has no deployment authorization (IRGF S7 · Gate G3)."
+    if environment and authorization.environment != environment:
+        return (
+            f"{label} is authorized for {authorization.get_environment_display().lower()}, "
+            f"not {environment} (IRGF S7 · Gate G3)."
+        )
+    if authorization.status == AuthorizationStatus.SUSPENDED:
+        return f"{label}'s deployment authorization is suspended. {authorization.suspension_reason}"
+    if policy.option("block_pending_changes", False) and authorization.changes.filter(
+        status__in=OPEN_CHANGE_STATUSES
+    ).exists():
+        return f"{label} has changes awaiting Gate G4."
+    return None
+
+
+def excepted_policy_ids(organization, agent) -> set:
+    """Policies an active IRGF M17 exception sets aside for this agent."""
+    if agent is None or getattr(agent, "pk", None) is None:
+        return set()
+    from apps.lifecycle.services import ExceptionService
+
+    return ExceptionService.active_policy_ids(organization, agent)
+
+
 EVALUATORS: dict[str, Callable[[Policy, PolicyContext], "str | None"]] = {
+    PolicyType.DEPLOYMENT_AUTHORIZATION: _check_deployment_authorization,
     PolicyType.MODEL_APPROVAL: _check_model_approval,
     PolicyType.PROVIDER: _check_provider,
     PolicyType.DATA_CLASSIFICATION: _check_data_classification,
@@ -370,7 +492,25 @@ EVALUATORS: dict[str, Callable[[Policy, PolicyContext], "str | None"]] = {
     PolicyType.COST_LIMIT: _check_cost_limit,
     PolicyType.TOOL_ACCESS: _check_tool_access,
     PolicyType.HUMAN_APPROVAL: _check_human_approval,
+    PolicyType.RISK_CLASSIFICATION: _check_risk_classification,
 }
+
+
+def policy_tiers(policy: Policy) -> set[int]:
+    """The IRGF tiers a policy is scoped to. Empty means it is not tier-scoped."""
+    tiers = set()
+    for value in policy.option("tiers", []) or []:
+        try:
+            tiers.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return tiers
+
+
+def in_tier_scope(policy: Policy, tier: int | None) -> bool:
+    """Whether a policy applies at this tier. Unclassified meets no tier scope."""
+    scope = policy_tiers(policy)
+    return not scope or tier in scope
 
 
 class PolicyEngine:
@@ -392,8 +532,16 @@ class PolicyEngine:
         if organization is None:
             return decision
 
+        excepted = excepted_policy_ids(organization, context.agent)
         for policy in cls.policies_for(organization):
             if types is not None and policy.policy_type not in types:
+                continue
+            if not in_tier_scope(policy, context.effective_tier):
+                # Scoped to IRGF tiers this request is not at.
+                continue
+            if policy.pk in excepted:
+                # Set aside for this agent by an active IRGF M17 exception.
+                decision.excepted.append(policy)
                 continue
             evaluator = EVALUATORS.get(policy.policy_type)
             if evaluator is None:
