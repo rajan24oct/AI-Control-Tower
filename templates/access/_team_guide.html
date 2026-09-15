@@ -1,0 +1,20 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">What a team is for</div>
+  <div class="ct-card-body small">
+    <ul class="ps-3 mb-0 ct-guide-steps">
+      <li>Agents, applications and MCP servers name the team that owns them.</li>
+      <li>A team budget counts the spend of every agent in the team.</li>
+      <li>Spend by team appears in AI FinOps.</li>
+    </ul>
+  </div>
+</div>
+{% if object %}
+  <div class="ct-card">
+    <div class="ct-card-header">Delete</div>
+    <div class="ct-card-body small">
+      <p class="mb-2">A team can be deleted only while it owns nothing: its budgets would go with it. Otherwise retire it.</p>
+      <button type="submit" class="btn btn-sm btn-outline-danger" formnovalidate formaction="{% url 'access:team_delete' object.pk %}">
+        <i class="bi bi-trash"></i> Delete team</button>
+    </div>
+  </div>
+{% endif %}

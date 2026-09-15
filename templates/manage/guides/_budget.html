@@ -1,0 +1,16 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">How spend is counted</div>
+  <div class="ct-card-body small">
+    <ul class="mb-0 ps-3 ct-guide-steps">
+      <li>Every run's cost, from engine telemetry or served by the AI Gateway, priced from the model registry when the engine reports none.</li>
+      <li>An agent, team, provider or model budget counts only the runs attributable to it; an organization budget counts everything.</li>
+      <li>Thresholds are checked every 15 minutes, and once when you save.</li>
+    </ul>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Hard stops</div>
+  <div class="ct-card-body small">
+    <p class="mb-0">A hard stop acts only where the platform holds the request: AI Gateway calls get <code>402 budget_exceeded</code>. Traffic outside the gateway can only be alerted on. <code>GATEWAY_ENFORCE_BUDGETS=0</code> makes every hard stop advisory at once.</p>
+  </div>
+</div>

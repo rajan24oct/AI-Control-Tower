@@ -1,0 +1,31 @@
+{% if field.is_hidden %}
+  {{ field }}
+{% elif field.field.widget.input_type == "checkbox" and field.field.widget.allow_multiple_selected %}
+  <div class="form-label fw-semibold">{{ field.label }}</div>
+  <div class="ct-check-grid">
+    {% for option in field %}
+      <div class="form-check">
+        {{ option.tag }}
+        <label class="form-check-label" for="{{ option.id_for_label }}">{{ option.choice_label }}</label>
+      </div>
+    {% empty %}
+      <p class="small text-muted mb-0">Nothing to choose from yet.</p>
+    {% endfor %}
+  </div>
+  {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+  {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+{% elif field.field.widget.input_type == "checkbox" %}
+  <div class="form-check">
+    {{ field }}
+    <label class="form-check-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {% if field.help_text %}<div class="form-text mt-0">{{ field.help_text }}</div>{% endif %}
+    {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+  </div>
+{% else %}
+  <label class="form-label fw-semibold" for="{{ field.id_for_label }}">
+    {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+  </label>
+  {{ field }}
+  {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+  {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+{% endif %}

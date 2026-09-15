@@ -19,9 +19,25 @@
       <span class="badge badge-soft text-bg-{{ ai_model.status|status_style }}">{{ ai_model.get_status_display }}</span>
     </div>
   </div>
-  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:models_registry_aimodel_change' ai_model.pk %}">
-    <i class="bi bi-pencil"></i> Edit
-  </a>
+  <div class="d-flex gap-2 flex-wrap justify-content-end">
+    {% if "model.approve" in org_perms %}
+      <form method="post" action="{% url 'inventory:model_approval' ai_model.pk %}" class="m-0">
+        {% csrf_token %}
+        {% if ai_model.approved_for_use %}
+          <input type="hidden" name="decision" value="revoke">
+          <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-shield-x"></i> Revoke approval</button>
+        {% else %}
+          <input type="hidden" name="decision" value="approve">
+          <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-shield-check"></i> Approve for use</button>
+        {% endif %}
+      </form>
+    {% endif %}
+    {% if "model.manage" in org_perms %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:model_edit' ai_model.pk %}">
+        <i class="bi bi-pencil"></i> Edit
+      </a>
+    {% endif %}
+  </div>
 </div>
 
 {% comment %}

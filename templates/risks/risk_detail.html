@@ -17,9 +17,11 @@
       <span class="badge badge-soft text-bg-{{ risk.status|status_style }}">{{ risk.get_status_display }}</span>
     </div>
   </div>
-  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:risks_risk_change' risk.pk %}">
-    <i class="bi bi-pencil"></i> Edit
-  </a>
+  {% if "risk.manage" in org_perms %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'risks:edit' risk.pk %}">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+  {% endif %}
 </div>
 
 <div class="row g-3">

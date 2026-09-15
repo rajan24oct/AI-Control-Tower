@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Teams{% endblock %}
+
+{% block content %}
+{% include "access/_tabs.html" %}
+<div class="ct-card">
+  <div class="ct-card-header">
+    <span>Teams</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ teams|length }}</span>
+      <a class="btn btn-sm btn-primary" href="{% url 'access:team_create' %}"><i class="bi bi-plus-lg"></i> New team</a>
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr><th>Team</th><th>Department</th><th>Lead</th><th class="text-end">Members</th><th>Owns</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for team in teams %}
+          <tr>
+            <td class="small">
+              <a href="{% url 'access:team_edit' team.pk %}" class="fw-semibold text-decoration-none">{{ team.name }}</a>
+              {% if team.description %}<div class="text-muted">{{ team.description|truncatechars:90 }}</div>{% endif %}
+            </td>
+            <td class="small">{{ team.department|default:"—" }}</td>
+            <td class="small">{{ team.lead.get_full_name|default:"—" }}</td>
+            <td class="small text-end">{{ team.member_count }}</td>
+            <td class="small text-muted">
+              {{ team.agent_count }} agent{{ team.agent_count|pluralize }} &middot;
+              {{ team.application_count }} application{{ team.application_count|pluralize }} &middot;
+              {{ team.budget_count }} budget{{ team.budget_count|pluralize }}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ team.status|status_style }}">{{ team.get_status_display }}</span></td>
+            <td class="text-end small"><a href="{% url 'access:team_edit' team.pk %}" class="text-decoration-none">Edit</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-diagram-2"></i><p class="mb-0">No teams yet.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

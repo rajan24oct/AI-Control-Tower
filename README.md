@@ -36,6 +36,7 @@ access on live model and tool calls, while holding the upstream credentials so a
 |---|---|---|
 | **Dashboard & Control Tower** | Executive KPIs for a chosen period, and an end-to-end map of the estate with everything that needs attention | `/`, `/control-tower/` |
 | **AI Landscape** | Registries for applications, agents, models and platform providers — owners, risk, environments, pricing, health | `/inventory/` |
+| **Onboarding** | A guided hub and in-app create and edit pages for providers, models, agents, applications, routing, MCP servers, control policies, approval rules, risks and budgets — permission-checked and audited, with no trip to the admin | `/onboarding/` |
 | **Observability** | Every run with its timeline, tokens, cost and latency; a live monitor pushed over WebSockets | `/executions/` |
 | **AI Gateway** | In-path model calls: policy and budget enforcement, cost-aware routing, fallback chains, circuit breakers, streaming, agent-to-agent messaging | `/gateway/`, `/routing/` |
 | **MCP Gateway** | One registry for every MCP server, tool review and re-review, per-agent access grants, and a single governed MCP endpoint for all of them | `/mcp-gateway/` |
@@ -160,8 +161,7 @@ whenever you like.
 
 On its first run it also prints a **service-account API key** — the only time that key is shown.
 Copy it: it is how external code talks to the API and both gateways. (Lost it? Open the profile
-menu → *Integrations*, select the `langgraph-runtime` service account and run
-*Issue a new API key*.)
+menu → *Integrations*, open the `langgraph-runtime` service account and issue a new key there.)
 
 ### 4. Run
 
@@ -174,7 +174,7 @@ Open <http://localhost:8000> and sign in:
 | Email | Password | Role |
 |---|---|---|
 | `ava.mitchell@northwind.example` | `ControlTower!2026` | Organization Administrator (sees everything) |
-| `admin@northwind.example` | `ControlTower!2026` | Django superuser (for `/admin/`) |
+| `admin@northwind.example` | `ControlTower!2026` | Superuser: the site administrator, who creates organizations |
 
 ![Sign in](docs/screenshots/01-login.png)
 
@@ -311,7 +311,7 @@ which ones the running platform can actually find.
 | `tom.becker@northwind.example` | Tom Becker | Operational Risk Manager | Risk Manager |
 | `chen.wei@northwind.example` | Chen Wei | Head of Customer Operations | Approver |
 | `nadia.faris@northwind.example` | Nadia Faris | Internal Auditor | Auditor |
-| `admin@northwind.example` | Platform Admin | — | Django superuser |
+| `admin@northwind.example` | Platform Admin | — | Superuser (site administrator) |
 
 Signing in as different people is the quickest way to see role-based access at work.
 
@@ -322,7 +322,8 @@ Viewer in another.
 
 | Role | Beyond read access, may… |
 |---|---|
-| Organization Administrator / Super Administrator | Everything, including the second signature on Tier 4 gate decisions, as the Enterprise Governance Sponsor. |
+| Superuser (site administrator) | Not a role but an account flag, set by `createsuperuser`. Everything in every organization, plus creating organizations and managing anyone's membership in any of them. |
+| Organization Administrator / Super Administrator | Everything: people, teams and service accounts, and the second signature on Tier 4 gate decisions, as the Enterprise Governance Sponsor. |
 | AI Platform Administrator | Manage the inventory, providers, models, agents and applications; score their risk classification; request deployment authorizations and exceptions; ingest telemetry; manage costs; read prompts; call the AI Gateway; manage and call the MCP Gateway; use the agent kill-switch. |
 | AI Developer | Manage agents and applications; score their risk classification; request deployment authorizations and exceptions; ingest telemetry; read prompts; call both gateways; use the agent kill-switch. |
 | AI Governance Manager | Decide IRGF gates and exceptions as the AI Governance Body; approve models; approve MCP servers, review tools and mark their action-limit arguments; manage policies and risks; score and countersign risk classifications; resolve drift and run the Control Plane; decide approvals; read the audit trail and prompts; use the agent kill-switch. |
@@ -353,6 +354,25 @@ latency, policy denials, pending approvals, open risks and provider incidents. T
 maps the estate end to end and leads with what needs a person.
 
 ![Control Tower](docs/screenshots/03-control-tower.png)
+
+### Onboarding
+
+**Onboarding** in the header opens a hub that walks the estate in dependency order:
+- providers, models, agents and applications
+- routing and MCP servers
+- policies and rules, budgets and risks
+- IRGF classification and authorization
+
+Each step shows what it still needs, with a button for whatever your role may add.
+
+![Onboarding hub](docs/screenshots/51-onboarding-hub.png)
+
+Every registry and governance record has its own create and edit page, and people, teams and service
+accounts are managed from the profile menu. The menu offers only what the signed-in role may
+create. Each save is checked and written to the audit trail, and editing a system authorized at
+Gate G3 goes through change control.
+
+![Onboarding menu](docs/screenshots/52-onboarding-menu.png)
 
 ### AI Landscape — the registries
 
@@ -478,10 +498,23 @@ it. See [IRGF alignment](docs/irgf-alignment.md#11-phase-3-the-control-plane).
 
 ### Control & Settings
 
-Audit trail, users, teams, integrations (service accounts and API keys), Django settings and the
-Integration Handbook live under the profile menu.
+The profile menu holds the audit trail, the organization's people and machine identities, and the
+Integration Handbook:
+- **Users** lists every member with their role, teams and last sign-in. An organization
+  administrator adds someone by email, changes their role, or removes them. Someone new gets a
+  single-use link to set their own password.
+- **Teams** group people, and own agents, applications and budgets.
+- **Integrations** holds the service accounts that applications call the platform as. Bind each one
+  to the agents it runs, and issue or revoke its API keys. Each key is shown once.
+- **Organizations**, for superusers only, lists every organization on the installation. A
+  superuser creates an organization together with its first administrator, and adds, changes or
+  removes anyone in any organization from its page.
 
 ![Profile menu](docs/screenshots/24-profile-menu.png)
+
+![Users](docs/screenshots/58-users.png)
+
+![A service account and its keys](docs/screenshots/61-service-account.png)
 
 The **Audit Trail** is append-only; every entry carries a content hash so a change made directly in
 the database is still detectable.
@@ -499,26 +532,27 @@ code for Python, TypeScript and common agent frameworks, security model and trou
 
 ## Onboarding your AI estate
 
-Register in dependency order — each record points at the ones before it. Steps 1–4 can be done in
-the admin (`/admin/`) or over the REST API; the rest happen in the web UI and the admin. The
+Register in dependency order — each record points at the ones before it. Everything below is done in
+the web UI, from **Onboarding** in the header and the profile menu, or over the REST API. A
+superuser creates the organization itself, under the profile menu → *Organizations*. The
 [Integration Handbook](http://localhost:8000/docs/integration/#estate) walks through each with
 sample payloads.
 
-1. **Platform provider** — name, `adapter_key` (`openai`, `generic_rest`, `mock`; see
-   `GET /api/v1/adapters/`), endpoint, region and `credential_ref`. Set the variable, then run
-   *Run health check* and *Refresh capabilities from adapter* from the admin. Governance marks it
-   approved.
+1. **Platform provider** — name, adapter (`openai`, `generic_rest`, `mock`; see
+   `GET /api/v1/adapters/`), endpoint, region and `credential_ref`. Set the variable, then press
+   *Health check* and *Refresh capabilities* on its page. Governance presses *Approve for
+   production*.
 2. **Models** — `model_id`, type, context window and per-1K pricing (pricing drives cost and
-   routing). Approve with the admin action *Approve for use*; if a policy requires evaluation
-   evidence, run a suite in the Evaluation Centre first.
+   routing). Governance approves each on its page (*Approve for use*); if a policy requires
+   evaluation evidence, run a suite in the Evaluation Centre first.
 3. **Agent** — a stable `agent_id` (the identifier your code sends), framework, provider, primary
    and fallback models, environment, risk, autonomy level and data classification.
 4. **Application** — owners, criticality, data classification, review date, and the agents, models
    and providers it uses.
-5. **Identity** — create a service account for the application (profile menu → *Integrations*) and
-   run *Issue a new API key*. The key is shown once; store it as a secret. Bind the account to the
-   agents it runs (*Acts as* in the admin): from Tier 3, the gateways refuse an agent any key that is
-   not bound to it.
+5. **Identity** — create a service account for the application (profile menu → *Integrations* →
+   *New service account*), ticking the agents it runs, and issue a key on its page. The key is shown
+   once; store it as a secret. From Tier 3, the gateways refuse an agent any key that is not bound to
+   it.
 6. **MCP servers** — *MCP Gateway → Server Registry → Register server*. Choose Streamable HTTP, set
    the endpoint and `credential_ref`, then **Health check → Approve → Sync tools → review each
    tool → grant agents**. For a tool that moves value, mark which argument carries the amount and
@@ -741,7 +775,9 @@ aig-tower/
 │   ├── models_registry/        Model registry and approvals
 │   ├── agents/                 Agent registry
 │   ├── applications_registry/  Application registry
-│   ├── inventory/              Registry pages (AI Landscape)
+│   ├── inventory/              Registry pages (AI Landscape) and their create and edit pages
+│   ├── onboarding/             The Onboarding hub
+│   ├── access/                 People, teams, service accounts and API keys
 │   ├── executions/             Runs, events, live monitor (Channels)
 │   ├── telemetry/              Telemetry ingestion
 │   ├── gateway/                AI Gateway: pipeline, circuit breakers, agent messaging
@@ -785,6 +821,10 @@ aig-tower/
   applications and agents never hold upstream credentials.
 - **API keys** have the form `act_<prefix>_<secret>`. Only a SHA-256 hash is stored; the raw key is
   shown once. Keys can expire and be revoked, and `last_used_at` shows which are still in use.
+- **People**: an organization always keeps an administrator. Invited people set their own password
+  through a single-use link. An organization's administrators never change the profile or password
+  of someone who also belongs to another organization. Service accounts never hold an administrator
+  role. Only superusers create organizations or grant Super Administrator.
 - **Tenant isolation** is enforced in the data layer: organization-owned records are always queried
   through an organization-scoped manager.
 - **Role-based access** is checked on every page, action and API call, per organization.

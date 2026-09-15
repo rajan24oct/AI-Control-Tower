@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Users{% endblock %}
+
+{% block content %}
+{% include "access/_tabs.html" %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Members</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+      <a class="btn btn-sm btn-primary" href="{% url 'access:member_create' %}"><i class="bi bi-person-plus"></i> Add member</a>
+    </span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm" placeholder="Name, email or job title">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Role</label>
+        <select name="role" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in roles %}
+            <option value="{{ value }}" {% if active_role == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <noscript><div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">Filter</button></div></noscript>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr><th>Person</th><th>Role</th><th>Teams</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for membership in memberships %}
+          <tr>
+            <td class="small">
+              <a href="{% url 'access:member_edit' membership.pk %}" class="fw-semibold text-decoration-none">{{ membership.user.get_full_name|default:membership.user.email }}</a>
+              <div class="text-muted">{{ membership.user.email }}{% if membership.user.job_title %} &middot; {{ membership.user.job_title }}{% endif %}</div>
+            </td>
+            <td><span class="badge badge-soft {% if membership.role in admin_roles %}text-bg-primary{% else %}text-bg-light text-dark{% endif %}">{{ membership.get_role_display }}</span></td>
+            <td class="small">{{ membership.team_names|join:", "|default:"—" }}</td>
+            <td class="small text-muted">{% if membership.user.last_login %}{{ membership.user.last_login|timesince }} ago{% else %}Never{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ membership.status_tone }}">{{ membership.status_label }}</span></td>
+            <td class="text-end small"><a href="{% url 'access:member_edit' membership.pk %}" class="text-decoration-none">Edit</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="ct-empty"><i class="bi bi-people"></i><p class="mb-0">No members match.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

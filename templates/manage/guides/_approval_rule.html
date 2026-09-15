@@ -1,0 +1,16 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">How rules are used</div>
+  <div class="ct-card-body small">
+    <ul class="mb-0 ps-3 ct-guide-steps">
+      <li>Engines ask <code>POST /api/v1/approval-requests/</code> to raise a request; every rule that matches is recorded on it.</li>
+      <li>The gateways cannot wait for a person, so a call a rule holds is refused with <code>202 approval_required</code>.</li>
+      <li>Requests expire after 24 hours unless the engine asks for longer.</li>
+    </ul>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header"><span>Tier 3–4</span><span class="small text-muted">IRGF</span></div>
+  <div class="ct-card-body small">
+    <p class="mb-0">When a request concerns a Tier 3 or 4 system, neither the person who raised it nor the system's owners may decide it: the decision leaves the delivery line.</p>
+  </div>
+</div>

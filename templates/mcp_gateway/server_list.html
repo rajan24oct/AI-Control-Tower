@@ -10,7 +10,7 @@
     <span class="d-flex align-items-center gap-2">
       <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
       {% if can_manage %}
-        <a class="btn btn-sm btn-primary" href="{% url 'admin:mcp_gateway_mcpserver_add' %}">
+        <a class="btn btn-sm btn-primary" href="{% url 'mcp_gateway:server_create' %}">
           <i class="bi bi-plus-lg"></i> Register server
         </a>
       {% endif %}

@@ -1,0 +1,13 @@
+{% with current=request.resolver_match.url_name %}
+<ul class="nav nav-tabs ct-access-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if current == 'members' %}active{% endif %}" href="{% url 'access:members' %}"><i class="bi bi-people"></i> Users</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if current == 'teams' %}active{% endif %}" href="{% url 'access:teams' %}"><i class="bi bi-diagram-2"></i> Teams</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if current == 'service_accounts' %}active{% endif %}" href="{% url 'access:service_accounts' %}"><i class="bi bi-plug"></i> Integrations</a>
+  </li>
+</ul>
+{% endwith %}

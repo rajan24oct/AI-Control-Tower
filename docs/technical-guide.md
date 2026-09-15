@@ -185,6 +185,8 @@ local memory.
 | `apps.agents` | Agent registry |
 | `apps.applications_registry` | Application registry |
 | `apps.inventory` | The AI Landscape registry pages |
+| `apps.onboarding` | The Onboarding hub. Each app's `forms.py` and `manage.py` hold its own create and edit pages |
+| `apps.access` | People, teams, service accounts and API keys, managed in the web UI; organizations, for site administrators |
 | `apps.executions` | Executions, events, traces and the live monitor consumer |
 | `apps.telemetry` | Payload ingestion through execution adapters; raw payload retention |
 | `apps.gateway` | AI Gateway pipeline, provider circuit breakers, agent-to-agent messaging |
@@ -592,17 +594,21 @@ history on each run unless `--executions 0`. On its first run it prints an API k
 `langgraph-runtime` service account. The key is shown only once.
 
 Sign in as `ava.mitchell@northwind.example` (Organization Administrator) or
-`admin@northwind.example` (superuser, for `/admin/`). The README lists every demo user and role.
+`admin@northwind.example` (superuser: the site administrator). The README lists every demo user and
+role.
 
 ### 3.2 Your own organization
 
 1. **Administrator.** `python manage.py migrate`, then `python manage.py createsuperuser` (prompts for
    an email address and a password).
-2. **Organization.** In `/admin/`, **Organizations → Add organization**: name, industry, status
-   *Active*. Under **Organization memberships**, add yourself as **Organization Administrator** and
-   tick **Is default**.
-3. **People.** **Users → Add user**, then give each a membership with the role that fits. Roles are
-   per organization. Create **Teams** to group spend, agents and applications.
+2. **Organization.** Sign in to the app as the superuser. The empty dashboard offers **Create the
+   first organization** (later: profile menu → **Organizations** → **New organization**). Enter the
+   name, industry and status *Active*, and under **First administrator** the person who will run it,
+   which can be you ([3.6](#36-people-teams-and-service-accounts)).
+3. **People.** Sign in to the app as that administrator: profile menu → **Users** → **Add member**,
+   with each person's work email, role and teams. Someone new receives a single-use link to set their
+   password. Create **Teams** from the same menu to group spend, agents and applications
+   ([3.6](#36-people-teams-and-service-accounts)).
 4. **Default governance.** A new organization has no control policies or approval rules. Load the
    platform defaults, which are idempotent (matched by name):
 
@@ -616,28 +622,27 @@ Sign in as `ava.mitchell@northwind.example` (Organization Administrator) or
    `modify_permissions`, and delegate human approval to the approval rules. Review them before
    production traffic depends on the gateways ([6.1](#61-control-policies)).
 
-![Django admin](screenshots/26-admin-home.png)
+![A new organization](screenshots/64-new-organization.png)
 
 ### 3.3 Service accounts and API keys
 
 Every application or engine gets its own service account, so every call is attributable and one key
 can be rotated without touching anything else.
 
-1. **Create the account** in the admin, under **Service accounts → Add service account**, or from the
-   profile menu under **Integrations**. Choose the organization, a name, the external system it
-   represents and a role.
+1. **Create the account** from the profile menu: **Integrations** → **New service account**. Give it
+   a name, the external system it represents, a role, and the agents it may act as.
    - **AI Developer** (the default) grants `telemetry.ingest`, `gateway.invoke` and `mcp.invoke`,
      and can manage agents and applications. It is everything a running application needs.
    - **AI Platform Administrator** also manages providers, models, costs and MCP servers. Use it only
      for a provisioning pipeline that registers providers and models over the API.
-2. **Issue a key**: tick the account, choose **Issue a new API key**, press **Run**. The key,
-   `act_<prefix>_<secret>`, appears once at the top of the page. Only a SHA-256 hash is stored, so
-   copy the key straight into your secret manager.
-3. **Rotate**: issue a new key, deploy it, then revoke the old one under **API keys → Revoke selected
-   keys**. Keys can carry an **Expires at** date, and **Last used at** shows which keys are still in
-   use.
+   - Administrator roles are not offered: a leaked key must never be able to hand out access.
+2. **Issue a key** on the account's page: a name, an optional expiry, **Issue**. The key,
+   `act_<prefix>_<secret>`, is shown once, on a page that is never cached. Only a SHA-256 hash is
+   stored, so copy the key straight into your secret manager.
+3. **Rotate**: issue a new key, deploy it, then press **Revoke** next to the old one. **Last used**
+   shows which keys are still in use. An account set to anything but active refuses every key.
 
-![Issue an API key](screenshots/27-admin-service-accounts.png)
+![A service account and its keys](screenshots/61-service-account.png)
 
 ### 3.4 Onboarding the estate
 
@@ -645,20 +650,98 @@ Register records in dependency order; each one refers to the ones before it.
 
 | Step | Record | Where | Then |
 |---|---|---|---|
-| 1 | Platform provider | Admin, or `POST /api/v1/providers/` | Set the variable named by `credential_ref`; run **Run health check** and **Refresh capabilities from adapter**; governance ticks **Is approved** |
-| 2 | Models | Admin, or `POST /api/v1/models/` | Set `model_id` exactly as the provider expects it, plus pricing per 1,000 tokens; approve with **Approve for use** (`model.approve`) |
-| 3 | Agents | UI, admin, or `POST /api/v1/agents/` | Give it a stable `agent_id` — the identifier your code sends |
-| 4 | Applications | UI, admin, or `POST /api/v1/applications/` | Link its agents, models and providers |
-| 5 | MCP servers | **MCP Gateway → Server Registry → Register server** | **Health check → Approve → Sync tools →** review each tool **→ Grant an agent** access; mark the action-limit arguments of tools that move value |
-| 6 | Service accounts | Admin or **Integrations** | One per application ([3.3](#33-service-accounts-and-api-keys)) |
-| 7 | Guardrails | Routing policies, control policies, budgets | Optional: without a routing policy, the gateway ranks every active model of the requested type |
+| 1 | Platform provider | **Onboarding → New platform provider**, or `POST /api/v1/providers/` | Set the variable named by `credential_ref`; on its page press **Health check** and **Refresh capabilities**; governance presses **Approve for production** (`model.approve`) |
+| 2 | Models | **Onboarding → New model**, or `POST /api/v1/models/` | Set `model_id` exactly as the provider expects it, plus pricing per 1,000 tokens; governance approves it on its page with **Approve for use** (`model.approve`) |
+| 3 | Agents | **Onboarding → New agent**, or `POST /api/v1/agents/` | Give it a stable `agent_id` — the identifier your code sends. It cannot change once saved |
+| 4 | Applications | **Onboarding → New application**, or `POST /api/v1/applications/` | Link its agents, models and providers, and declare its delegation graph |
+| 5 | MCP servers | **Onboarding → Register MCP server** | On its page: **Health check → Approve → Sync tools →** review each tool **→ Grant an agent** access; mark the action-limit arguments of tools that move value |
+| 6 | Service accounts | Profile menu → **Integrations** | One per application, bound to the agents it runs ([3.3](#33-service-accounts-and-api-keys)) |
+| 7 | Guardrails | **Onboarding** → routing policy, control policy, approval rule, budget | Optional: without a routing policy, the gateway ranks every active model of the requested type |
 | 8 | Classification (IRGF S2) | **AI Governance → Risk Classification** | Score each agent and application; someone outside its delivery line countersigns. Complete each acting agent's Agent Card, and bind a service account to every Tier 3–4 agent |
 | 9 | Authorization (IRGF Gate G3) | **Request authorization** on each agent's page, then on the application's | The request page lists the entry criteria for the tier. To enforce S2 and G3 at the gateways, add `risk_classification` and `deployment_authorization` policies with effect `deny` |
 | 10 | Prove it | — | A gateway call naming the agent returns `200`; the MCP catalog lists the tools you enabled; both appear under Executions and MCP Tool Calls, and the Control Plane lists them as verified |
 
-![Add a provider](screenshots/29-admin-add-provider.png)
+The **Onboarding hub** (`/onboarding/`, *Onboarding* in the header) shows these steps with the
+organization's progress on each. It lists what still needs attention, such as credentials the
+platform cannot resolve, tools awaiting review, or systems in production without a Gate G3
+authorization. It also offers a button for everything the signed-in role may add.
 
-![Register an MCP server](screenshots/28-admin-register-mcp-server.png)
+![Onboarding hub](screenshots/51-onboarding-hub.png)
+
+### 3.5 Managing records in the web UI
+
+Every registry and governance record has its own create and edit page. People, teams and service
+accounts are managed from the profile menu, and site administrators create organizations there too
+([3.6](#36-people-teams-and-service-accounts)).
+
+| Record | Create | Permission | Notes |
+|---|---|---|---|
+| Platform provider | Onboarding → New platform provider | `provider.manage` | Health check and capabilities on its page; approval needs `model.approve` |
+| Model | Onboarding → New model, or *Add a model* on a provider | `model.manage` | Approval for use needs `model.approve` |
+| Agent | Onboarding → New agent | `agent.manage` | Includes the Agent Card; `agent_id` is fixed once saved |
+| Application | Onboarding → New application | `application.manage` | Composition and delegation graph; can link its agents' models and providers |
+| Routing policy | Onboarding → New routing policy | `provider.manage` | A provider cannot be both allowed and blocked |
+| MCP server | Onboarding → Register MCP server | `mcp.manage` | The tool prefix is fixed once saved; approval and tool review need `mcp.approve` |
+| MCP access grant | *Grant an agent* on the server's page | `mcp.approve` | Edited or revoked from the same page |
+| Control policy | Onboarding → New control policy | `policy.manage` | Settings checked against the type's schema and value types; IRGF tiers as boxes |
+| Approval rule | Onboarding → New approval rule | `policy.manage` | Needs at least one condition; inactive rules stay listed in the Approval Centre |
+| Risk | Onboarding → New risk | `risk.manage` | Numbered and scored on save; residual needs both likelihood and impact |
+| Budget | Onboarding → New budget | `cost.manage` | Counts against the one target its scope names; checked against spend on save |
+
+- **Audit.** Every save writes the entry the admin writes: the whole record on create, only the
+  changed fields on edit (many-to-many members included), with the person and `source: ui`.
+- **Change control.** Editing an agent or application authorized at Gate G3 is compared with its
+  authorized configuration, exactly as an API or admin edit is. The form says so before you save,
+  and reports any change records the save opened.
+- **Credentials.** Credential references must be environment variable names, so a pasted secret is
+  refused rather than stored.
+- **Scope.** Every choice of another record is limited to the active organization, and names are
+  unique within it.
+
+![Onboarding an agent](screenshots/53-new-agent.png)
+
+### 3.6 People, teams and service accounts
+
+The profile menu's **Users**, **Teams** and **Integrations** pages need `user.manage`, which only
+organization administrators hold. They act on the active organization.
+
+Superusers are the site administrators. Their profile menu adds **Organizations**: every
+organization on the installation, whichever one is active for them. No role grants it; make a
+superuser with `createsuperuser`.
+
+| Act | Where | Rules |
+|---|---|---|
+| Create an organization | Organizations → **New organization** | Site administrators only. The name is unique; the short name (slug) is made from it and fixed once created. The first administrator is added in the same step, as Organization or Super Administrator, and invited like any new member |
+| Edit an organization | Its page → **Edit** | Name, industry, description and status. Not deleted in the app: deleting would delete everything in it |
+| Staff any organization | Its page → **Add member**, or a member's row | Site administrators only. The same rules as the rows below, plus *Their default organization*: where someone lands after signing in. Audited in that organization's trail |
+| Add a member | Users → **Add member** | By work email, with a role and teams. Someone new gets a single-use link to set their password, valid for `PASSWORD_RESET_TIMEOUT` (three days). Someone who already has an account joins without one |
+| Change a role, name or teams | The member's page | Audited as a role change. Only a superuser grants or changes Super Administrator. The last Organization Administrator cannot be demoted |
+| Send a link to set a password | The member's page | Only for people who belong to this organization alone, and never for a superuser |
+| Remove a member | The member's page | Their other organizations are untouched. Nobody removes themselves, or the last administrator |
+| Team | Teams → **New team** | Members and a lead from the organization. A team that owns agents, applications, MCP servers or budgets cannot be deleted; retire it |
+| Service account | Integrations → **New service account** | Roles stop below Organization Administrator. *Agents it may act as* binds it to agents (IRGF link 02) |
+| API key | The service account's page → **Issue** | Shown once, on a page that is never cached; only a hash is stored. Optional expiry. **Revoke** stops it at once, and an inactive account's keys all stop |
+
+- **Email delivery.** Some backends do not deliver mail: the default console backend, `locmem`,
+  `dummy` and `filebased`. With one of these, an invitation for someone new is also shown to the
+  person who sent it, so they can pass it on. A link for an existing account is never shown on
+  screen.
+- **Audit.** Adding, changing and removing members, teams, service accounts and keys are all in the
+  audit trail. A key's entry records its prefix, never the secret.
+- **Change control.** Binding or unbinding an agent authorized at Gate G3 changes its authorized
+  configuration, and is recorded for Gate G4. The service account's edit page says so before you save.
+
+![Users](screenshots/58-users.png)
+
+![A member's page](screenshots/59-member-form.png)
+
+![Teams](screenshots/60-teams.png)
+
+![Setting a password from an invitation](screenshots/62-set-password.png)
+
+![Organizations, for site administrators](screenshots/63-organizations.png)
+
+![An organization and its members](screenshots/65-organization.png)
 
 ---
 
@@ -1013,13 +1096,13 @@ All paths are relative to `/api/v1/`. Superusers pass every permission check.
 | `/mcp-servers/` | read-only | `transport`, `status`, `is_approved`, `access_mode`, `health_status` | name, slug, description, publisher | `name`, `created_at` |
 
 - `id` and timestamps are read-only everywhere; `slug` is generated for providers and applications.
-  A provider's capabilities and health fields are maintained by the platform (health checks and
-  **Refresh capabilities from adapter**).
+  A provider's capabilities and health fields are maintained by the platform: the scheduled health
+  checks, and the **Health check** and **Refresh capabilities** buttons on the provider's page.
 - A write names the owning `organization` by UUID; `GET /api/v1/organizations/` lists yours.
 - **The MCP registry is read-only over the API.** Registering, approving and reviewing MCP servers are
   governed acts with an audit trail, made in the Control Tower UI.
-- Approvals are not registry writes either: approve models with the admin action or UI, which needs
-  `model.approve`.
+- Approvals are not registry writes either: governance approves providers and models on their pages
+  in the web UI, which needs `model.approve`.
 
 ```bash
 # Production agents at autonomy level 3, newest first
@@ -1982,8 +2065,8 @@ its records.
 | Change record (G4) | `apps.lifecycle` | Automatically, when an authorized agent or application, its MCP grants, its bound identities or its tier change | Minor changes move the baseline; material ones wait for G4; major ones suspend the authorization until G4 decides |
 | Exception (M17) | `apps.lifecycle` | Requested for one agent and one policy, or for one drift record | The policy engine skips the excepted policy for that agent, for at most 90 days |
 
-- **Change detection** runs on model signals, so an edit made through the admin, the API or the
-  platform itself is caught the same way. Each difference from the authorized configuration is
+- **Change detection** runs on model signals, so an edit made through the web UI, the admin, the API
+  or the platform itself is caught the same way. Each difference from the authorized configuration is
   classified with IRGF's change table, in `apps/lifecycle/irgf.py`.
 - **Decision rights** are checked on every signature, in `apps/lifecycle/decisions.py`. They settle
   which seat the next signature needs and who may hold it. They exclude owners and requesters from
@@ -2318,6 +2401,14 @@ To refresh only the demo telemetry: `python manage.py generate_executions --purg
 | *Re-score the agent at S2* when approving a change | A major change re-enters S2. Score the agent again, have the tier countersigned, then approve at G4. |
 | An application's request shows *Every acting agent authorized* in red | Authorize its acting agents for the application's environment first; each keeps its own authorization. |
 | *S2 scored against the composite authority* is red | The application's D2 is lower than the autonomy one of its agents reaches. Score the application again at S2 against what its agents can reach together. |
+| A *New …* page answers 403 | The role lacks the permission that record needs ([3.5](#35-managing-records-in-the-web-ui)). The header's *Onboarding* menu lists only what the role may add. |
+| *Enter the name of an environment variable* when saving a provider or MCP server | The credential reference held something other than a variable name, often the secret itself. Put the secret in the platform's environment and name the variable. |
+| The agent ID or tool prefix cannot be edited | By design: engines report against the agent ID and agents call tools by the prefix. Onboard a new record instead. |
+| An invited person never receives the email | The installation does not deliver email; the default console backend prints it. The link was shown to whoever sent the invitation. To deliver mail, set `DJANGO_EMAIL_BACKEND` ([4.4](#44-email)). |
+| *This link has expired* on the set-password page | Links work once, and for `PASSWORD_RESET_TIMEOUT`. Send a new one from the member's page. |
+| A member's name fields are greyed out, or *Send a link* is missing | They also belong to another organization, or are a superuser, so their profile and password are theirs to manage. |
+| *This is the organization's last administrator* | Make someone else an Organization Administrator first. |
+| *Organizations* is missing from the profile menu | Only superusers, the site administrators, see it. Make one with `python manage.py createsuperuser`. |
 
 ---
 
@@ -2603,6 +2694,12 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 | Adapter contracts and types | [`integrations/base/`](../integrations/base/) |
 | Adapter registry and discovery | [`integrations/registry.py`](../integrations/registry.py), [`integrations/bootstrap.py`](../integrations/bootstrap.py) |
 | Reference adapters | [`integrations/providers/mock.py`](../integrations/providers/mock.py), [`integrations/webhooks/generic.py`](../integrations/webhooks/generic.py) |
+| Web UI forms: list, checkbox and JSON fields, organization scoping | [`apps/core/forms.py`](../apps/core/forms.py) |
+| Web UI create and edit pages: permission, audit, messages | [`apps/core/manage.py`](../apps/core/manage.py) |
+| The Onboarding hub's steps | [`apps/onboarding/services.py`](../apps/onboarding/services.py) |
+| People, teams, service accounts and keys in the web UI | [`apps/access/views.py`](../apps/access/views.py), [`apps/access/services.py`](../apps/access/services.py) |
+| Organizations and anyone's memberships, for site administrators | [`apps/access/site_admin.py`](../apps/access/site_admin.py) |
+| Setting a password from an invitation or reset link | [`apps/accounts/views.py`](../apps/accounts/views.py) |
 | IRGF tier rule and S2 records | [`apps/classification/irgf.py`](../apps/classification/irgf.py), [`apps/classification/models.py`](../apps/classification/models.py), [`apps/classification/services.py`](../apps/classification/services.py) |
 | IRGF re-score triggers | [`apps/classification/signals.py`](../apps/classification/signals.py) |
 | Agent identity binding (IRGF link 02) | [`apps/api/identity.py`](../apps/api/identity.py) |

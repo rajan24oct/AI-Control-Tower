@@ -32,7 +32,7 @@
   <div class="col-6 col-md-3 col-xl-2">
     <div class="ct-metric">
       <span class="ct-metric-label">Active Rules</span>
-      <div class="ct-metric-value">{{ rules|length }}</div>
+      <div class="ct-metric-value">{{ active_rule_count }}</div>
       <div class="ct-metric-hint">Trigger conditions</div>
     </div>
   </div>
@@ -164,26 +164,44 @@
   {% include "partials/_pagination.html" %}
 </div>
 
-{% if rules %}
-  <div class="ct-card mt-3">
-    <div class="ct-card-header">Approval Rules</div>
-    <div class="table-responsive">
-      <table class="table ct-table mb-0">
-        <thead><tr><th>Rule</th><th>Conditions</th><th>Severity</th><th class="text-end">Priority</th></tr></thead>
-        <tbody>
-          {% for rule in rules %}
-            <tr>
-              <td class="small fw-semibold">{{ rule.name }}
-                {% if rule.description %}<div class="text-muted fw-normal">{{ rule.description }}</div>{% endif %}
-              </td>
-              <td class="small text-muted">{{ rule.conditions|join:"; "|default:"no conditions (never matches)" }}</td>
-              <td><span class="badge badge-soft text-bg-{{ rule.severity|risk_style }}">{{ rule.get_severity_display }}</span></td>
-              <td class="small text-end">{{ rule.priority }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<div class="ct-card mt-3" id="approval-rules">
+  <div class="ct-card-header">
+    <span>Approval Rules</span>
+    {% if "policy.manage" in org_perms %}
+      <a class="btn btn-sm btn-primary" href="{% url 'approvals:rule_create' %}"><i class="bi bi-plus-lg"></i> New rule</a>
+    {% endif %}
   </div>
-{% endif %}
+  <div class="table-responsive">
+    <table class="table ct-table mb-0">
+      <thead>
+        <tr>
+          <th>Rule</th><th>Conditions</th><th>Severity</th><th>Status</th><th class="text-end">Priority</th>
+          {% if "policy.manage" in org_perms %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for rule in rules %}
+          <tr>
+            <td class="small fw-semibold">{{ rule.name }}
+              {% if rule.description %}<div class="text-muted fw-normal">{{ rule.description }}</div>{% endif %}
+            </td>
+            <td class="small text-muted">{{ rule.conditions|join:"; "|default:"no conditions (never matches)" }}</td>
+            <td><span class="badge badge-soft text-bg-{{ rule.severity|risk_style }}">{{ rule.get_severity_display }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ rule.status|status_style }}">{{ rule.get_status_display }}</span></td>
+            <td class="small text-end">{{ rule.priority }}</td>
+            {% if "policy.manage" in org_perms %}
+              <td class="small text-end"><a href="{% url 'approvals:rule_edit' rule.pk %}" class="text-decoration-none">Edit</a></td>
+            {% endif %}
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">
+            <div class="ct-empty"><i class="bi bi-person-check"></i>
+              <p class="mb-0">No approval rules. Without one, a human-approval policy has nothing to delegate to.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

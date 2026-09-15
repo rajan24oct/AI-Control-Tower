@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Onboarding{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div class="row g-3">
+  <div class="col-12 col-xl-8">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Onboarding path</span>
+        <span class="small text-muted">{{ done }} of {{ steps|length }} steps in place</span>
+      </div>
+      <div class="ct-card-body">
+        {% for step in steps %}
+          <div class="ct-onboard-step">
+            <div class="ct-step-index {% if step.state == 'done' %}is-done{% elif step.state == 'attention' %}is-attention{% endif %}"
+                 title="{% if step.state == 'done' %}In place{% elif step.state == 'attention' %}Needs attention{% elif step.state == 'optional' %}Optional{% else %}Not started{% endif %}">
+              {% if step.state == "done" %}<i class="bi bi-check-lg"></i>{% elif step.state == "attention" %}<i class="bi bi-exclamation-lg"></i>{% else %}{{ forloop.counter }}{% endif %}
+            </div>
+            <div class="flex-grow-1">
+              <p class="ct-step-title">
+                {{ step.title }}
+                {% if step.state == "optional" %}<span class="badge badge-soft text-bg-light text-dark ms-1">Optional</span>{% endif %}
+              </p>
+              <p class="ct-step-detail">{{ step.detail }}</p>
+              {% if step.facts %}
+                <div class="ct-step-facts">
+                  {% for text, tone in step.facts %}
+                    <span class="badge badge-soft text-bg-{{ tone }}">{{ text }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                {% for action in step.actions %}
+                  <a class="btn btn-sm {% if forloop.first %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ action.url }}">
+                    <i class="bi {{ action.icon }}"></i> {{ action.label }}</a>
+                {% endfor %}
+                {% for link in step.links %}
+                  <a class="small text-decoration-none ms-1" href="{{ link.url }}">{{ link.label }} <i class="bi bi-arrow-right"></i></a>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Onboard</div>
+      <div class="ct-card-body">
+        {% if create_links %}
+          <div class="ct-quick-add">
+            {% for link in create_links %}
+              <a href="{{ link.url }}"><i class="bi {{ link.icon }}"></i>{{ link.label }}<span>{{ link.hint }}</span></a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="small text-muted mb-0">Your role can view the estate but not add to it. An administrator, platform administrator or governance manager onboards records.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Who adds what</div>
+      <div class="ct-card-body p-0">
+        <table class="table ct-table mb-0 small">
+          <tbody>
+            <tr><td>Providers, models, routing</td><td class="text-muted">Platform administrators</td></tr>
+            <tr><td>Agents and applications</td><td class="text-muted">AI developers and platform administrators</td></tr>
+            <tr><td>MCP servers</td><td class="text-muted">Platform administrators; governance approves and grants</td></tr>
+            <tr><td>Policies and approval rules</td><td class="text-muted">AI governance managers</td></tr>
+            <tr><td>Risks</td><td class="text-muted">Governance and risk managers</td></tr>
+            <tr><td>Budgets</td><td class="text-muted">Platform administrators</td></tr>
+            <tr><td>People, teams, service accounts</td><td class="text-muted">Organization administrators</td></tr>
+          </tbody>
+        </table>
+        <p class="small text-muted mb-0 p-3">Approving a provider, model or MCP server is always a separate governance decision, so whoever registers one cannot also clear it.</p>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Also needed</div>
+      <div class="ct-card-body small">
+        <ul class="ps-3 mb-0 ct-guide-steps">
+          <li><strong>Identities.</strong> One service account per application, bound to the agents it runs, under
+            {% if "user.manage" in org_perms %}<a href="{% url 'access:service_accounts' %}">Integrations</a>{% else %}<em>Integrations</em>{% endif %}.</li>
+          <li><strong>Enforcement.</strong> A <code>risk_classification</code> and a <code>deployment_authorization</code> control policy make the gateways refuse anything that skipped S2 or G3.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

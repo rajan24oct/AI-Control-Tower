@@ -71,6 +71,10 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   background: var(--ct-green-900);
   padding: 0;
   border-bottom: 1px solid rgba(255, 255, 255, .1);
+  /* Bootstrap's expanded navbar takes a link's side padding from this
+     variable, over any plain .nav-link rule. Eight sections and the account
+     controls share one row at 1440px. */
+  --bs-navbar-nav-link-padding-x: .4rem;
 }
 
 .ct-navbar-inner {
@@ -81,7 +85,7 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: .75rem;
 }
 
 .ct-brand {
@@ -122,13 +126,13 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
 .ct-toggler:focus { box-shadow: none; }
 .ct-toggler i { font-size: 1.2rem; line-height: 1; }
 
-.ct-nav { gap: .15rem; }
+.ct-nav { gap: 0; }
 
 .ct-nav .nav-link {
   color: rgba(255, 255, 255, .8);
   font-size: .8rem;
   font-weight: 500;
-  padding: 1.1rem .8rem;
+  padding: 1.1rem .4rem;
   border-bottom: 2px solid transparent;
   transition: color .12s ease, border-color .12s ease;
 }
@@ -165,7 +169,7 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
 .ct-header-actions {
   display: flex;
   align-items: center;
-  gap: .55rem;
+  gap: .45rem;
   margin-left: auto;
   padding: .5rem 0;
 }
@@ -176,7 +180,7 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   background-color: var(--ct-surface);
   border-color: rgba(255, 255, 255, .25);
   color: var(--ct-ink);
-  max-width: 200px;
+  max-width: 170px;
 }
 .ct-org-select:focus {
   border-color: var(--ct-accent);
@@ -196,6 +200,20 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
 .ct-icon-btn:hover, .ct-user-btn:hover { background: rgba(255, 255, 255, .18); color: #fff; }
 .ct-icon-btn:disabled { opacity: .8; color: #fff; }
 .ct-user-btn { font-size: .78rem; }
+
+/* The name beside the avatar is capped, so a long one cannot push the menu
+   onto a second row. Below 1440px the avatar alone stands for the account;
+   the menu it opens shows who is signed in. */
+.ct-user-name { display: none; }
+@media (min-width: 1440px) {
+  .ct-user-name {
+    display: block;
+    max-width: 6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 
 .ct-avatar {
   display: inline-flex;
@@ -1426,6 +1444,67 @@ mark.ct-pii {
   .ct-stream-status.is-live .ct-stream-dot { animation: none; }
   .ct-row-flash > td, .ct-toast { animation: none; }
 }
+
+/* -- Management forms and onboarding -------------------------------------- */
+
+.ct-form-section .form-label { margin-bottom: .3rem; font-size: .8rem; color: var(--ct-body); }
+.ct-form-section .form-text { font-size: .74rem; }
+.ct-form-section textarea.font-monospace { font-size: .8rem; }
+
+/* Checkbox sets sit in a light well, so a long list reads as one field. */
+.ct-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .3rem 1rem;
+  padding: .55rem .75rem;
+  border: 1px solid var(--ct-rule);
+  border-radius: var(--ct-radius);
+  background: var(--ct-surface-alt);
+}
+.ct-check-grid .form-check { margin: 0; font-size: .82rem; }
+
+.ct-guide-steps li { margin-bottom: .45rem; }
+.ct-guide-steps li:last-child { margin-bottom: 0; }
+
+.ct-onboard-step { display: flex; gap: .9rem; padding: 1rem 0; border-bottom: 1px solid var(--ct-rule); }
+.ct-onboard-step:first-child { padding-top: .25rem; }
+.ct-onboard-step:last-child { padding-bottom: .25rem; border-bottom: 0; }
+.ct-step-index {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--ct-green-900);
+  background: var(--ct-green-100);
+}
+.ct-step-index.is-done { color: #fff; background: var(--ct-success); }
+.ct-step-index.is-attention { color: #fff; background: var(--ct-warning); }
+.ct-step-title { margin: 0; font-size: .9rem; font-weight: 600; color: var(--ct-ink); }
+.ct-step-detail { margin: .15rem 0 .5rem; font-size: .8rem; color: var(--ct-muted); }
+.ct-step-facts { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .55rem; }
+
+.ct-quick-add { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; }
+.ct-quick-add a {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding: .75rem .8rem;
+  border: 1px solid var(--ct-rule);
+  border-radius: var(--ct-radius);
+  background: var(--ct-surface);
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--ct-ink);
+  text-decoration: none;
+}
+.ct-quick-add a i { font-size: 1.1rem; color: var(--ct-green-700); }
+.ct-quick-add a:hover { border-color: var(--ct-green-700); background: var(--ct-green-100); }
+.ct-quick-add a span { font-size: .72rem; font-weight: 400; color: var(--ct-muted); }
 
 /* -- Mobile --------------------------------------------------------------- */
 

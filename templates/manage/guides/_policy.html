@@ -1,0 +1,31 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">Settings for this type</div>
+  <div class="ct-card-body small">
+    <p class="text-muted mb-0" data-show-when="policy_type:">Choose a type to see the settings it understands.</p>
+    {% for type in policy_types %}
+      <div data-show-when="policy_type:{{ type.value }}">
+        <p class="fw-semibold mb-1">{{ type.label }}</p>
+        <p class="text-muted mb-2">With no settings: {{ type.inherent }}.</p>
+        {% if type.keys %}
+          <ul class="mb-0 ps-3">
+            {% for key in type.keys %}<li><code>{{ key }}</code></li>{% endfor %}
+          </ul>
+        {% else %}
+          <p class="mb-0">No settings: it delegates to the approval rules.</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Where it is enforced</div>
+  <div class="ct-card-body small">
+    <ul class="mb-0 ps-3 ct-guide-steps">
+      <li><strong>AI Gateway</strong>: before routing, then against every candidate model.</li>
+      <li><strong>MCP Gateway</strong>: on every tool call; deny tool-access policies also trim the catalog.</li>
+      <li><strong>Agent messages</strong>: a blocked message is refused.</li>
+      <li><strong>Reporting mode</strong>: advisory, through <code>POST /api/v1/policy/check/</code>.</li>
+    </ul>
+    <p class="text-muted mb-0 mt-2">An M17 exception can set one policy aside for one agent for up to 90 days.</p>
+  </div>
+</div>

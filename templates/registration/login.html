@@ -28,6 +28,12 @@
         <h1 class="ct-login-title">Sign in</h1>
         <p class="ct-login-lead">Use your organization account to continue.</p>
 
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }} py-2 small" role="status">
+            <i class="bi bi-check2-circle me-1"></i>{{ message }}
+          </div>
+        {% endfor %}
+
         {% if form.errors %}
           <div class="alert alert-danger py-2 small" role="alert">
             <i class="bi bi-exclamation-circle me-1"></i>

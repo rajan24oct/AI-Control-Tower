@@ -35,7 +35,12 @@
 <div class="ct-card" id="results" data-ajax-region>
   <div class="ct-card-header">
     <span>Budgets</span>
-    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+      {% if "cost.manage" in org_perms %}
+        <a class="btn btn-sm btn-primary" href="{% url 'costs:budget_create' %}"><i class="bi bi-plus-lg"></i> New budget</a>
+      {% endif %}
+    </span>
   </div>
 
   {% include "partials/_pagination.html" with position="top" %}
@@ -52,7 +57,11 @@
       <tbody>
         {% for state in budget_states %}
           <tr>
-            <td class="fw-semibold small">{{ state.budget.name }}</td>
+            <td class="fw-semibold small">
+              {% if "cost.manage" in org_perms %}
+                <a href="{% url 'costs:budget_edit' state.budget.pk %}" class="text-decoration-none">{{ state.budget.name }}</a>
+              {% else %}{{ state.budget.name }}{% endif %}
+            </td>
             <td class="small">
               {{ state.budget.get_scope_display }}
               <div class="text-muted">{{ state.budget.scope_label }}</div>
@@ -86,7 +95,7 @@
           <tr><td colspan="8">
             <div class="ct-empty"><i class="bi bi-wallet2"></i>
               <p class="mb-0">No budgets defined.</p>
-              <p class="small mb-0">Create one in the admin to start tracking spend against a limit.</p>
+              <p class="small mb-0">Create one with <em>New budget</em> to start tracking spend against a limit.</p>
             </div>
           </td></tr>
         {% endfor %}

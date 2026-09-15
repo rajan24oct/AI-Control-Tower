@@ -47,7 +47,12 @@
 <div class="ct-card" id="results" data-ajax-region>
   <div class="ct-card-header">
     <span>Policies</span>
-    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+      {% if "policy.manage" in org_perms %}
+        <a class="btn btn-sm btn-primary" href="{% url 'policies:create' %}"><i class="bi bi-plus-lg"></i> New policy</a>
+      {% endif %}
+    </span>
   </div>
 
   <div class="ct-card-body border-bottom">

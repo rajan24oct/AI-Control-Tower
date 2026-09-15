@@ -51,7 +51,7 @@ Phases 2 to 4 build on that tier:
 | Independent approval decisions for Tier 3–4 systems | Decision rights at Tier 3–4 | Approval Centre |
 | Service accounts bound to the agents they run | Agent chain link 02 · Identity | Admin → Service accounts; both gateways |
 | Suspend and resume an agent | Link 06 · Action; G3 requires a pre-approved kill-switch | Agent page; `POST /api/v1/agents/{id}/suspend/` |
-| Agent Card fields and completeness check | S3 artifact, required at G3 | Agent page; admin; agents API |
+| Agent Card fields and completeness check | S3 artifact, required at G3 | Agent page and its edit form; agents API |
 | The eight-link chain shown per agent | M10 | Agent page |
 
 ## 3. Risk classification: stage S2
@@ -158,7 +158,7 @@ keep this simpler rule, which still keeps the decision out of the delivery line.
 ## 5. Agent identity: chain link 02
 
 IRGF asks that every agent act under a registered identity of its own. A service account can now be
-**bound** to the agents it runs (*Admin → Service accounts → Acts as*).
+**bound** to the agents it runs (*Integrations* → the service account → *Edit* → *Agents it may act as*).
 
 | Caller | Agent named | Result |
 |---|---|---|
@@ -238,7 +238,7 @@ Each agent page also shows the **eight-link chain (M10)** and where the agent st
 |---|---|---|---|
 | Score a system (S2) | System owner, delivery team | `agent.manage` / `application.manage`, or `risk.manage` | AI Developer, AI Platform Administrator, AI Governance Manager, Risk Manager, Org Admin |
 | Countersign (M6) | Risk and Compliance Lead, independent of delivery | `risk.manage`, and not the scorer or an owner | AI Governance Manager, Risk Manager, Org Admin |
-| Bind an identity (link 02) | System owner and Security | Django admin | Administrators |
+| Bind an identity (link 02) | System owner and Security | `user.manage`, on the service account's page | Organization administrators |
 | Pull or release the kill-switch (link 06) | System owner, Security, on-call | `agent.suspend` (release: people only) | AI Developer, AI Platform Administrator, AI Governance Manager, Risk Manager, Org Admin |
 | Decide a Tier 3–4 approval | AI Governance Body | `approval.decide`, and not the requester or an owner | AI Governance Manager, Approver, Org Admin |
 | Request a G3 authorization or an exception | System owner, delivery team | `agent.manage` / `application.manage`, or being the system's owner | AI Developer, AI Platform Administrator, Org Admin, and owners |
@@ -357,7 +357,7 @@ agent's `agent_id` and `in_force`. The `agent` filter takes the agent's platform
 ### Change (S9 · Gate G4)
 
 **What is detected.** Once an agent is authorized, any of these is compared with the authorized
-configuration, whether it comes through the admin, the API or the platform itself:
+configuration, whether it comes through the web UI, the admin, the API or the platform itself:
 - an edit to the agent
 - a new or changed MCP grant
 - an identity bound or unbound
@@ -568,7 +568,7 @@ agents, IRGF chapter 16 asks for two things:
 - its member agents
 - **its delegation graph.** Each edge is `{"from": agent_id, "to": agent_id, "authority": "own" | "caller"}`.
   An edge with `caller` authority means the invoked agent acts with its caller's authority, which is
-  where authority compounds. The graph is declared on the application, in the admin or the API; it
+  where authority compounds. The graph is declared on the application's edit page or over the API; it
   is not inferred from traffic.
 - **its composite reachable authority:**
   - the highest autonomy level among its agents

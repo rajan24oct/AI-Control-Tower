@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+  <div>
+    <a href="{% url 'access:organizations' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Organizations</a>
+    <h2 class="h4 mt-1 mb-1">{{ org.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-{{ org.status|status_style }}">{{ org.get_status_display }}</span>
+      {% if org.industry %}<span class="badge badge-soft text-bg-light text-dark">{{ org.industry }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    {% if is_active_here %}
+      <span class="btn btn-sm btn-outline-secondary disabled"><i class="bi bi-check2"></i> Active for you</span>
+    {% else %}
+      <form method="post" action="{% url 'dashboard:switch_organization' %}" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="organization_id" value="{{ org.pk }}">
+        <input type="hidden" name="next" value="{% url 'dashboard:home' %}">
+        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-in-right"></i> Switch to it</button>
+      </form>
+    {% endif %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'access:organization_edit' org.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+  </div>
+</div>
+
+{% if not admin_count %}
+  <div class="alert alert-warning small py-2">
+    <i class="bi bi-exclamation-triangle"></i> No administrator: until someone here is an Organization Administrator, only a site administrator can manage its people.
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="ct-card">
+      <div class="ct-card-header">Organization</div>
+      <div class="ct-card-body">
+        {% if org.description %}<p class="small">{{ org.description }}</p>{% endif %}
+        <dl class="ct-kv mb-0">
+          <dt>Short name</dt><dd><code>{{ org.slug }}</code></dd>
+          <dt>Created</dt><dd>{{ org.created_at|date:"j M Y" }}</dd>
+          {% for label, value in counts.items %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Members</span>
+        <span class="d-flex align-items-center gap-2">
+          <span class="badge text-bg-secondary">{{ memberships|length }}</span>
+          <a class="btn btn-sm btn-primary" href="{% url 'access:organization_member_create' org.pk %}"><i class="bi bi-person-plus"></i> Add member</a>
+        </span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Person</th><th>Role</th><th>Teams</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for membership in memberships %}
+              <tr>
+                <td class="small">
+                  <a href="{% url 'access:organization_member_edit' org.pk membership.pk %}" class="fw-semibold text-decoration-none">{{ membership.user.get_full_name|default:membership.user.email }}</a>
+                  <div class="text-muted">{{ membership.user.email }}{% if membership.is_default %} &middot; lands here after signing in{% endif %}</div>
+                </td>
+                <td><span class="badge badge-soft {% if membership.role in admin_roles %}text-bg-primary{% else %}text-bg-light text-dark{% endif %}">{{ membership.get_role_display }}</span></td>
+                <td class="small">{{ membership.team_names|join:", "|default:"—" }}</td>
+                <td><span class="badge badge-soft text-bg-{{ membership.status_tone }}">{{ membership.status_label }}</span></td>
+                <td class="text-end small"><a href="{% url 'access:organization_member_edit' org.pk membership.pk %}" class="text-decoration-none">Edit</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5"><div class="ct-empty"><i class="bi bi-people"></i><p class="mb-0">Nobody belongs to it yet.</p></div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="small text-muted mt-2 mb-0">Teams and service accounts are managed inside the organization: switch to it, then use the profile menu.</p>
+  </div>
+</div>
+{% endblock %}

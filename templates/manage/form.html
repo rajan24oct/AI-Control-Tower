@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{{ back_url }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> {{ back_label }}</a>
+  <h2 class="h4 mt-1 mb-1">{{ heading }}</h2>
+  {% if lead %}<p class="text-muted small mb-0">{{ lead }}</p>{% endif %}
+</div>
+
+{% for notice in notices %}
+  <div class="alert alert-{{ notice.tone|default:'info' }} d-flex gap-2 align-items-start small py-2">
+    <i class="bi {{ notice.icon|default:'bi-info-circle' }} mt-1"></i>
+    <div>{{ notice.text }}</div>
+  </div>
+{% endfor %}
+
+<form method="post" novalidate class="ct-manage-form">
+  {% csrf_token %}
+  <div class="row g-3">
+    <div class="col-12 col-xl-8">
+      {% if form.errors %}
+        <div class="alert alert-danger small py-2">
+          <i class="bi bi-exclamation-triangle"></i>
+          {% if form.non_field_errors %}{% for error in form.non_field_errors %}{{ error }} {% endfor %}{% else %}Check the fields marked below.{% endif %}
+        </div>
+      {% endif %}
+
+      {% for section in form.section_list %}
+        <div class="ct-card mb-3 ct-form-section">
+          {% if section.title %}
+            <div class="ct-card-header">
+              <span>{{ section.title }}</span>
+              {% if section.tag %}<span class="small text-muted">{{ section.tag }}</span>{% endif %}
+            </div>
+          {% endif %}
+          <div class="ct-card-body">
+            {% if section.description %}<p class="small text-muted mb-3">{{ section.description }}</p>{% endif %}
+            <div class="row g-3">
+              {% for item in section.fields %}
+                <div class="{{ item.col }}"{% if item.show_when %} data-show-when="{{ item.show_when }}"{% endif %}>
+                  {% include "manage/_field.html" with field=item.field %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+
+      {% block form_extra %}{% endblock %}
+
+      <div class="d-flex gap-2 mb-4">
+        <button type="submit" class="btn btn-primary"><i class="bi {% if creating %}bi-plus-lg{% else %}bi-check2{% endif %}"></i> {{ submit_label }}</button>
+        <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+      {% if guide_template %}{% include guide_template %}{% endif %}
+    </div>
+  </div>
+</form>
+{% endblock %}

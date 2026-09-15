@@ -271,12 +271,48 @@
     });
   }
 
+  /* Management forms: `data-show-when="field:value1,value2"` shows a block only
+     while another field holds one of those values -- a budget's target follows
+     its scope, an MCP server's endpoint follows its transport. A hidden field
+     keeps its value; the server decides what counts. */
+  function bindConditionalFields() {
+    function currentValue(name) {
+      var $inputs = $("form [name='" + name + "']");
+      if ($inputs.is(":radio")) return $inputs.filter(":checked").val() || "";
+      if ($inputs.is(":checkbox")) return $inputs.is(":checked") ? "on" : "";
+      return $inputs.val() || "";
+    }
+    function refresh() {
+      $("[data-show-when]").each(function () {
+        var rule = String($(this).data("show-when")).split(":");
+        var wanted = (rule[1] || "").split(",");
+        $(this).toggle(wanted.indexOf(String(currentValue(rule[0]))) !== -1);
+      });
+    }
+    $(document).on("change", "form select, form input", refresh);
+    $(document).on("controltower:swapped", refresh);
+    refresh();
+  }
+
+  /* A control policy's configuration starts from its type's own settings:
+     choosing a type fills an empty or untouched configuration with a starter. */
+  function bindConfigTemplates() {
+    $(document).on("change", "select[data-config-templates]", function () {
+      var templates = $(this).data("config-templates") || {};
+      var $target = $($(this).data("config-target"));
+      var current = $.trim($target.val());
+      if (current && current !== $target.data("starter")) return;
+      var starter = templates[$(this).val()] || "{}";
+      $target.val(starter).data("starter", starter);
+    });
+  }
+
   $(function () {
     bindFilters();
     bindActions();
     bindPolling();
     bindUnreadCounters();
-
-
+    bindConditionalFields();
+    bindConfigTemplates();
   });
 })(jQuery);

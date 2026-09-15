@@ -1,0 +1,14 @@
+<div class="ct-card">
+  <div class="ct-card-header">About organizations</div>
+  <div class="ct-card-body small">
+    <p>An organization is the tenant boundary. Its agents, applications, policies, budgets and audit trail are invisible to every other organization, and each person's role is set per organization.</p>
+    <ul class="ps-3 mb-3">
+      {% if creating %}
+        <li class="mb-1"><strong>First administrator.</strong> Adds the organization's people, teams and service accounts. It can be you. An organization always keeps at least one.</li>
+      {% endif %}
+      <li class="mb-1"><strong>Short name.</strong> What scripts and commands such as <code>generate_executions</code> call it. It is fixed once the organization exists.</li>
+      <li><strong>Its people.</strong> Add, change or remove anyone from the organization's page, whichever organization is active for you.</li>
+    </ul>
+    <p class="text-muted mb-0">Only site administrators, who are superusers, see these pages. Creating an organization and every membership change are recorded in that organization's audit trail.</p>
+  </div>
+</div>

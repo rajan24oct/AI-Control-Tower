@@ -53,9 +53,11 @@
         {% endif %}
       </form>
     {% endif %}
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:mcp_gateway_mcpserver_change' server.pk %}">
-      <i class="bi bi-pencil"></i> Edit
-    </a>
+    {% if can_manage %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'mcp_gateway:server_edit' server.pk %}">
+        <i class="bi bi-pencil"></i> Edit
+      </a>
+    {% endif %}
   </div>
 </div>
 
@@ -258,8 +260,8 @@
     <div class="ct-card mb-3">
       <div class="ct-card-header">
         <span>Access Grants <span class="badge text-bg-secondary">{{ grants|length }}</span></span>
-        {% if can_manage %}
-          <a href="{% url 'admin:mcp_gateway_mcpaccessgrant_add' %}?server={{ server.pk }}" class="small text-decoration-none">
+        {% if can_approve %}
+          <a href="{% url 'mcp_gateway:grant_create' server.pk %}" class="small text-decoration-none">
             <i class="bi bi-plus-lg"></i> Grant an agent</a>
         {% endif %}
       </div>
@@ -285,6 +287,15 @@
                 <span class="text-muted">Until {{ grant.expires_at|date:"j M Y" }}</span>
               {% else %}
                 <span class="text-muted">No expiry</span>
+              {% endif %}
+              {% if can_approve %}
+                <div class="d-flex gap-2 justify-content-end mt-1">
+                  <a href="{% url 'mcp_gateway:grant_edit' grant.pk %}" class="text-decoration-none">Edit</a>
+                  <form method="post" action="{% url 'mcp_gateway:grant_revoke' grant.pk %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 small text-danger text-decoration-none align-baseline">Revoke</button>
+                  </form>
+                </div>
               {% endif %}
             </div>
           </div>

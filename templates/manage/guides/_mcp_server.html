@@ -1,0 +1,18 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">After registering</div>
+  <div class="ct-card-body small">
+    <ol class="ps-3 mb-0 ct-guide-steps">
+      <li><strong>Set the credential</strong> in the platform's environment under the variable you name here.</li>
+      <li><strong>Health check</strong> on its page.</li>
+      <li><strong>Approve</strong> it (<code>mcp.approve</code>). An unapproved server is invisible to every agent.</li>
+      <li><strong>Sync tools.</strong> New tools arrive awaiting review; enable each one deliberately.</li>
+      <li><strong>Grant agents</strong> access, if the server is restricted.</li>
+    </ol>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Why a prefix</div>
+  <div class="ct-card-body small">
+    <p class="mb-0">An agent sees every permitted tool from every server through one endpoint, <code>/api/v1/mcp/&lt;agent&gt;/</code>, so each tool is named <code>&lt;prefix&gt;__&lt;tool&gt;</code>. A tool whose definition changes upstream goes back to review on its own.</p>
+  </div>
+</div>

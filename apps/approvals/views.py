@@ -81,9 +81,11 @@ class ApprovalCentreView(OrganizationScopedMixin, ListView):
                 "can_decide": self.request.user.has_org_permission(
                     organization, Perm.APPROVAL_DECIDE
                 ),
-                "rules": ApprovalRule.objects.for_organization(organization).filter(
-                    status="active"
-                ),
+                # Every rule, so one that was switched off can be found and
+                # switched back on; the metric counts the active ones.
+                "rules": ApprovalRule.objects.for_organization(organization).order_by("status", "priority", "name"),
+                "active_rule_count": ApprovalRule.objects.for_organization(organization)
+                .filter(status="active").count(),
             }
         )
         return context

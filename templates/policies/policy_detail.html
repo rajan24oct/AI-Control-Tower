@@ -18,7 +18,7 @@
     </div>
   </div>
   {% if can_manage %}
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:policies_policy_change' policy.pk %}">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'policies:edit' policy.pk %}">
       <i class="bi bi-pencil"></i> Edit
     </a>
   {% endif %}

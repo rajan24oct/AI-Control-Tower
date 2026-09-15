@@ -19,9 +19,35 @@
       <span class="badge badge-soft text-bg-{{ provider.status|status_style }}">{{ provider.get_status_display }}</span>
     </div>
   </div>
-  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:providers_aiprovider_change' provider.pk %}">
-    <i class="bi bi-pencil"></i> Edit
-  </a>
+  <div class="d-flex gap-2 flex-wrap justify-content-end">
+    {% if "provider.manage" in org_perms %}
+      <form method="post" action="{% url 'inventory:provider_health' provider.pk %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-heart-pulse"></i> Health check</button>
+      </form>
+      <form method="post" action="{% url 'inventory:provider_capabilities' provider.pk %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Refresh capabilities</button>
+      </form>
+    {% endif %}
+    {% if "model.approve" in org_perms %}
+      <form method="post" action="{% url 'inventory:provider_approval' provider.pk %}" class="m-0">
+        {% csrf_token %}
+        {% if provider.is_approved %}
+          <input type="hidden" name="decision" value="revoke">
+          <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-shield-x"></i> Revoke approval</button>
+        {% else %}
+          <input type="hidden" name="decision" value="approve">
+          <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-shield-check"></i> Approve for production</button>
+        {% endif %}
+      </form>
+    {% endif %}
+    {% if "provider.manage" in org_perms %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:provider_edit' provider.pk %}">
+        <i class="bi bi-pencil"></i> Edit
+      </a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="row g-3">
@@ -99,7 +125,13 @@
     </div>
 
     <div class="ct-card mb-3">
-      <div class="ct-card-header">Models <span class="badge text-bg-secondary">{{ provider.models.count }}</span></div>
+      <div class="ct-card-header">
+        <span>Models <span class="badge text-bg-secondary">{{ provider.models.count }}</span></span>
+        {% if "model.manage" in org_perms %}
+          <a href="{% url 'inventory:model_create' %}?provider={{ provider.pk }}" class="small text-decoration-none">
+            <i class="bi bi-plus-lg"></i> Add a model</a>
+        {% endif %}
+      </div>
       <div class="ct-card-body">
         <div class="row g-2">
           {% for model in provider.models.all %}

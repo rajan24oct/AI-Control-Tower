@@ -18,9 +18,11 @@
       <span class="badge badge-soft text-bg-{{ agent.status|status_style }}">{{ agent.get_status_display }}</span>
     </div>
   </div>
-  <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:agents_aiagent_change' agent.pk %}">
-    <i class="bi bi-pencil"></i> Edit
-  </a>
+  {% if "agent.manage" in org_perms %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:agent_edit' agent.pk %}">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+  {% endif %}
 </div>
 
 {% if agent.is_suspended %}

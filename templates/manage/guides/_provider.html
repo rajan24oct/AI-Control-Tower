@@ -1,0 +1,19 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">After registering</div>
+  <div class="ct-card-body small">
+    <ol class="ps-3 mb-0 ct-guide-steps">
+      <li><strong>Set the credential.</strong> Put the secret in the platform's environment under the variable you name here, for the web processes and the workers alike, then restart them.</li>
+      <li><strong>Health check.</strong> On the provider's page. The registry shows the credential as <em>Resolved</em> once the platform can find it.</li>
+      <li><strong>Refresh capabilities</strong> from the adapter, so routing knows what it can do.</li>
+      <li><strong>Approval.</strong> Someone who holds <code>model.approve</code> approves it for production; the default provider policy requires it.</li>
+      <li><strong>Register its models</strong> with their prices.</li>
+    </ol>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Adapters</div>
+  <div class="ct-card-body small">
+    <p class="mb-2"><code>openai</code> reaches the OpenAI API or any OpenAI-compatible endpoint, <code>generic_rest</code> any JSON-over-HTTP service described by its options, and <code>mock</code> answers without credentials, for demos and tests.</p>
+    <p class="mb-0 text-muted">A new vendor is one adapter class, registered in <code>integrations/</code>.</p>
+  </div>
+</div>

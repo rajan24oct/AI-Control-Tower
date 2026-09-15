@@ -310,7 +310,7 @@ The IRGF alignment explains each record: [gates](docs/irgf-alignment.md#10-phase
 [applications](docs/irgf-alignment.md#12-phase-4-applications-and-composite-authority).
 
 Sign in as `ava.mitchell@northwind.example` (Organization Administrator) or `admin@northwind.example`
-(superuser, for `/admin/`), with the password above. The full list of demo users and what each role
+(superuser: the site administrator, who creates organizations), with the password above. The full list of demo users and what each role
 may do is in the [README](README.md#demo-data-accounts-and-roles).
 
 ![Sign in](docs/screenshots/01-login.png)
@@ -319,7 +319,8 @@ On its **first** run, `seed_demo` also prints an API key for the `langgraph-runt
 It is shown only once; if you missed it, issue a new one ([section 10](#10-give-applications-an-identity)).
 
 A user who belongs to several organizations switches between them with the selector in the header.
-Superusers can see every organization.
+Superusers can see every organization, and create and staff them under the profile menu →
+**Organizations**.
 
 ---
 
@@ -336,27 +337,38 @@ python manage.py createsuperuser        # prompts for an email address and a pas
 
 ### 2. Create the organization
 
-Sign in at `/admin/`, open **Organizations → Add organization**, and fill in the name (the slug
-fills itself in), industry and status *Active*. In the **Organization memberships** section at the
-bottom, add yourself with the role **Organization Administrator** and tick **Is default**. Save.
+Sign in to the app as that superuser. With no organization yet, the dashboard offers **Create the
+first organization**; later, use the profile menu → **Organizations** → **New organization**.
+- Fill in the name (the short name fills itself in), the industry and the status *Active*.
+- Under **First administrator**, enter the person who will run it: yourself, or someone else by work
+  email. Someone new gets a link to set their password, as in step 3.
 
-![Django admin](docs/screenshots/26-admin-home.png)
+![A new organization](docs/screenshots/64-new-organization.png)
 
-A superuser can see every organization even without a membership; everyone else sees only the
-organizations they belong to. Give yourself a membership anyway, so your role is explicit and the
-organization opens by default.
+Superusers are the site administrators. They see every organization. From an organization's page
+they can add, change or remove anyone in it, make someone a Super Administrator, and choose where
+someone lands after signing in. Everyone else sees only the organizations they belong to. Making
+yourself the first administrator keeps your role explicit, and opens the organization by default.
+
+![Organizations](docs/screenshots/63-organizations.png)
 
 ### 3. Invite your people
 
-Create users under **Users → Add user**, then give each one a membership — either in the
-organization's membership section or under **Organization memberships** — with the role that fits.
-Roles are per organization. Create **Teams** if you want spend, agents and applications grouped by
-team.
+Sign in to the app as that administrator and open the profile menu → **Users** → **Add member**.
+Enter each person's work email, their role and their teams. Roles are per organization.
+- Someone new gets an email with a single-use link to set their own password.
+- With the default console email backend nothing is actually sent, so the link is shown to you
+  instead, to pass on.
+- Someone who already has an account, in another organization, simply joins.
+
+Create **Teams** from the same menu if you want spend, agents and applications grouped by team.
+
+![Users](docs/screenshots/58-users.png)
 
 ### 4. Load the default governance (recommended)
 
 A new organization starts with no control policies and no approval rules. Load the platform's
-defaults, then tailor them under *AI Governance → Policies* and in the admin:
+defaults, then tailor them under *AI Governance → Policies* and the Approval Centre's rules:
 
 ```bash
 python manage.py shell -c "from apps.organizations.models import Organization; from apps.core.demo_governance import seed_policies, seed_approval_rules; org = Organization.objects.get(name='Your Organization'); print(len(seed_policies(org)), 'policies,', len(seed_approval_rules(org)), 'approval rules')"
@@ -380,10 +392,15 @@ deployment authorization. Add those once your estate is classified and authorize
 
 ### 5. Onboard the estate
 
-Register, in order: providers ([section 8](#8-connect-real-model-providers)) → models → agents →
-applications → MCP servers ([section 9](#9-connect-mcp-servers)) → service accounts
-([section 10](#10-give-applications-an-identity)). The Integration Handbook's *Onboarding the
-estate* section walks through each with sample API payloads.
+Open **Onboarding** in the header. The hub lists every step in dependency order, shows what each
+still needs, and offers a button for whatever your role may add. The order is providers
+([section 8](#8-connect-real-model-providers)) → models → agents → applications → MCP servers
+([section 9](#9-connect-mcp-servers)) → routing, control policies, approval rules, budgets and risks.
+Each has its own page in the web UI; service accounts
+([section 10](#10-give-applications-an-identity)) are under the profile menu. The Integration
+Handbook's *Onboarding the estate* section shows the same steps over the REST API.
+
+![Onboarding hub](docs/screenshots/51-onboarding-hub.png)
 
 ### 6. Classify and authorize (IRGF)
 
@@ -450,12 +467,14 @@ them afterwards.
 
 ### 3. Register the provider
 
-In the admin: **AI providers → Add AI provider**. Choose the organization, a name, the provider type
-(a label), the adapter key, endpoint, region, authentication method and `credential_ref`.
+**Onboarding → New platform provider**, or *Onboard provider* on the Platform Providers Registry.
+Enter a name, the provider type (a label), the adapter, endpoint, region, authentication method and
+`credential_ref`. The form accepts only an environment variable's name there, so a key pasted by
+mistake is refused rather than stored.
 
-![Add a provider](docs/screenshots/29-admin-add-provider.png)
+![Onboard a platform provider](docs/screenshots/57-new-provider.png)
 
-For `generic_rest`, the `options` field describes the service. Every key is optional; these are the
+For `generic_rest`, the **Adapter options** field describes the service. Every key is optional; these are the
 defaults for an OpenAI-shaped API:
 
 ```json
@@ -474,19 +493,23 @@ defaults for an OpenAI-shaped API:
 
 ### 4. Check it
 
-Select the provider in the admin list and run **Run health check**, then **Refresh capabilities from
-adapter**. The registry shows its health, and whether the credential is **Resolved** or **Missing**.
+On the provider's page, press **Health check**, then **Refresh capabilities**. The registry shows its
+health, and whether the credential is **Resolved** or **Missing**.
 
 ![Providers registry](docs/screenshots/06-providers.png)
 
-Governance then ticks **Is approved** — the default provider policy requires it for production.
+Governance then presses **Approve for production** on the same page, which needs `model.approve`.
+The default provider policy requires approval for production. Registering a provider and approving
+it are separate permissions, so the person who registers one cannot also clear it unless their role
+holds both.
 
 ### 5. Register its models
 
-**AI models → Add AI model**: the provider, a display name, the `model_id` exactly as the provider
-expects it, the type, context window and prices per 1,000 tokens (they drive cost reporting and
-routing). Approve each with the admin action **Approve for use**. If a model-approval policy
-requires evaluation evidence, run a suite in the Evaluation Centre first.
+**Add a model** on the provider's page, or **Onboarding → New model**. Enter the provider, a display
+name, the `model_id` exactly as the provider expects it, the type, context window and prices per
+1,000 tokens (they drive cost reporting and routing). Governance approves each on its page with
+**Approve for use**. If a model-approval policy requires evaluation evidence, run a suite in the
+Evaluation Centre first.
 
 ### 6. Smoke-test through the AI Gateway
 
@@ -514,23 +537,25 @@ GITHUB_MCP_TOKEN=...
 
 ### 2. Register the server
 
-**MCP Gateway → Server Registry → Register server** (or **MCP servers → Add** in the admin):
+**Onboarding → Register MCP server**, or *Register server* on the Server Registry:
 
-- **Name** — its slug becomes the prefix of every tool it contributes (`github__create_issue`).
+- **Name** and **Tool prefix** — the prefix names every tool it contributes (`github__create_issue`).
+  Left blank, it is derived from the name. It cannot change once the server is registered.
 - **Transport** — *Streamable HTTP*, and the server's **endpoint** URL.
-- **Auth method** — *None*, *Bearer token* or *API key header* (then set **Auth header**, default
-  `X-API-Key`), and **Credential ref** naming the variable from step 1.
-- **Access mode** — *Only agents with a grant* (the default) or *Any agent in the organization*.
-- **Data classification**, **risk level**, **owner** and **team** for governance.
+- **Authentication** — *None*, *Bearer token* or *API key header* (then set **Header name**, default
+  `X-API-Key`), and **Credential reference** naming the variable from step 1.
+- **Access** — *Only agents with a grant* (the default) or *Any agent in the organization*.
+- **Data classification**, **risk**, **owner** and **team** for governance.
 - **Options** — static, non-secret headers if the server needs them: `{"headers": {"X-Tenant": "acme"}}`.
 
-![Register an MCP server](docs/screenshots/28-admin-register-mcp-server.png)
+![Register an MCP server](docs/screenshots/56-register-mcp-server.png)
 
 ### 3. Bring it into service
 
 On the server's page, in order: **Health check** → **Approve** (needs `mcp.approve`) → **Sync
 tools** → review each tool (**Enable** or **Disable**) → **Grant an agent** access if the server is
-restricted.
+restricted. Approving, reviewing and granting are governance's acts and need `mcp.approve`; a grant
+can be edited or revoked from the same page.
 
 ![MCP server](docs/screenshots/14-mcp-server.png)
 
@@ -551,21 +576,22 @@ curl -H "X-API-Key: $CONTROL_TOWER_KEY" \
 Every application or engine gets its own service account — never a shared one — so every call is
 attributable and a key can be rotated without touching anything else.
 
-1. In the admin, open **Service accounts → Add service account**. Choose the organization, a name,
-   the external system it represents, and a role. The default, **AI Developer**, grants
-   `telemetry.ingest`, `gateway.invoke` and `mcp.invoke`: everything an application needs.
-2. Back in the list, tick the account, choose **Issue a new API key** and press **Run**. The key
-   (`act_<prefix>_<secret>`) appears once, in the message at the top of the page. Only a hash is
+1. Open the profile menu → **Integrations** → **New service account**. Enter a name, the external
+   system it represents, a role and, under *Agents it may act as*, the agents it runs. The default
+   role, **AI Developer**, grants `telemetry.ingest`, `gateway.invoke` and `mcp.invoke`: everything
+   an application needs. Service accounts cannot be given an administrator role.
+2. On the account's page, name the key, choose when it expires and press **Issue**. The key
+   (`act_<prefix>_<secret>`) is shown once, on the next page, which is never cached. Only a hash is
    stored — copy it straight into your secret manager.
 
-![Issue an API key](docs/screenshots/27-admin-service-accounts.png)
+![A service account and its keys](docs/screenshots/61-service-account.png)
 
 Send it as `X-API-Key: act_...`, `Authorization: Api-Key act_...`, or — on the MCP endpoint —
 `Authorization: Bearer act_...`.
 
-**Rotating a key:** issue a new one, deploy it, then revoke the old one under **API keys** with
-**Revoke selected keys**. Keys can also be given an **Expires at** date, and **Last used at** shows
-which ones are still in use.
+**Rotating a key:** issue a new one, deploy it, then press **Revoke** next to the old one on the
+account's page. **Last used** shows which keys are still in use. Setting the account to anything but
+active stops all of its keys at once.
 
 ---
 

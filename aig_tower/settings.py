@@ -75,6 +75,8 @@ LOCAL_APPS = [
     "apps.evaluations",
     "apps.notifications",
     "apps.inventory",
+    "apps.onboarding",
+    "apps.access",
     "apps.dashboard",
     "apps.api",
     "apps.integrations",

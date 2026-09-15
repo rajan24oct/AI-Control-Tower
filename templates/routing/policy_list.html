@@ -51,6 +51,11 @@
       <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
     </form>
     <div class="d-flex gap-2">
+      {% if "provider.manage" in org_perms %}
+        <a href="{% url 'routing:create' %}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg"></i> New routing policy
+        </a>
+      {% endif %}
       <a href="{% url 'routing:simulator' %}" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-play-circle"></i> Simulator
       </a>

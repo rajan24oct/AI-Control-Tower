@@ -802,7 +802,8 @@
               <strong>one organization</strong> and carries a role like any user.
             </p>
             <p>
-              Create it from the profile menu, under <em>Control and Settings &rarr; Integrations</em>.
+              Create it from the profile menu, under <em>Control and Settings &rarr; Integrations &rarr;
+              New service account</em>, ticking the agents it runs.
               Set <code>external_system</code> to the engine's name &mdash; it lands in the audit trail
               on every write. The default role, <em>AI Developer</em>, already grants
               <code>telemetry.ingest</code>, <code>gateway.invoke</code> and <code>mcp.invoke</code>.
@@ -819,8 +820,8 @@
               recoverable afterwards. Put it straight into your secret manager.
             </p>
             <p>
-              The quickest route is the admin: select the service account and run
-              <em>Issue a new API key</em>. From code:
+              The quickest route is the service account's page: name the key, choose an expiry and
+              press <em>Issue</em>. From code:
             </p>
             <div class="code">
               <div class="code-head"><span>python manage.py shell</span></div>
@@ -936,18 +937,19 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
             <tr><th>Step</th><th>Record</th><th>Register in</th><th>Or over the API</th><th>Needs</th></tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>Platform provider</td><td>Admin &rarr; AI providers</td><td class="path"><code>POST /providers/</code></td><td><code>provider.manage</code></td></tr>
-            <tr><td>2</td><td>Models</td><td>Admin &rarr; AI models</td><td class="path"><code>POST /models/</code></td><td><code>model.manage</code>, <code>model.approve</code></td></tr>
-            <tr><td>3</td><td>Agent</td><td>Admin &rarr; AI agents</td><td class="path"><code>POST /agents/</code></td><td><code>agent.manage</code></td></tr>
-            <tr><td>4</td><td>Application</td><td>Admin &rarr; AI applications</td><td class="path"><code>POST /applications/</code></td><td><code>application.manage</code></td></tr>
+            <tr><td>1</td><td>Platform provider</td><td>Onboarding &rarr; New platform provider</td><td class="path"><code>POST /providers/</code></td><td><code>provider.manage</code></td></tr>
+            <tr><td>2</td><td>Models</td><td>Onboarding &rarr; New model</td><td class="path"><code>POST /models/</code></td><td><code>model.manage</code>, <code>model.approve</code></td></tr>
+            <tr><td>3</td><td>Agent</td><td>Onboarding &rarr; New agent</td><td class="path"><code>POST /agents/</code></td><td><code>agent.manage</code></td></tr>
+            <tr><td>4</td><td>Application</td><td>Onboarding &rarr; New application</td><td class="path"><code>POST /applications/</code></td><td><code>application.manage</code></td></tr>
             <tr><td>5</td><td>Service account and key</td><td>Profile menu &rarr; Integrations</td><td>&mdash;</td><td>administrator</td></tr>
-            <tr><td>6</td><td>MCP servers and tools</td><td>MCP Gateway &rarr; Server Registry</td><td>&mdash;</td><td><code>mcp.manage</code>, <code>mcp.approve</code></td></tr>
-            <tr><td>7</td><td>Routing, policies, budgets</td><td>AI Gateway, AI Governance, AI FinOps</td><td>&mdash;</td><td><code>policy.manage</code>, <code>cost.manage</code></td></tr>
+            <tr><td>6</td><td>MCP servers and tools</td><td>Onboarding &rarr; Register MCP server</td><td>&mdash;</td><td><code>mcp.manage</code>, <code>mcp.approve</code></td></tr>
+            <tr><td>7</td><td>Routing, policies, rules, budgets</td><td>Onboarding &rarr; New routing policy, control policy, approval rule, budget</td><td>&mdash;</td><td><code>provider.manage</code>, <code>policy.manage</code>, <code>cost.manage</code></td></tr>
           </tbody>
         </table>
       </div>
       <p>
-        The registry pages under <em>AI Landscape</em> show every record and link to its edit form.
+        The <em>Onboarding</em> hub in the header walks these steps and shows what each still needs;
+        every record's page links to its edit form.
         Over the API, create payloads name the <code>organization</code> and every related record by
         its <strong>UUID</strong>; only calls your application makes at run time &mdash; telemetry
         and both gateways &mdash; accept the loose identifiers described under
@@ -981,10 +983,10 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
 }</pre>
             </div>
             <p>
-              Then set the variable in the <em>platform's</em> environment and restart it. In the
-              admin, run <em>Run health check</em> and <em>Refresh capabilities from adapter</em> on
-              the provider; the registry shows the credential as <strong>Resolved</strong> once it
-              can find it. Governance marks it <code>is_approved</code> &mdash; the default provider
+              Then set the variable in the <em>platform's</em> environment and restart it. On the
+              provider's page, press <em>Health check</em> and <em>Refresh capabilities</em>; the
+              registry shows the credential as <strong>Resolved</strong> once it can find it.
+              Governance approves it for production on the same page &mdash; the default provider
               policy requires that before production traffic reaches it.
             </p>
           </div>
@@ -1015,8 +1017,8 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
 }</pre>
             </div>
             <p>
-              Approve it with the admin action <em>Approve for use</em>, which the audit trail
-              records as a model approval. Until then the default policy keeps it out of
+              Governance approves it on the model's page (<em>Approve for use</em>, which needs
+              <code>model.approve</code>); the audit trail records it as a model approval. Until then the default policy keeps it out of
               production and the AI Gateway skips it. If a model-approval policy sets
               <code>require_evaluation</code>, run a suite in the <a href="#evaluation">Evaluation
               Centre</a> first: the gateway reads the model's latest completed run.

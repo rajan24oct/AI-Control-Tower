@@ -1,0 +1,25 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">How candidates are ranked</div>
+  <div class="ct-card-body p-0">
+    <table class="table ct-table mb-0 small">
+      <thead><tr><th>Strategy</th><th class="text-end">Cost</th><th class="text-end">Latency</th><th class="text-end">Reliability</th></tr></thead>
+      <tbody>
+        {% for label, weights in strategy_weights %}
+          <tr>
+            <td class="text-nowrap">{{ label }}</td>
+            <td class="text-end">{{ weights.cost|floatformat:2 }}</td>
+            <td class="text-end">{{ weights.latency|floatformat:2 }}</td>
+            <td class="text-end">{{ weights.reliability|floatformat:2 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="small text-muted mb-0 p-3">Signals come from observed traffic. Lower priority numbers are considered first; the first policy that applies decides.</p>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Without a policy</div>
+  <div class="ct-card-body small">
+    <p class="mb-0">The gateway ranks every active, approved model of the requested type and offers a three-model chain. A caller that pins a model gets it first, with the ranking behind it. Try any policy in the <a href="{% url 'routing:simulator' %}">Routing Simulator</a>.</p>
+  </div>
+</div>

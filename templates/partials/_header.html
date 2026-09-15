@@ -137,6 +137,65 @@
             </ul>
           </li>
 
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'onboarding' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Onboarding</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'onboarding:hub' %}">
+                <i class="bi bi-flag"></i> Onboarding Hub</a></li>
+              {% if "application.manage" in org_perms or "agent.manage" in org_perms or "model.manage" in org_perms or "provider.manage" in org_perms %}
+                <li><hr class="dropdown-divider"></li>
+                <li class="dropdown-header">AI Landscape</li>
+                {% if "application.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'inventory:application_create' %}">
+                    <i class="bi bi-window-stack"></i> New application</a></li>
+                {% endif %}
+                {% if "agent.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'inventory:agent_create' %}">
+                    <i class="bi bi-robot"></i> New agent</a></li>
+                {% endif %}
+                {% if "model.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'inventory:model_create' %}">
+                    <i class="bi bi-cpu"></i> New model</a></li>
+                {% endif %}
+                {% if "provider.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'inventory:provider_create' %}">
+                    <i class="bi bi-hdd-network"></i> New platform provider</a></li>
+                {% endif %}
+              {% endif %}
+              {% if "provider.manage" in org_perms or "mcp.manage" in org_perms %}
+                <li><hr class="dropdown-divider"></li>
+                <li class="dropdown-header">Gateways</li>
+                {% if "provider.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'routing:create' %}">
+                    <i class="bi bi-signpost-split"></i> New routing policy</a></li>
+                {% endif %}
+                {% if "mcp.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'mcp_gateway:server_create' %}">
+                    <i class="bi bi-hdd-stack"></i> Register MCP server</a></li>
+                {% endif %}
+              {% endif %}
+              {% if "policy.manage" in org_perms or "risk.manage" in org_perms or "cost.manage" in org_perms %}
+                <li><hr class="dropdown-divider"></li>
+                <li class="dropdown-header">Governance and FinOps</li>
+                {% if "policy.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'policies:create' %}">
+                    <i class="bi bi-file-earmark-ruled"></i> New control policy</a></li>
+                  <li><a class="dropdown-item" href="{% url 'approvals:rule_create' %}">
+                    <i class="bi bi-person-check"></i> New approval rule</a></li>
+                {% endif %}
+                {% if "risk.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'risks:create' %}">
+                    <i class="bi bi-clipboard-data"></i> New risk</a></li>
+                {% endif %}
+                {% if "cost.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'costs:budget_create' %}">
+                    <i class="bi bi-wallet2"></i> New budget</a></li>
+                {% endif %}
+              {% endif %}
+            </ul>
+          </li>
+
         </ul>
 
         <div class="ct-header-actions">
@@ -169,7 +228,7 @@
               <button class="btn btn-sm ct-user-btn dropdown-toggle" data-bs-toggle="dropdown"
                       aria-expanded="false">
                 <span class="ct-avatar">{{ user.initials }}</span>
-                <span class="d-none d-xl-inline">{{ user.get_full_name|default:user.email }}</span>
+                <span class="ct-user-name" title="{{ user.get_full_name|default:user.email }}">{{ user.get_full_name|default:user.email }}</span>
               </button>
               <ul class="dropdown-menu dropdown-menu-end">
                 <li class="dropdown-header">
@@ -185,14 +244,24 @@
                 <li class="dropdown-header">Control and Settings</li>
                 <li><a class="dropdown-item" href="{% url 'audit:list' %}">
                   <i class="bi bi-journal-text"></i> Audit Trail</a></li>
-                <li><a class="dropdown-item" href="{% url 'admin:accounts_user_changelist' %}">
-                  <i class="bi bi-people"></i> Users</a></li>
-                <li><a class="dropdown-item" href="{% url 'admin:organizations_team_changelist' %}">
-                  <i class="bi bi-diagram-2"></i> Teams</a></li>
-                <li><a class="dropdown-item" href="{% url 'admin:api_serviceaccount_changelist' %}">
-                  <i class="bi bi-plug"></i> Integrations</a></li>
-                <li><a class="dropdown-item" href="{% url 'admin:index' %}">
-                  <i class="bi bi-gear"></i> Settings</a></li>
+                {% if "user.manage" in org_perms %}
+                  <li><a class="dropdown-item" href="{% url 'access:members' %}">
+                    <i class="bi bi-people"></i> Users</a></li>
+                  <li><a class="dropdown-item" href="{% url 'access:teams' %}">
+                    <i class="bi bi-diagram-2"></i> Teams</a></li>
+                  <li><a class="dropdown-item" href="{% url 'access:service_accounts' %}">
+                    <i class="bi bi-plug"></i> Integrations</a></li>
+                {% endif %}
+                {% if user.is_superuser %}
+                  {# Site administration: every organization, not only the active one. #}
+                  <li><a class="dropdown-item" href="{% url 'access:organizations' %}">
+                    <i class="bi bi-building"></i> Organizations</a></li>
+                {% endif %}
+                {% if user.is_staff %}
+                  {# Organizations themselves, and anything else only staff should touch. #}
+                  <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                    <i class="bi bi-gear"></i> Django admin</a></li>
+                {% endif %}
                 {% comment %}
                   Opens in its own tab: the handbook carries its own design and
                   replacing the app with it would strand anyone mid-task.

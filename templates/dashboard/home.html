@@ -8,8 +8,15 @@
   <div class="ct-card">
     <div class="ct-card-body ct-empty">
       <i class="bi bi-building"></i>
-      <p class="mb-0">You are not a member of any organization yet.</p>
-      <p class="small">An administrator must add you to one before the Control Tower has anything to show.</p>
+      {% if user.is_superuser %}
+        {# A superuser sees every organization, so for them none exists yet. #}
+        <p class="mb-0">There is no organization yet.</p>
+        <p class="small">As a site administrator, create the first one, with the person who will run it.</p>
+        <a class="btn btn-sm btn-primary" href="{% url 'access:organization_create' %}"><i class="bi bi-plus-lg"></i> Create the first organization</a>
+      {% else %}
+        <p class="mb-0">You are not a member of any organization yet.</p>
+        <p class="small">An administrator must add you to one before the Control Tower has anything to show.</p>
+      {% endif %}
     </div>
   </div>
 {% else %}

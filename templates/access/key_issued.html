@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}New API key{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-xl-8">
+    <div class="ct-card">
+      <div class="ct-card-header"><span><i class="bi bi-key me-1"></i> New key for {{ account.name }}</span><span class="small text-muted">{{ api_key.name }}</span></div>
+      <div class="ct-card-body">
+        <div class="alert alert-warning small py-2">
+          <i class="bi bi-exclamation-triangle"></i>
+          <strong>Copy it now.</strong> This is the only time the key is shown: the platform keeps a hash, never the key.
+          Store it in your secret manager.
+        </div>
+        <label class="form-label small fw-semibold" for="raw-key">API key</label>
+        <div class="input-group mb-3">
+          <input type="text" id="raw-key" class="form-control font-monospace" value="{{ raw_key }}" readonly>
+          <button type="button" class="btn btn-outline-secondary" data-copy="raw-key"><i class="bi bi-clipboard"></i> Copy</button>
+        </div>
+        <dl class="ct-kv row small mb-3">
+          <div class="col-4"><dt>Prefix</dt><dd><code>{{ api_key.prefix }}</code></dd></div>
+          <div class="col-4"><dt>Role</dt><dd>{{ account.get_role_display }}</dd></div>
+          <div class="col-4"><dt>Expires</dt><dd>{{ api_key.expires_at|date:"j M Y"|default:"Never" }}</dd></div>
+        </dl>
+        <p class="small mb-1">Send it as <code>X-API-Key</code>, or as <code>Authorization: Bearer</code> on the MCP endpoint:</p>
+        <pre class="small bg-light border p-2 mb-3"><code>curl -H "X-API-Key: $CONTROL_TOWER_KEY" {{ api_base }}adapters/</code></pre>
+        <a class="btn btn-primary" href="{% url 'access:service_account_detail' account.pk %}">I have stored it</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll("[data-copy]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var input = document.getElementById(button.dataset.copy);
+      input.select();
+      (navigator.clipboard ? navigator.clipboard.writeText(input.value) : Promise.reject()).then(function () {
+        button.innerHTML = '<i class="bi bi-check2"></i> Copied';
+      }, function () { document.execCommand("copy"); });
+    });
+  });
+</script>
+{% endblock %}
