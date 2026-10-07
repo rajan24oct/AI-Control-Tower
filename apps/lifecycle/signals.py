@@ -11,6 +11,7 @@ from __future__ import annotations
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
+from apps.a2a.models import A2AContract
 from apps.agents.models import AIAgent
 from apps.api.models import ServiceAccount
 from apps.applications_registry.models import AIApplication
@@ -46,6 +47,14 @@ def _agent_saved(sender, instance, created, raw=False, **kwargs):
 def _grant_changed(sender, instance, raw=False, **kwargs):
     if not raw:
         _detect_with_systems(AIAgent.objects.filter(pk=instance.agent_id).first())
+
+
+@receiver(post_save, sender=A2AContract)
+@receiver(post_delete, sender=A2AContract)
+def _contract_changed(sender, instance, raw=False, **kwargs):
+    # A contract widens what the sending agent can reach, as a grant does.
+    if not raw:
+        _detect_with_systems(AIAgent.objects.filter(pk=instance.sender_id).first())
 
 
 @receiver(m2m_changed, sender=ServiceAccount.agents.through)

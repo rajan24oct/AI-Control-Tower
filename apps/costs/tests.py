@@ -292,6 +292,8 @@ class BudgetAlertTests(CostFixtureMixin, TestCase):
             scope=BudgetScope.ORGANIZATION,
             amount=Decimal("100.00"),
             alert_thresholds=[50, 75, 90, 100],
+            # Threshold behaviour only; forecast alerts are tested separately.
+            forecast_alerts=False,
         )
 
     def test_default_thresholds_are_applied(self):

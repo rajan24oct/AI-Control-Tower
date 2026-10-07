@@ -186,7 +186,13 @@ class CatalogEntry:
 
 
 class ServerBreaker:
-    """Circuit-breaker rules for MCP servers, kept together in one place."""
+    """Circuit-breaker rules for MCP servers, kept together in one place.
+
+    Works on any record carrying the breaker fields, so the A2A Gateway holds
+    external agents to the same rules with its own settings.
+    """
+
+    label = "MCP"
 
     @staticmethod
     def threshold() -> int:
@@ -229,8 +235,8 @@ class ServerBreaker:
             server.circuit_opened_at = now
             server.circuit_trips += 1
             logger.warning(
-                "MCP circuit opened for %s after %s failures: %s",
-                server.name, server.consecutive_failures, error,
+                "%s circuit opened for %s after %s failures: %s",
+                cls.label, server.name, server.consecutive_failures, error,
             )
         server.save(update_fields=[
             "consecutive_failures", "last_failure_at", "last_error", "circuit_state",

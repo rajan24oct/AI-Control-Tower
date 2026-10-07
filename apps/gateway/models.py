@@ -74,13 +74,12 @@ class ProviderCircuit(BaseModel):
 
 
 class GatewayMessage(OrganizationOwnedModel):
-    """One agent-to-agent message brokered by the gateway.
+    """One agent-to-agent message brokered by the gateway's original mailbox.
 
-    Deliberately a mailbox, not an orchestrator: the gateway records, governs
-    and delivers a message from one registered agent to another. It does not
-    decide what happens next, schedule work, or run a graph -- section 40 puts
-    multi-agent orchestration out of scope, and this stays on the near side of
-    that line.
+    Superseded by the A2A Gateway: every hand-off between agents is now an
+    `apps.a2a.A2ATask`, whichever endpoint it came through, and nothing writes
+    these any more. Kept, read-only, so the messages sent before it -- and the
+    verifications that point at them -- stay on the record.
     """
 
     class Status(models.TextChoices):

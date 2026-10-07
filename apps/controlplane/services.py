@@ -283,13 +283,43 @@ def system_findings(baseline: Baseline, execution) -> list[Finding]:
     return findings
 
 
-def delegation_findings(message, authorizations) -> tuple[list, bool]:
+def communication_findings(baseline: Baseline, task) -> list[Finding]:
+    """Link 04 for hand-offs: the contract a task travelled under, against the authorized ones.
+
+    A hand-off to an open agent needs no contract, so it is inside the boundary
+    by governance's own decision on that agent. An authorization that recorded
+    no contracts at all has nothing to compare with.
+    """
+    authorized = baseline.configuration.get("a2a_contracts")
+    if baseline.authorization is None or task.contract_id is None or authorized is None:
+        return []
+    skill = task.skill_name
+    if any(
+        item.get("to") == task.recipient_name and (not item.get("skills") or (skill and skill in item["skills"]))
+        for item in authorized
+    ):
+        return []
+    recipient = task.recipient.name if task.recipient_id else task.recipient_name
+    return [Finding(
+        "communication_outside_boundary", task.recipient_name,
+        f"{baseline.agent.name} sent work to {recipient} outside its authorized communication boundary.",
+        "The contract it used was granted or widened after Gate G3 authorized the agent, and Gate G4 has not "
+        "approved it.",
+        expected=[f"{item['to']} ({', '.join(item.get('skills') or []) or 'all skills'})" for item in authorized]
+        or "No agent-to-agent contracts",
+        observed=[f"{task.recipient_name} ({skill})" if skill else task.recipient_name],
+    )]
+
+
+def delegation_findings(edge: tuple[str, str], sender_name: str, recipient_name: str,
+                        authorizations) -> tuple[list, bool]:
     """IRGF chapter 16: one agent handing work to another is a delegation.
 
-    Returns (authorization, finding) pairs for every authorized application whose
-    declared graph the message falls outside, and whether any graph covers it.
+    `edge` is the hand-off in the terms delegation graphs use: from an agent_id
+    to an agent_id, or to an external agent's address. Returns (authorization,
+    finding) pairs for every authorized application whose declared graph the
+    hand-off falls outside, and whether any graph covers it.
     """
-    edge = (message.sender.agent_id, message.recipient.agent_id)
     if any(
         edge in {(item["from"], item["to"]) for item in authorization.configuration.get("delegations") or []}
         for authorization in authorizations
@@ -303,7 +333,7 @@ def delegation_findings(message, authorizations) -> tuple[list, bool]:
         declared = [f"{item['from']} → {item['to']}" for item in authorization.configuration.get("delegations") or []]
         findings.append((authorization, Finding(
             "undeclared_delegation", f"{edge[0]}->{edge[1]}",
-            f"{message.sender.name} delegated work to {message.recipient.name}; "
+            f"{sender_name} delegated work to {recipient_name}; "
             f"{authorization.application.name}'s authorization declares no such delegation.",
             "Which agents may invoke which is declared at Gate G3, not left to emerge from traffic.",
             expected=declared or "No delegations declared",
@@ -834,58 +864,76 @@ class ControlPlane:
             logger.exception("Control Plane could not verify MCP tool call %s", pk)
 
     @classmethod
-    def verify_message(cls, message, *, now=None) -> Verification | None:
-        """Check one agent-to-agent message against the declared delegation graphs."""
-        from apps.gateway.models import GatewayMessage
+    def verify_a2a_task(cls, task, *, baselines=None, now=None) -> Verification | None:
+        """Check one agent-to-agent hand-off: the sender's authorized state, and the delegation graphs.
+
+        The sender acted, so its own authorization is the first measure: where it
+        ran, the identity it acted under, and whether the contract it used was
+        part of what Gate G3 authorized. Then every authorized application either
+        agent belongs to: a path none of their graphs declares is integration
+        drift for each of them (IRGF chapter 16).
+        """
         from apps.lifecycle.models import BASELINE_STATUSES, DeploymentAuthorization
 
-        if Verification.objects.filter(message=message).exists():
+        if Verification.objects.filter(a2a_task=task).exists():
             return None
         now = now or timezone.now()
-        findings, governed = [], False
-        if message.status != GatewayMessage.Status.BLOCKED:
+        sender, findings, system, baseline, governed = task.sender, [], [], None, False
+        if sender is not None and task.reached_recipient:
+            baseline = (baselines if baselines is not None else Baselines()).for_agent(sender)
+            environment = (task.execution.environment if task.execution_id else "") or sender.environment
+            findings += deployment_findings(baseline, environment)
+            findings += communication_findings(baseline, task)
+            findings += identity_findings(baseline, task.service_account)
             authorizations = list(
                 DeploymentAuthorization.objects.filter(
-                    organization=message.organization, application__isnull=False,
-                    status__in=BASELINE_STATUSES,
+                    organization=task.organization, application__isnull=False, status__in=BASELINE_STATUSES,
                 ).select_related("application")
             )
-            findings, covered = delegation_findings(message, authorizations)
-            governed = covered or bool(findings)
+            recipient = task.recipient.name if task.recipient_id else task.recipient_name
+            system, covered = delegation_findings(
+                (sender.agent_id, task.recipient_name), sender.name, recipient, authorizations
+            )
+            governed = covered or bool(system) or baseline.authorization is not None
         outcome = (
-            VerificationOutcome.DIVERGES if findings
+            VerificationOutcome.DIVERGES if findings or system
             else VerificationOutcome.CONFORMS if governed
             else VerificationOutcome.UNGOVERNED
         )
         verification = cls._save_verification(
-            organization=message.organization, message=message, agent=message.sender,
-            acted_at=message.created_at, outcome=outcome,
-            findings=[finding.as_entry() for _, finding in findings],
-            **cls._timing(message.sender, message.created_at, now),
+            organization=task.organization, a2a_task=task, agent=sender, acted_at=task.created_at,
+            outcome=outcome,
+            findings=[finding.as_entry() for finding in (*findings, *(finding for _, finding in system))],
+            **cls._timing(sender, task.created_at, now),
         )
         if verification is not None:
             evidence = {
-                "kind": "message", "id": str(message.pk), "at": message.created_at,
-                "label": f"{message.sender.agent_id} → {message.recipient.agent_id}",
+                "kind": "a2a_task", "id": str(task.pk), "at": task.created_at,
+                "label": f"{task.sender_label} → {task.recipient_name}",
             }
-            for authorization, finding in findings:
+            if findings:
+                cls._record_findings(baseline, findings, evidence=evidence, at=task.created_at)
+            for authorization, finding in system:
                 application = authorization.application
                 DriftService.record(
                     application, finding, tier=application.risk_tier, authorization=authorization,
-                    evidence=[evidence], at=message.created_at,
+                    evidence=[evidence], at=task.created_at,
                 )
         return verification
 
     @classmethod
-    def verify_message_by_id(cls, pk) -> None:
-        from apps.gateway.models import GatewayMessage
+    def verify_a2a_task_by_id(cls, pk) -> None:
+        """For the post-save hook: never let verification break the caller."""
+        from apps.a2a.models import A2ATask
 
         try:
-            message = GatewayMessage.objects.select_related("sender", "recipient", "organization").filter(pk=pk).first()
-            if message is not None:
-                cls.verify_message(message)
+            task = A2ATask.objects.select_related(
+                "sender", "recipient", "service_account", "execution", "organization"
+            ).filter(pk=pk).first()
+            if task is not None:
+                cls.verify_a2a_task(task)
         except Exception:
-            logger.exception("Control Plane could not verify agent message %s", pk)
+            logger.exception("Control Plane could not verify A2A task %s", pk)
 
     @classmethod
     def verify_execution(cls, execution, *, baselines=None, now=None) -> Verification | None:
@@ -939,8 +987,8 @@ class ControlPlane:
     @classmethod
     def verify_pending(cls, organization=None, *, now=None, settle=irgf.SETTLE) -> dict:
         """Everything recorded in the look-back window that nobody has verified yet."""
+        from apps.a2a.models import A2ATask
         from apps.executions.models import Execution
-        from apps.gateway.models import GatewayMessage
         from apps.mcp_gateway.models import MCPToolCall
 
         now = now or timezone.now()
@@ -953,21 +1001,21 @@ class ControlPlane:
             verification__isnull=True, created_at__gte=since, status__in=TERMINAL_EXECUTION_STATUSES,
             updated_at__lte=now - settle,
         ).select_related("agent", "application", "model", "service_account", "organization")
-        messages = GatewayMessage.objects.filter(verification__isnull=True, created_at__gte=since).select_related(
-            "sender", "recipient", "organization"
+        tasks = A2ATask.objects.filter(verification__isnull=True, created_at__gte=since).select_related(
+            "sender", "recipient", "service_account", "execution", "organization"
         )
         if organization is not None:
             calls = calls.filter(organization=organization)
             executions = executions.filter(organization=organization)
-            messages = messages.filter(organization=organization)
+            tasks = tasks.filter(organization=organization)
 
-        counts = {"tool_calls": 0, "executions": 0, "messages": 0}
+        counts = {"tool_calls": 0, "executions": 0, "a2a_tasks": 0}
         for call in calls.order_by("created_at"):
             counts["tool_calls"] += bool(cls.verify_tool_call(call, baselines=baselines, now=now))
         for execution in executions.order_by("created_at"):
             counts["executions"] += bool(cls.verify_execution(execution, baselines=baselines, now=now))
-        for message in messages.order_by("created_at"):
-            counts["messages"] += bool(cls.verify_message(message, now=now))
+        for task in tasks.order_by("created_at"):
+            counts["a2a_tasks"] += bool(cls.verify_a2a_task(task, baselines=baselines, now=now))
         return counts
 
     # -- Observers: evaluations, policies, budgets, tool definitions ------------------
@@ -1058,9 +1106,13 @@ class ControlPlane:
     @classmethod
     def observe_budgets(cls, organization=None) -> int:
         """Cost drift: an agent's or application's spend past its approved budget."""
-        from apps.costs.models import BudgetAlert
+        from apps.costs.models import BudgetAlert, BudgetAlertKind
 
-        alerts = BudgetAlert.objects.filter(percentage__gte=100).select_related(
+        # Spend actually past the budget. A forecast alert's percentage is a
+        # projection, not drift that has happened.
+        alerts = BudgetAlert.objects.filter(
+            kind=BudgetAlertKind.THRESHOLD, percentage__gte=100
+        ).select_related(
             "budget", "budget__agent", "budget__application"
         )
         if organization is not None:

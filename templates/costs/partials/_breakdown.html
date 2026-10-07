@@ -1,7 +1,10 @@
 {% load humanize %}
 <div class="col-12 col-md-6 col-xl-3">
   <div class="ct-card h-100">
-    <div class="ct-card-header"><span><i class="bi {{ icon }} me-1"></i> {{ title }}</span></div>
+    <div class="ct-card-header">
+      <span><i class="bi {{ icon }} me-1"></i> {{ title }}</span>
+      {% if dim %}<a class="small text-decoration-none" href="{% url 'costs:explorer' %}?dim={{ dim }}&amp;days={{ days }}">Explore</a>{% endif %}
+    </div>
     <div class="table-responsive">
       <table class="table ct-table align-middle mb-0">
         <thead>

@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% load control_tower humanize a2a_tags %}
+
+{% block title %}A2A Skill Catalog{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Skills</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    {% comment %}
+      Status first, because the question a reviewer arrives with is "what is
+      waiting for me", and the answer should be one click away.
+    {% endcomment %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <a href="?" class="btn btn-sm {% if not active_filters.status %}btn-primary{% else %}btn-outline-secondary{% endif %}">All</a>
+      {% for value, label, count in skill_statuses %}
+        <a href="?status={{ value }}"
+           class="btn btn-sm {% if active_filters.status == value %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+          {{ label }} <span class="badge {% if value == 'pending_review' and count %}text-bg-warning{% else %}text-bg-light{% endif %}">{{ count }}</span>
+        </a>
+      {% endfor %}
+    </div>
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <input type="hidden" name="status" value="{{ active_filters.status }}">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Skill, description or agent">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Agent</label>
+        <select name="agent" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for card in cards %}
+            <option value="{{ card.pk }}" {% if active_filters.agent == card.pk|stringformat:"s" %}selected{% endif %}>{{ card.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Risk</label>
+        <select name="risk" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in risk_levels %}
+            <option value="{{ value }}" {% if active_filters.risk == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>{% sort_th "Skill" "skill" %}{% sort_th "Agent" "agent" %}{% sort_th "Risk" "risk" first="desc" %}{% sort_th "Status" "status" %}{% sort_th "Last seen" "seen" first="desc" %}<th class="text-end">Review</th></tr>
+      </thead>
+      <tbody>
+        {% for skill in skills %}
+          <tr>
+            <td>
+              <code class="small">{{ skill.qualified_name }}</code>
+              <div class="small text-muted" style="max-width:34rem">{{ skill.description|truncatechars:160 }}</div>
+            </td>
+            <td class="small">
+              <a href="{% url 'a2a:card_detail' skill.card.pk %}" class="text-decoration-none">{{ skill.card.name }}</a>
+              {% if skill.card.is_external %}<div><span class="badge badge-soft text-bg-light text-dark">External</span></div>{% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ skill.risk_level|risk_style }}">{{ skill.get_risk_level_display }}</span></td>
+            <td class="text-nowrap">
+              <span class="badge badge-soft text-bg-{{ skill.status|skill_status_style }}">{{ skill.get_status_display }}</span>
+              {% if skill.changed_since_review %}<div><span class="badge badge-soft text-bg-danger">Changed since review</span></div>{% endif %}
+            </td>
+            <td class="small text-nowrap">{{ skill.last_seen_at|naturaltime }}</td>
+            <td class="text-end">
+              {% if can_approve and skill.status != "removed" %}
+                <div class="d-flex gap-1 justify-content-end">
+                  {% if skill.status != "enabled" %}
+                    <form method="post" action="{% url 'a2a:skill_review' skill.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#results">
+                      {% csrf_token %}
+                      <input type="hidden" name="decision" value="enable">
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn btn-sm btn-outline-success">Enable</button>
+                    </form>
+                  {% endif %}
+                  {% if skill.status != "disabled" %}
+                    <form method="post" action="{% url 'a2a:skill_review' skill.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#results">
+                      {% csrf_token %}
+                      <input type="hidden" name="decision" value="disable">
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Disable</button>
+                    </form>
+                  {% endif %}
+                </div>
+              {% elif skill.reviewed_by %}
+                <span class="small text-muted">{{ skill.reviewed_by.get_full_name|default:skill.reviewed_by.email }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">
+            <div class="ct-empty"><i class="bi bi-list-stars"></i>
+              <p class="mb-0">No skills match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

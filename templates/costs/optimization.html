@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% load static control_tower humanize finops %}
+
+{% block title %}Cost Optimization{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="results" data-ajax-region>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <span class="small text-muted">
+      {% if last_run %}Analysis last refreshed {{ last_run|naturaltime }}; it runs daily over the last 30 days.{% else %}The analysis runs daily over the last 30 days.{% endif %}
+    </span>
+    {% if can_manage %}
+      <form method="post" action="{% url 'costs:optimization_run' %}" data-ajax-action data-ajax-refresh="#results">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-cpu"></i> Re-analyse now</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-5">
+      <div class="ct-metric-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div class="ct-metric"><span class="ct-metric-label">Potential savings</span>
+          <div class="ct-metric-value text-success">${{ summary.open_savings|floatformat:0|intcomma }}<span class="fs-6 text-muted"> /mo</span></div>
+          <div class="ct-metric-hint">Open and accepted recommendations</div></div>
+        <div class="ct-metric"><span class="ct-metric-label">Annualised</span>
+          <div class="ct-metric-value">${{ summary.open_annual|floatformat:0|intcomma }}</div>
+          <div class="ct-metric-hint">If all were implemented</div></div>
+        <div class="ct-metric"><span class="ct-metric-label">Implemented</span>
+          <div class="ct-metric-value">${{ summary.implemented_savings|floatformat:0|intcomma }}<span class="fs-6 text-muted"> /mo</span></div>
+          <div class="ct-metric-hint">Estimated, at the time of the decision</div></div>
+        <div class="ct-metric"><span class="ct-metric-label">To review</span>
+          <div class="ct-metric-value">{{ summary.open_count }}</div>
+          <div class="ct-metric-hint">Recommendations open or accepted</div></div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-7">
+      <div class="ct-card h-100">
+        <div class="ct-card-header"><span><i class="bi bi-bar-chart me-1"></i> Monthly savings by kind</span></div>
+        <div class="ct-card-body">
+          <div style="height:190px"><canvas data-savings="savings-data" role="img" aria-label="Potential monthly savings by kind of recommendation"></canvas></div>
+          <script type="application/json" id="savings-data">{{ chart_json|safe }}</script>
+          <p class="small text-muted mb-0 mt-2">Estimates are conservative and can overlap where two recommendations touch the same agent.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <form method="get" class="ct-card mb-3" data-ajax-filter="#results">
+    <div class="ct-card-body d-flex flex-wrap gap-2 align-items-center">
+      <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm" style="max-width:220px" placeholder="Search">
+      <select name="status" class="form-select form-select-sm" style="width:auto" aria-label="Status">
+        <option value="actionable" {% if status_filter == "actionable" %}selected{% endif %}>Open and accepted</option>
+        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All statuses</option>
+        {% for value, label in statuses %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <select name="category" class="form-select form-select-sm" style="width:auto" aria-label="Category">
+        <option value="">All categories</option>
+        {% for value, label in categories %}<option value="{{ value }}" {% if active_filters.category == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <select name="kind" class="form-select form-select-sm" style="width:auto" aria-label="Kind">
+        <option value="">All kinds</option>
+        {% for value, label in kinds %}<option value="{{ value }}" {% if active_filters.kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <select name="confidence" class="form-select form-select-sm" style="width:auto" aria-label="Confidence">
+        <option value="">Any confidence</option>
+        <option value="high" {% if active_filters.confidence == "high" %}selected{% endif %}>High confidence</option>
+        <option value="medium" {% if active_filters.confidence == "medium" %}selected{% endif %}>Medium confidence</option>
+        <option value="low" {% if active_filters.confidence == "low" %}selected{% endif %}>Low confidence</option>
+      </select>
+      <span class="ms-auto small text-muted">{{ page_obj.paginator.count }} recommendation{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
+  </form>
+
+  {% include "partials/_pagination.html" with position="top" %}
+
+  {% for rec in recommendations %}
+    <div class="ct-card ct-reco mb-3 {% if rec.category == 'governance' %}is-governance{% endif %} {% if not rec.is_actionable %}is-closed{% endif %}" data-ajax-row>
+      <div class="ct-card-body">
+        <div class="d-flex flex-wrap gap-3 justify-content-between">
+          <div class="flex-grow-1" style="min-width:260px;max-width:820px">
+            <div class="ct-reco-meta mb-1">
+              <span class="badge badge-soft text-bg-{% if rec.category == 'governance' %}info{% elif rec.category == 'developer_tools' %}dark{% else %}primary{% endif %}">{{ rec.get_category_display }}</span>
+              <span class="badge text-bg-light">{{ rec.get_kind_display }}</span>
+              <span class="small text-muted">Confidence <strong>{{ rec.get_confidence_display|lower }}</strong> &middot; effort <strong>{{ rec.get_effort_display|lower }}</strong></span>
+              {% if rec.status != "open" %}<span class="badge badge-soft text-bg-{% if rec.status == 'implemented' %}success{% elif rec.status == 'accepted' %}warning{% else %}secondary{% endif %}">{{ rec.get_status_display }}</span>{% endif %}
+            </div>
+            <h3>{{ rec.title }}</h3>
+            <p class="small mb-2 mt-1">{{ rec.rationale }}</p>
+            <p class="small mb-2"><strong>What to do.</strong> {{ rec.action }}</p>
+            <div class="small text-muted d-flex flex-wrap gap-3">
+              {% if rec.agent %}<a href="{% url 'inventory:agent_detail' rec.agent.pk %}" class="text-decoration-none"><i class="bi bi-robot"></i> {{ rec.agent.name }}</a>{% endif %}
+              {% if rec.model %}<span><i class="bi bi-cpu"></i> {{ rec.model.model_name }}{% if rec.suggested_model %} <i class="bi bi-arrow-right"></i> {{ rec.suggested_model.model_name }}{% endif %}</span>{% endif %}
+              {% if rec.team %}<span><i class="bi bi-people"></i> {{ rec.team.name }}</span>{% endif %}
+              {% if rec.subscription %}<a href="{% url 'costs:developer_tools' %}{% if rec.team %}?team={{ rec.team.name|urlencode }}{% endif %}" class="text-decoration-none"><i class="bi bi-github"></i> {{ rec.subscription.name }}</a>{% endif %}
+              <span><i class="bi bi-clock"></i> First seen {{ rec.first_detected_at|naturaltime }}</span>
+            </div>
+            {% if rec.evidence %}
+              <details class="ct-chart-table">
+                <summary>Evidence</summary>
+                <div class="ct-chart-table-body">
+                  {% if rec.evidence.seats %}
+                    <table class="table table-sm mb-0 small">
+                      <thead><tr><th>Person</th><th>Login</th><th class="text-end">Detail</th></tr></thead>
+                      <tbody>{% for seat in rec.evidence.seats %}
+                        <tr><td>{{ seat.name }}</td><td class="text-muted">{{ seat.login }}</td>
+                          <td class="text-end">{% if seat.idle_days is not None %}{% if seat.idle_days %}idle {{ seat.idle_days }} days{% endif %}{% elif "idle_days" in seat %}never used{% endif %}{% if seat.peak_monthly_requests is not None %}peak {{ seat.peak_monthly_requests|floatformat:0 }} requests/month{% endif %}{% if seat.avg_monthly_requests is not None %}avg {{ seat.avg_monthly_requests|floatformat:0 }} requests/month{% endif %}</td></tr>
+                      {% endfor %}</tbody>
+                    </table>
+                  {% elif rec.evidence.top_errors %}
+                    <table class="table table-sm mb-0 small">
+                      <thead><tr><th>Most common error</th><th class="text-end">Runs</th></tr></thead>
+                      <tbody>{% for e in rec.evidence.top_errors %}<tr><td>{{ e.error }}</td><td class="text-end">{{ e.count }}</td></tr>{% endfor %}</tbody>
+                    </table>
+                  {% else %}
+                    <dl>{% for key, value in rec.evidence.items %}<dt>{{ key|evidence_label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+                  {% endif %}
+                </div>
+              </details>
+            {% endif %}
+            {% if rec.decision_note or rec.decided_by %}
+              <p class="small text-muted mt-2 mb-0"><i class="bi bi-chat-left-text"></i>
+                {{ rec.get_status_display }} by {{ rec.decided_by.get_full_name|default:"—" }} {{ rec.decided_at|naturaltime }}{% if rec.decision_note %}: “{{ rec.decision_note }}”{% endif %}</p>
+            {% endif %}
+          </div>
+          <div class="text-end" style="min-width:170px">
+            {% if rec.estimated_monthly_savings %}
+              <div class="ct-reco-savings">${{ rec.estimated_monthly_savings|floatformat:2|intcomma }}</div>
+              <div class="small text-muted">a month &middot; ${{ rec.annual_savings|floatformat:0|intcomma }} a year</div>
+            {% else %}
+              <div class="ct-reco-savings text-muted" style="font-size:1rem">Risk control</div>
+              <div class="small text-muted">${{ rec.current_monthly_cost|floatformat:0|intcomma }} a month unwatched</div>
+            {% endif %}
+            {% if can_manage %}
+              <form method="post" action="{% url 'costs:recommendation_decide' rec.pk %}" class="mt-2 d-flex flex-column gap-1 align-items-end"
+                    data-ajax-action data-ajax-refresh="#results">
+                {% csrf_token %}
+                {# Set by the clicked button: an AJAX post does not carry the submitter's value. #}
+                <input type="hidden" name="decision" value="" data-decision>
+                <input type="text" name="note" class="form-control form-control-sm" placeholder="Note (optional)" style="max-width:190px">
+                <div class="btn-group btn-group-sm">
+                  {% if rec.status == "open" %}
+                    <button type="submit" name="decision" value="accept" class="btn btn-outline-secondary">Accept</button>
+                  {% endif %}
+                  {% if rec.is_actionable %}
+                    <button type="submit" name="decision" value="implement" class="btn btn-outline-secondary">Done</button>
+                    <button type="submit" name="decision" value="dismiss" class="btn btn-outline-secondary">Dismiss</button>
+                  {% else %}
+                    <button type="submit" name="decision" value="reopen" class="btn btn-outline-secondary">Reopen</button>
+                  {% endif %}
+                </div>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="ct-card"><div class="ct-card-body ct-empty">
+      <i class="bi bi-lightbulb"></i>
+      <p class="mb-0">No recommendations match.</p>
+      <p class="small mb-0">Run the analysis, or widen the filters.</p>
+    </div></div>
+  {% endfor %}
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/finops.js' %}"></script>
+{% endblock %}

@@ -13,27 +13,70 @@ from apps.notifications.models import NotificationCategory, NotificationSeverity
 from apps.notifications.services import NotificationService
 
 
+def _with_routed(organization, category, extra) -> list:
+    """The people a category routes to, plus anyone a record names itself."""
+    return [*NotificationService.recipients_for(organization, category), *extra]
+
+
 def budget_alert(alert) -> list:
-    severity = (
-        NotificationSeverity.CRITICAL if alert.threshold >= 100 else NotificationSeverity.WARNING
-    )
-    over = " and is over budget" if alert.threshold >= 100 else ""
+    budget = alert.budget
+    if alert.is_forecast:
+        severity = NotificationSeverity.WARNING
+        title = f"{budget.name} is forecast to exceed its budget"
+        body = (
+            f"At the current rate, spend will reach {alert.currency} {alert.spend:.2f} against a "
+            f"limit of {alert.currency} {alert.budget_amount:.2f} ({alert.percentage:.0f}%) by "
+            f"{alert.period_end}. There is still time to act."
+        )
+    else:
+        severity = (
+            NotificationSeverity.CRITICAL if alert.threshold >= 100 else NotificationSeverity.WARNING
+        )
+        over = " and is over budget" if alert.threshold >= 100 else ""
+        title = f"{budget.name} reached {alert.threshold}% of budget"
+        body = (
+            f"Spend is {alert.currency} {alert.spend:.2f} against a limit of "
+            f"{alert.currency} {alert.budget_amount:.2f}{over}, for the period "
+            f"starting {alert.period_start}."
+        )
 
     return NotificationService.notify(
         organization=alert.organization,
         category=NotificationCategory.BUDGET_ALERT,
         severity=severity,
-        title=f"{alert.budget.name} reached {alert.threshold}% of budget",
-        body=(
-            f"Spend is {alert.currency} {alert.spend:.2f} against a limit of "
-            f"{alert.currency} {alert.budget_amount:.2f}{over}, for the period "
-            f"starting {alert.period_start}."
+        title=title,
+        body=body,
+        recipients=_with_routed(
+            alert.organization, NotificationCategory.BUDGET_ALERT, budget.alert_recipients()
         ),
-        url=reverse("costs:budgets"),
+        url=reverse("costs:budget_detail", args=[budget.pk]),
         # One notification per threshold crossing, not one per scheduled sweep.
         dedupe_key=f"budget_alert:{alert.pk}",
         resource_type="costs.BudgetAlert",
         resource_id=alert.pk,
+    )
+
+
+def cost_alert(event) -> list:
+    rule = event.rule
+    extra = list(rule.recipients.filter(is_active=True))
+    if rule.owner_id:
+        extra.append(rule.owner)
+    recipients = (
+        _with_routed(event.organization, NotificationCategory.COST_ALERT, extra)
+        if rule.notify_cost_managers else extra
+    )
+    return NotificationService.notify(
+        organization=event.organization,
+        category=NotificationCategory.COST_ALERT,
+        severity=event.severity,
+        title=f"Cost alert: {rule.name}",
+        body=event.summary,
+        recipients=recipients,
+        url=reverse("costs:governance"),
+        dedupe_key=f"cost_alert:{event.pk}",
+        resource_type="costs.CostAlertEvent",
+        resource_id=event.pk,
     )
 
 

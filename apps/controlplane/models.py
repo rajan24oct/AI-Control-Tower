@@ -171,10 +171,14 @@ class Verification(OrganizationOwnedModel):
         "mcp_gateway.MCPToolCall", null=True, blank=True, on_delete=models.CASCADE,
         related_name="verification",
     )
-    #: Agent-to-agent delegation through the gateway (IRGF chapter 16).
+    #: A message through the agent mailbox before the A2A Gateway, kept for its history.
     message = models.OneToOneField(
         "gateway.GatewayMessage", null=True, blank=True, on_delete=models.CASCADE,
         related_name="verification",
+    )
+    #: Agent-to-agent hand-off through the A2A Gateway: a delegation (IRGF chapter 16).
+    a2a_task = models.OneToOneField(
+        "a2a.A2ATask", null=True, blank=True, on_delete=models.CASCADE, related_name="verification",
     )
     agent = models.ForeignKey(
         "agents.AIAgent", null=True, blank=True, on_delete=models.SET_NULL, related_name="verifications"
@@ -194,9 +198,10 @@ class Verification(OrganizationOwnedModel):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(execution__isnull=False, tool_call__isnull=True, message__isnull=True)
-                    | Q(execution__isnull=True, tool_call__isnull=False, message__isnull=True)
-                    | Q(execution__isnull=True, tool_call__isnull=True, message__isnull=False)
+                    Q(execution__isnull=False, tool_call__isnull=True, message__isnull=True, a2a_task__isnull=True)
+                    | Q(execution__isnull=True, tool_call__isnull=False, message__isnull=True, a2a_task__isnull=True)
+                    | Q(execution__isnull=True, tool_call__isnull=True, message__isnull=False, a2a_task__isnull=True)
+                    | Q(execution__isnull=True, tool_call__isnull=True, message__isnull=True, a2a_task__isnull=False)
                 ),
                 name="verification_has_one_action",
             ),
@@ -209,8 +214,10 @@ class Verification(OrganizationOwnedModel):
     def kind(self) -> str:
         if self.tool_call_id:
             return "tool_call"
+        if self.a2a_task_id:
+            return "a2a_task"
         return "message" if self.message_id else "execution"
 
     @property
     def action_id(self):
-        return self.tool_call_id or self.message_id or self.execution_id
+        return self.tool_call_id or self.a2a_task_id or self.message_id or self.execution_id

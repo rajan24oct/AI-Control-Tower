@@ -300,6 +300,7 @@ class Command(BaseCommand):
         applications = self._applications(organization, agents, models, providers, teams, users)
         self._service_account(organization)
         superuser_created = self._superuser(options["superuser"], password)
+        from apps.a2a.demo import seed_a2a_traffic
         from apps.controlplane.signals import deferred
         from apps.core.demo_irgf import seed_control_plane, seed_gates, seed_irgf, seed_systems
 
@@ -310,9 +311,18 @@ class Command(BaseCommand):
             governance = self._governance(
                 organization, users, teams, applications, agents, models, providers
             )
+            # FinOps: who caused the spend, GitHub Copilot, scoped budgets,
+            # alert rules and the first optimization run.
+            from apps.costs.demo import seed_finops
+
+            finops = seed_finops(organization, teams, agents, users)
             # MCP traffic runs after governance so the gateway judges it against
             # the seeded policies: its refusals are the policies' own decisions.
             mcp = self._mcp(organization, agents, teams, users)
+            # Agent-to-agent: the published agents, their reviewed skills and the
+            # contracts between them -- before Gate G3 authorizes the agents that
+            # hold them, so the contracts are part of what G3 signs.
+            a2a = self._a2a(organization, agents, teams, users)
 
             # IRGF: S2 classifications, identities and Agent Cards (Phase 1), then
             # G3 authorizations, a G4 change and an M17 exception (Phase 2), then
@@ -320,6 +330,7 @@ class Command(BaseCommand):
             irgf = seed_irgf(organization, agents, applications, users)
             gates = seed_gates(organization, agents, users)
             systems = seed_systems(organization, agents, applications, users)
+            a2a["tasks"] = seed_a2a_traffic(organization, agents, users)
             plane = seed_control_plane(organization, agents, users)
 
         self._say()
@@ -339,12 +350,20 @@ class Command(BaseCommand):
             f"1 pricing version"
         )
         self._say(
+            f"  FinOps: {finops['seats']} GitHub Copilot seats, {finops['budgets']} scoped budgets, "
+            f"{finops['rules']} cost alert rules, {finops['recommendations']} optimization recommendations"
+        )
+        self._say(
             f"  {governance['policies']} control policies, "
             f"{governance['violations']} policy findings"
         )
         self._say(
             f"  {mcp['servers']} MCP servers, {mcp['tools']} MCP tools, "
             f"{mcp['calls']} MCP tool calls"
+        )
+        self._say(
+            f"  {a2a['agents']} A2A agents, {a2a['skills']} A2A skills, {a2a['contracts']} A2A contracts, "
+            f"{a2a['tasks']} agent-to-agent hand-offs"
         )
         if irgf["classified"]:
             self._say(f"  {irgf['classified']} IRGF risk classifications (stage S2)")
@@ -598,6 +617,12 @@ class Command(BaseCommand):
         from apps.mcp_gateway.demo import seed_mcp
 
         return seed_mcp(organization, agents, teams, users)
+
+    def _a2a(self, organization, agents, teams, users) -> dict:
+        """Agents published for A2A, their reviewed skills and the contracts between them."""
+        from apps.a2a.demo import seed_a2a
+
+        return seed_a2a(organization, agents, teams, users)
 
     def _superuser(self, email: str, password: str) -> bool:
         if not email or User.objects.filter(email=email).exists():

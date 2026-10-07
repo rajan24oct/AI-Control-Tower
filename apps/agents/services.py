@@ -157,6 +157,7 @@ def governance_chain(agent) -> list[ChainLink]:
     tier = agent.risk_tier
     accounts = list(agent.service_accounts.values_list("name", flat=True))
     grants = MCPAccessGrant.objects.filter(agent=agent).count()
+    contracts = agent.a2a_contracts.count()
     enforcing = [
         policy
         for policy in Policy.objects.for_organization(agent.organization).filter(
@@ -202,7 +203,8 @@ def governance_chain(agent) -> list[ChainLink]:
         "03", "Permission", "met" if authorization and authorization.is_in_force else "partial",
         f"Autonomy level {agent.autonomy_level}; approval "
         f"{'required' if agent.approval_required else 'not required'}; "
-        f"{grants} MCP access grant{'s' if grants != 1 else ''}.{approved}",
+        f"{grants} MCP access grant{'s' if grants != 1 else ''}; "
+        f"{contracts} A2A contract{'s' if contracts != 1 else ''}.{approved}",
     )
 
     if agent.allowed_tools:

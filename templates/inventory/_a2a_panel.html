@@ -1,0 +1,46 @@
+{% load a2a_tags %}
+{% comment %}
+  An agent's place in the communication graph: whether others can send it
+  work, and whom it may send work to. Both are governed at the A2A Gateway.
+{% endcomment %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span>Agent-to-agent <span class="small text-muted">· A2A</span></span>
+    {% if a2a.card %}<a href="{% url 'a2a:card_detail' a2a.card.pk %}" class="small text-decoration-none">Its A2A card</a>{% endif %}
+  </div>
+  <div class="ct-card-body">
+    <dt class="small text-uppercase text-muted fw-semibold mb-1" style="font-size:.7rem">Others may send it work</dt>
+    {% if a2a.card %}
+      <p class="small mb-2">
+        At <code>/api/v1/a2a/{{ a2a.card.slug }}/</code> &middot;
+        {% if a2a.card.is_approved %}approved{% else %}<span class="text-warning">not approved</span>{% endif %} &middot;
+        cleared for {{ a2a.card.data_classification }} data &middot;
+        {% if a2a.card.access_mode == "open" %}any agent may send it work{% else %}
+          {% for contract in a2a.inbound %}{{ contract.sender.name }}{% if not forloop.last %}, {% endif %}{% empty %}no agent holds a contract{% endfor %}
+        {% endif %}
+      </p>
+    {% else %}
+      <p class="small text-muted mb-2">Not published: no agent can send it work through the gateway.</p>
+      {% if "a2a.manage" in org_perms %}
+        <a class="btn btn-sm btn-outline-primary mb-3" href="{% url 'a2a:card_create' %}?agent={{ agent.pk }}">
+          <i class="bi bi-diagram-2"></i> Publish for A2A</a>
+      {% endif %}
+    {% endif %}
+
+    <dt class="small text-uppercase text-muted fw-semibold mb-1" style="font-size:.7rem">It may send work to</dt>
+    {% for contract in a2a.outbound %}
+      <div class="small">
+        <a href="{% url 'a2a:card_detail' contract.recipient.pk %}" class="text-decoration-none">{{ contract.recipient.name }}</a>
+        <span class="text-muted">&middot; {% if contract.allowed_skills %}{{ contract.allowed_skills|join:", " }}{% else %}all skills{% endif %} &middot; up to {{ contract.ceiling }}</span>
+        {% if contract.is_expired %}<span class="badge badge-soft text-bg-danger">Expired</span>{% endif %}
+      </div>
+    {% empty %}
+      <p class="small text-muted mb-0">No contracts: it can reach only agents open to every agent.</p>
+    {% endfor %}
+
+    <div class="small text-muted mt-2">
+      {{ a2a.sent_24h }} hand-off{{ a2a.sent_24h|pluralize }} sent in the last 24 hours{% if a2a.blocked_24h %},
+      <a href="{% url 'a2a:tasks' %}?sender={{ agent.pk }}&amp;status=blocked" class="text-danger">{{ a2a.blocked_24h }} refused</a>{% endif %}.
+    </div>
+  </div>
+</div>

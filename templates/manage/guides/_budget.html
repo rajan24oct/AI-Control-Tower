@@ -2,15 +2,23 @@
   <div class="ct-card-header">How spend is counted</div>
   <div class="ct-card-body small">
     <ul class="mb-0 ps-3 ct-guide-steps">
-      <li>Every run's cost, from engine telemetry or served by the AI Gateway, priced from the model registry when the engine reports none.</li>
-      <li>An agent, team, provider or model budget counts only the runs attributable to it; an organization budget counts everything.</li>
+      <li><strong>AI runtime</strong>: every run's cost, from engine telemetry or served by the AI Gateway, priced from the model registry when the engine reports none.</li>
+      <li><strong>Developer tools</strong>: GitHub Copilot seat licences, prorated by day, plus premium requests past each seat's allowance.</li>
+      <li>A department or team gets a run through its application, or its agent if it served none; an individual through the person the run was attributed to, or the Copilot seat they hold.</li>
       <li>Thresholds are checked every 15 minutes, and once when you save.</li>
     </ul>
+  </div>
+</div>
+<div class="ct-card mb-3">
+  <div class="ct-card-header">Thresholds and notifications</div>
+  <div class="ct-card-body small">
+    <p class="mb-2">Each threshold alerts once a period. A <strong>forecast alert</strong> fires once when spend so far projects past the limit, so there is time to act before the money is gone.</p>
+    <p class="mb-0">Cost managers always hear about budgets; the owner, the team lead and any extra recipients are added as you choose. E-mail follows each person's notification preferences.</p>
   </div>
 </div>
 <div class="ct-card">
   <div class="ct-card-header">Hard stops</div>
   <div class="ct-card-body small">
-    <p class="mb-0">A hard stop acts only where the platform holds the request: AI Gateway calls get <code>402 budget_exceeded</code>. Traffic outside the gateway can only be alerted on. <code>GATEWAY_ENFORCE_BUDGETS=0</code> makes every hard stop advisory at once.</p>
+    <p class="mb-0">A hard stop acts only where the platform holds the request: AI Gateway calls get <code>402 budget_exceeded</code>. Traffic outside the gateway, and Copilot, can only be alerted on. <code>GATEWAY_ENFORCE_BUDGETS=0</code> makes every hard stop advisory at once.</p>
   </div>
 </div>

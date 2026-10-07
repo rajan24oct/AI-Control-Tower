@@ -4,6 +4,10 @@
 {% block title %}AI Control Policies{% endblock %}
 
 {% block content %}
+{# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+<div class="ct-alert-layout">
+<div class="ct-alert-main">
+
 <div class="row g-3 mb-3">
   <div class="col-6 col-md-3">
     <div class="ct-metric"><span class="ct-metric-label">Active Policies</span>
@@ -133,37 +137,44 @@
   {% include "partials/_pagination.html" %}
 </div>
 
-{% if recent_violations %}
-  <div class="ct-card mt-3">
-    <div class="ct-card-header">Recent Policy Activity</div>
-    <div class="ct-card-body py-0">
-      {% for violation in recent_violations %}
-        <div class="ct-attention-item" data-ajax-row>
-          <i class="bi {% if violation.effect == 'deny' %}bi-shield-slash-fill{% else %}bi-exclamation-triangle-fill{% endif %} text-{{ violation.severity|risk_style }}"></i>
-          <div class="flex-grow-1">
-            <p class="ct-attention-title">
-              {{ violation.policy.name }}
-              <span class="badge badge-soft text-bg-{{ violation.effect|effect_style }} ms-1">
-                {{ violation.get_effect_display }}
-              </span>
-            </p>
-            <p class="ct-attention-detail">
-              {{ violation.reason }}
-              {% if violation.agent %} &middot; {{ violation.agent.name }}{% endif %}
-              &middot; {{ violation.created_at|naturaltime }}
-            </p>
+</div>
+<aside class="ct-alert-rail" aria-label="Alerts">
+  {% if recent_violations %}
+    <div class="ct-card">
+      <div class="ct-card-header">Recent Policy Activity</div>
+      <div class="ct-card-body py-0">
+        {% for violation in recent_violations %}
+          <div class="ct-attention-item" data-ajax-row>
+            <i class="bi {% if violation.effect == 'deny' %}bi-shield-slash-fill{% else %}bi-exclamation-triangle-fill{% endif %} text-{{ violation.severity|risk_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                {{ violation.policy.name }}
+                <span class="badge badge-soft text-bg-{{ violation.effect|effect_style }} ms-1">
+                  {{ violation.get_effect_display }}
+                </span>
+              </p>
+              <p class="ct-attention-detail">
+                {{ violation.reason }}
+                {% if violation.agent %} &middot; {{ violation.agent.name }}{% endif %}
+                &middot; {{ violation.created_at|naturaltime }}
+              </p>
+            </div>
+            {% if can_manage and not violation.is_acknowledged %}
+              <form method="post" action="{% url 'policies:acknowledge_violation' violation.pk %}"
+                    class="align-self-center" data-ajax-action="remove">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
+              </form>
+            {% endif %}
           </div>
-          {% if can_manage and not violation.is_acknowledged %}
-            <form method="post" action="{% url 'policies:acknowledge_violation' violation.pk %}"
-                  class="align-self-center" data-ajax-action="remove">
-              {% csrf_token %}
-              <input type="hidden" name="next" value="{{ request.get_full_path }}">
-              <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
-            </form>
-          {% endif %}
-        </div>
-      {% endfor %}
+        {% endfor %}
+      </div>
     </div>
-  </div>
-{% endif %}
+  {% endif %}
+  {% if not recent_violations %}
+    {% include "partials/_alerts_empty.html" with detail="No recent policy denials or flags." %}
+  {% endif %}
+</aside>
+</div>
 {% endblock %}

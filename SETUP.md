@@ -261,12 +261,14 @@ python manage.py seed_demo
 
 This builds *Northwind Financial Group*: 8 users across every role, 4 teams, providers, models,
 agents, applications, 500 mock executions, pricing, budgets and alerts, risks, approval rules and
-requests, the seven default control policies with findings, and a governed MCP estate (servers,
-reviewed tools, access grants and real gateway traffic). It then runs the IRGF lifecycle over the
-estate:
+requests, the seven default control policies with findings, a governed MCP estate (servers,
+reviewed tools, access grants and real gateway traffic) and an A2A estate (published agents, other
+organizations' agents, contracts and real hand-offs, refusals included). It then runs the IRGF
+lifecycle over the estate:
 - risk classifications
 - deployment authorizations for three agents and one application
-- a change waiting at Gate G4, and an exception waiting for its decision
+- two changes waiting at Gate G4, one of them a contract granted after G3, and an exception waiting
+  for its decision
 - the Control Plane checking all of it
 
 | Option | Default | Effect |
@@ -286,10 +288,11 @@ Seeded 'Northwind Financial Group'
   5 budgets, 9 budget alerts, 1 pricing version
   7 control policies, 8 policy findings
   7 MCP servers, 15 MCP tools, 46 MCP tool calls
+  8 A2A agents, 11 A2A skills, 4 A2A contracts, 22 agent-to-agent hand-offs
   11 IRGF risk classifications (stage S2)
   3 agent deployment authorizations in force (IRGF S7, Gate G3)
   1 application authorization(s) in force, with composite authority (IRGF chapter 16)
-  560 actions verified (IRGF link 07), 13 unresolved drift records, 2 incidents (M13)
+  554 actions verified (IRGF link 07), 14 unresolved drift records, 3 incidents (M13)
 ```
 
 The classification line appears on the first run only. A re-run never rewrites score history or
@@ -304,10 +307,12 @@ Each IRGF record in the demo is easiest to see as the person it is waiting for:
 | The first signature on the Tier 4 change and exception that are waiting | `sofia.hernandez@northwind.example` — AI Governance Manager, the AI Governance Body | *AI Governance → Changes · G4* and *Exceptions · M17* |
 | All four resolutions of a drift incident | `tom.becker@northwind.example` — Risk Manager | *AI Governance → Drift · M13*, the support agent's action-limit breach |
 | An application whose authorization is blocked by an unauthorized agent | `chen.wei@northwind.example` — the Customer Support Portal's business owner | The portal's page → *Request authorization* |
+| A contract granted after Gate G3, and the traffic it carried | `tom.becker@northwind.example` — Risk Manager | *AI Governance → Changes · G4*, then *Drift · M13*: the research agent's contract with Adatum Market Signals |
 
 The IRGF alignment explains each record: [gates](docs/irgf-alignment.md#10-phase-2-gates-g3-and-g4-and-m17-exceptions),
-[the Control Plane](docs/irgf-alignment.md#11-phase-3-the-control-plane) and
-[applications](docs/irgf-alignment.md#12-phase-4-applications-and-composite-authority).
+[the Control Plane](docs/irgf-alignment.md#11-phase-3-the-control-plane),
+[applications](docs/irgf-alignment.md#12-phase-4-applications-and-composite-authority) and
+[agent-to-agent communication](docs/irgf-alignment.md#13-phase-5-agent-to-agent-communication).
 
 Sign in as `ava.mitchell@northwind.example` (Organization Administrator) or `admin@northwind.example`
 (superuser: the site administrator, who creates organizations), with the password above. The full list of demo users and what each role
@@ -383,9 +388,10 @@ This is idempotent (it matches by name) and gives you:
 - **Approval rules** — high-autonomy agents, critical-risk assets, restricted tools, sensitive
   actions, restricted data in production, unapproved providers or models, and high-cost operations.
 
-> These defaults are enforced by both gateways. Review them before production traffic depends on
+> These defaults are enforced by the gateways. Review them before production traffic depends on
 > the platform — for example, an agent at autonomy level 3 or above in production will be refused
-> gateway calls until the rule is adjusted, because a gateway call cannot wait for a human.
+> gateway calls, tool calls and hand-offs until the rule is adjusted, because none of them can wait
+> for a human.
 
 The defaults include no IRGF policy, so nothing is refused for lacking a risk classification or a
 deployment authorization. Add those once your estate is classified and authorized (step 6).
@@ -395,7 +401,8 @@ deployment authorization. Add those once your estate is classified and authorize
 Open **Onboarding** in the header. The hub lists every step in dependency order, shows what each
 still needs, and offers a button for whatever your role may add. The order is providers
 ([section 8](#8-connect-real-model-providers)) → models → agents → applications → MCP servers
-([section 9](#9-connect-mcp-servers)) → routing, control policies, approval rules, budgets and risks.
+([section 9](#9-connect-mcp-servers)) → A2A agents → routing, control policies, approval rules,
+budgets and risks.
 Each has its own page in the web UI; service accounts
 ([section 10](#10-give-applications-an-identity)) are under the profile menu. The Integration
 Handbook's *Onboarding the estate* section shows the same steps over the REST API.
@@ -578,16 +585,16 @@ attributable and a key can be rotated without touching anything else.
 
 1. Open the profile menu → **Integrations** → **New service account**. Enter a name, the external
    system it represents, a role and, under *Agents it may act as*, the agents it runs. The default
-   role, **AI Developer**, grants `telemetry.ingest`, `gateway.invoke` and `mcp.invoke`: everything
-   an application needs. Service accounts cannot be given an administrator role.
+   role, **AI Developer**, grants `telemetry.ingest`, `gateway.invoke`, `mcp.invoke` and
+   `a2a.invoke`: everything an application needs. Service accounts cannot be given an administrator role.
 2. On the account's page, name the key, choose when it expires and press **Issue**. The key
    (`act_<prefix>_<secret>`) is shown once, on the next page, which is never cached. Only a hash is
    stored — copy it straight into your secret manager.
 
 ![A service account and its keys](docs/screenshots/61-service-account.png)
 
-Send it as `X-API-Key: act_...`, `Authorization: Api-Key act_...`, or — on the MCP endpoint —
-`Authorization: Bearer act_...`.
+Send it as `X-API-Key: act_...`, `Authorization: Api-Key act_...`, or — on the MCP and A2A
+endpoints — `Authorization: Bearer act_...`.
 
 **Rotating a key:** issue a new one, deploy it, then press **Revoke** next to the old one on the
 account's page. **Last used** shows which keys are still in use. Setting the account to anything but
@@ -618,7 +625,8 @@ jobs run alongside them:
 - the **Control Plane sweep**, every minute: it verifies runs, looks for drift and escalates drift
   past its response window
 
-Without beat, the Control Plane still verifies tool calls and agent messages as they are recorded.
+Without beat, the Control Plane still verifies tool calls and agent-to-agent hand-offs as they are
+recorded.
 Runs and the drift checks wait until someone with `risk.manage` or `gate.decide` presses *Run the
 Control Plane now* on the Control Plane page.
 

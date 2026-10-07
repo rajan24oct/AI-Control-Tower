@@ -27,6 +27,16 @@ app.conf.beat_schedule = {
         "task": "apps.costs.tasks.rebuild_daily_rollups",
         "schedule": 3600.0,
     },
+    # GitHub settles premium-request usage a few hours late; every six hours
+    # keeps the developer-tools view within a day without burning API quota.
+    "developer-tool-sync": {
+        "task": "apps.costs.tasks.sync_developer_tools",
+        "schedule": 21600.0,
+    },
+    "cost-optimization-analysis": {
+        "task": "apps.costs.tasks.analyse_cost_optimizations",
+        "schedule": 86400.0,
+    },
     "expire-stale-approvals": {
         "task": "apps.approvals.tasks.expire_stale_approvals",
         "schedule": 600.0,

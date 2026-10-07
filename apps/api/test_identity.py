@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from apps.a2a.models import A2AAccessMode, A2AAgentCard
 from apps.accounts.roles import Role
 from apps.agents.models import AIAgent
 from apps.api.models import APIKey, ServiceAccount
@@ -122,6 +123,10 @@ class IdentityBindingTests(TestCase):
         self.assertEqual(self.client.get(url, HTTP_X_API_KEY=self.claims_key).status_code, 200)
 
     def test_messaging_checks_the_sending_agent(self):
+        A2AAgentCard.objects.create(
+            organization=self.organization, agent=self.support, is_approved=True,
+            access_mode=A2AAccessMode.OPEN,
+        )
         url = reverse("api:gateway-send-message")
         refused = self.client.post(
             url, {"sender": "support-agent", "recipient": "claims-agent", "body": "Hello"},

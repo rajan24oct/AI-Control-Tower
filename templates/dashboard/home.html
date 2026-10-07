@@ -22,6 +22,10 @@
 {% else %}
 
   <div id="results" data-ajax-region>
+  {# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+  <div class="ct-alert-layout">
+  <div class="ct-alert-main">
+
   <div class="ct-card mb-3">
     <div class="ct-card-body py-2">
       <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
@@ -81,34 +85,8 @@
   </div>
 
   <div class="row g-3 mb-3">
-    <div class="col-12 col-xl-5">
-      <div class="ct-card h-100">
-        <div class="ct-card-header">
-          <span><i class="bi bi-bell me-1"></i> Needs Attention</span>
-          <span class="badge text-bg-secondary">{{ data.attention|length }}</span>
-        </div>
-        <div class="ct-card-body py-0" style="max-height:420px;overflow-y:auto">
-          {% for item in data.attention %}
-            <a href="{{ item.url }}" class="ct-attention-item">
-              <i class="bi {{ item.severity|severity_icon }} text-{{ item.severity|severity_style }}"></i>
-              <div class="flex-grow-1">
-                <p class="ct-attention-title">{{ item.title }}</p>
-                {% if item.detail %}<p class="ct-attention-detail">{{ item.detail }}</p>{% endif %}
-              </div>
-              <i class="bi bi-chevron-right text-muted small align-self-center"></i>
-            </a>
-          {% empty %}
-            <div class="ct-empty">
-              <i class="bi bi-check-circle"></i>
-              <p class="mb-0">Nothing needs attention.</p>
-              <p class="small mb-0">No failing agents, provider incidents or autonomy exceptions.</p>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
 
-    <div class="col-12 col-xl-7">
+    <div class="col-12">
       <div class="ct-card h-100">
         <div class="ct-card-header">
           <span>Execution Volume</span>
@@ -304,6 +282,35 @@
 
   {# Inside the AJAX region so a filter change swaps the data with the markup. #}
   <script id="charts-data" type="application/json">{{ charts_json|safe }}</script>
+
+  </div>
+  <aside class="ct-alert-rail" aria-label="Alerts">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span><i class="bi bi-bell me-1"></i> Needs Attention</span>
+        <span class="badge text-bg-secondary">{{ data.attention|length }}</span>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for item in data.attention %}
+          <a href="{{ item.url }}" class="ct-attention-item">
+            <i class="bi {{ item.severity|severity_icon }} text-{{ item.severity|severity_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">{{ item.title }}</p>
+              {% if item.detail %}<p class="ct-attention-detail">{{ item.detail }}</p>{% endif %}
+            </div>
+            <i class="bi bi-chevron-right text-muted small align-self-center"></i>
+          </a>
+        {% empty %}
+          <div class="ct-empty">
+            <i class="bi bi-check-circle"></i>
+            <p class="mb-0">Nothing needs attention.</p>
+            <p class="small mb-0">No failing agents, provider incidents or autonomy exceptions.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </aside>
+  </div>
   </div>
 {% endif %}
 {% endblock %}

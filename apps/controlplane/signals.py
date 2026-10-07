@@ -9,7 +9,7 @@ from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from apps.gateway.models import GatewayMessage
+from apps.a2a.models import A2ATask
 from apps.lifecycle.models import ChangeRecord, GovernanceException
 from apps.mcp_gateway.models import MCPToolCall
 
@@ -38,14 +38,14 @@ def _tool_call_recorded(sender, instance, created, raw=False, **kwargs):
         transaction.on_commit(lambda: ControlPlane.verify_tool_call_by_id(pk))
 
 
-@receiver(post_save, sender=GatewayMessage)
-def _message_recorded(sender, instance, created, raw=False, **kwargs):
+@receiver(post_save, sender=A2ATask)
+def _handoff_recorded(sender, instance, created, raw=False, **kwargs):
     # One agent handing work to another is a delegation (IRGF chapter 16).
     if created and not raw and not getattr(_state, "deferred", False):
         from apps.controlplane.services import ControlPlane
 
         pk = instance.pk
-        transaction.on_commit(lambda: ControlPlane.verify_message_by_id(pk))
+        transaction.on_commit(lambda: ControlPlane.verify_a2a_task_by_id(pk))
 
 
 def _reconcile(**filters):

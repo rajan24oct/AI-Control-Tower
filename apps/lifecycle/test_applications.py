@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.a2a.models import A2AAccessMode, A2AAgentCard
 from apps.accounts.roles import Role
 from apps.agents.models import AIAgent
 from apps.api.models import APIKey, ServiceAccount
@@ -193,24 +194,33 @@ class SystemControlPlaneTests(SystemEstate):
         record = DriftRecord.objects.get(application=self.application, signal="agent_outside_system")
         self.assertEqual(record.observed, ["Outside Agent"])
 
+    def publish(self, agent):
+        """Put an agent on the A2A Gateway, open to every agent, so a hand-off needs no contract."""
+        return A2AAgentCard.objects.create(
+            organization=self.organization, agent=agent, is_approved=True, access_mode=A2AAccessMode.OPEN,
+            data_classification="restricted",
+        )
+
     def test_an_undeclared_delegation_is_integration_drift(self):
         self.authorize_application()
-        message = MessagingService.send(
-            self.organization, MessageRequest(sender=self.intake, recipient=self.agent, body="Please route this.")
+        self.publish(self.intake)
+        task = MessagingService.send(
+            self.organization, MessageRequest(sender=self.agent, recipient=self.intake, body="Please extract this.")
         )
-        verification = ControlPlane.verify_message(message)
+        verification = ControlPlane.verify_a2a_task(task)
         self.assertEqual(verification.outcome, VerificationOutcome.DIVERGES)
         record = DriftRecord.objects.get(application=self.application, signal="undeclared_delegation")
         self.assertEqual(record.category, "integration")
 
     def test_a_declared_delegation_conforms(self):
-        self.application.delegations = [{"from": "intake-agent", "to": "claims-agent", "authority": "own"}]
+        self.application.delegations = [{"from": "claims-agent", "to": "intake-agent", "authority": "own"}]
         self.application.save()
+        self.publish(self.intake)
         self.authorize_application()
-        message = MessagingService.send(
-            self.organization, MessageRequest(sender=self.intake, recipient=self.agent, body="Please route this.")
+        task = MessagingService.send(
+            self.organization, MessageRequest(sender=self.agent, recipient=self.intake, body="Please extract this.")
         )
-        self.assertEqual(ControlPlane.verify_message(message).outcome, VerificationOutcome.CONFORMS)
+        self.assertEqual(ControlPlane.verify_a2a_task(task).outcome, VerificationOutcome.CONFORMS)
 
 
 class SystemPageTests(SystemEstate):

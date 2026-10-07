@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}Cost Governance{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="governance" data-ajax-region>
+  {# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+  <div class="ct-alert-layout">
+  <div class="ct-alert-main">
+
+  <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
+    {% if can_manage %}
+      <form method="post" action="{% url 'costs:evaluate_now' %}" data-ajax-action data-ajax-refresh="#governance">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Check now</button>
+      </form>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'costs:rule_create' %}"><i class="bi bi-bell"></i> New alert rule</a>
+      <a class="btn btn-sm btn-primary" href="{% url 'costs:budget_create' %}"><i class="bi bi-plus-lg"></i> New budget</a>
+    {% endif %}
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Active budgets</span>
+      <div class="ct-metric-value">{{ states|length }}</div><div class="ct-metric-hint">Checked every 15 minutes</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label"><i class="bi bi-x-octagon text-danger"></i> Over budget</span>
+      <div class="ct-metric-value {% if health.over %}text-danger{% endif %}">{{ health.over }}</div><div class="ct-metric-hint">Spent past the limit</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label"><i class="bi bi-graph-up-arrow text-warning"></i> Forecast to exceed</span>
+      <div class="ct-metric-value {% if health.at_risk %}text-warning{% endif %}">{{ health.at_risk }}</div><div class="ct-metric-hint">At the current rate</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label"><i class="bi bi-eye text-info"></i> Watch</span>
+      <div class="ct-metric-value">{{ health.watch }}</div><div class="ct-metric-hint">A threshold crossed</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label"><i class="bi bi-check-circle text-success"></i> On track</span>
+      <div class="ct-metric-value">{{ health.on_track }}</div><div class="ct-metric-hint">Within limits</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Budget coverage</span>
+      <div class="ct-metric-value">{{ coverage.percentage|floatformat:0 }}%</div>
+      <div class="ct-metric-hint">of this month's runtime spend has a scoped budget</div></div></div>
+  </div>
+
+  <div class="ct-card mb-3">
+    <div class="ct-card-header">
+      <span><i class="bi bi-wallet2 me-1"></i> Budget health</span>
+      <a class="small text-decoration-none" href="{% url 'costs:budgets' %}">All budgets</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table ct-table align-middle mb-0">
+        <thead>
+          <tr><th>Budget</th><th>Scope</th><th>Counts</th><th class="text-end">Spend</th><th class="text-end">Limit</th>
+              <th style="min-width:200px">Used <span class="text-muted fw-normal small">&middot; tick marks the forecast</span></th>
+              <th class="text-end">Forecast</th><th>Health</th><th>Notifies</th></tr>
+        </thead>
+        <tbody>
+          {% for state in states %}
+            <tr>
+              <td class="small fw-semibold"><a class="text-decoration-none" href="{% url 'costs:budget_detail' state.budget.pk %}">{{ state.budget.name }}</a>
+                <div class="text-muted fw-normal">{{ state.budget.get_period_display }} &middot; {{ state.period_start|date:"j M" }}&ndash;{{ state.period_last|date:"j M" }}</div></td>
+              <td class="small">{{ state.budget.get_scope_display }}<div class="text-muted">{{ state.budget.scope_label }}</div></td>
+              <td class="small">{% if state.budget.cost_source == "all" %}Runtime + dev tools{% elif state.budget.cost_source == "developer_tools" %}Dev tools{% else %}AI runtime{% endif %}</td>
+              <td class="small text-end text-nowrap">${{ state.spend|floatformat:2|intcomma }}</td>
+              <td class="small text-end text-nowrap">${{ state.amount|floatformat:0|intcomma }}</td>
+              <td>
+                <div class="progress ct-progress-forecast" style="height:8px;overflow:visible">
+                  <div class="progress-bar bg-{{ state.health_style }}" style="width:{% if state.percentage > 100 %}100{% else %}{{ state.percentage|floatformat:0 }}{% endif %}%"></div>
+                  {% if state.forecast_ready %}
+                    <span class="ct-forecast-mark" style="left:{% if state.forecast_percentage > 100 %}100{% else %}{{ state.forecast_percentage|floatformat:0 }}{% endif %}%" title="Forecast {{ state.forecast_percentage|floatformat:0 }}%"></span>
+                  {% endif %}
+                </div>
+                <span class="small text-muted">{{ state.percentage|floatformat:1 }}%</span>
+              </td>
+              <td class="small text-end text-nowrap">{% if state.forecast_ready %}${{ state.forecast|floatformat:0|intcomma }}<div class="text-muted">{{ state.forecast_percentage|floatformat:0 }}%</div>{% else %}<span class="text-muted" title="Too early in the period">—</span>{% endif %}</td>
+              <td><span class="badge badge-soft text-bg-{{ state.health_style }}">{{ state.health_label }}</span></td>
+              <td class="small text-muted">
+                Cost managers{% if state.budget.notify_owner and state.budget.owner %}, {{ state.budget.owner.get_full_name|default:state.budget.owner.email }}{% endif %}{% if state.budget.notify_team_lead and state.budget.team.lead %}, team lead{% endif %}{% with extra=state.budget.extra_recipients.count %}{% if extra %}, +{{ extra }}{% endif %}{% endwith %}
+                {% if state.budget.is_enforcing %}<div><span class="badge badge-soft text-bg-danger">Hard stop</span></div>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="9"><div class="ct-empty"><i class="bi bi-wallet2"></i><p class="mb-0">No active budgets.</p></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-8">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span><i class="bi bi-sliders me-1"></i> Alert rules</span>
+          {% if can_manage %}<a class="small text-decoration-none" href="{% url 'costs:rule_create' %}">New rule</a>{% endif %}
+        </div>
+        <div class="table-responsive">
+          <table class="table ct-table align-middle mb-0">
+            <thead><tr><th>Rule</th><th>Scope</th><th>Condition</th><th class="text-end">Now</th><th>Last fired</th><th>Severity</th></tr></thead>
+            <tbody>
+              {% for rule in rules %}
+                <tr>
+                  <td class="small fw-semibold">
+                    {% if can_manage %}<a class="text-decoration-none" href="{% url 'costs:rule_edit' rule.pk %}">{{ rule.name }}</a>{% else %}{{ rule.name }}{% endif %}
+                    {% if rule.status != "active" %}<span class="badge badge-soft text-bg-secondary ms-1">{{ rule.get_status_display }}</span>{% endif %}
+                    {% if rule.description %}<div class="text-muted fw-normal">{{ rule.description|truncatechars:90 }}</div>{% endif %}
+                  </td>
+                  <td class="small">{{ rule.get_scope_display }}<div class="text-muted">{{ rule.scope_label }}</div></td>
+                  <td class="small">{{ rule.get_metric_display }} &ge; <strong>{{ rule.threshold_display }}</strong>
+                    <div class="text-muted">{{ rule.get_window_hours_display }}{% if rule.minimum_spend %} &middot; min ${{ rule.minimum_spend|floatformat:2 }}{% endif %} &middot; quiet {{ rule.cooldown_hours }}h</div></td>
+                  <td class="small text-end text-nowrap">{{ rule.last_value_display }}
+                    {% if rule.last_evaluated_at %}<div class="text-muted">{{ rule.last_evaluated_at|naturaltime }}</div>{% endif %}</td>
+                  <td class="small">{% if rule.last_triggered_at %}{{ rule.last_triggered_at|naturaltime }}{% else %}<span class="text-muted">Never</span>{% endif %}
+                    <div class="text-muted">{{ rule.event_count }} time{{ rule.event_count|pluralize }}</div></td>
+                  <td><span class="badge badge-soft text-bg-{{ rule.severity|notification_style }}">{{ rule.get_severity_display }}</span></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6"><div class="ct-empty"><i class="bi bi-sliders"></i>
+                  <p class="mb-0">No alert rules.</p>
+                  <p class="small mb-0">Rules catch a spike or a runaway agent within the hour, long before a monthly budget notices.</p>
+                </div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="ct-card h-100">
+        <div class="ct-card-header"><span><i class="bi bi-send me-1"></i> Who is told</span></div>
+        <div class="ct-card-body">
+          <ul class="ct-route-list">
+            <li><i class="bi bi-person-badge"></i><span><strong>Cost managers</strong> &mdash; everyone whose role grants <code>cost.manage</code> &mdash; hear every budget alert, and rule alerts unless the rule opts out.</span></li>
+            <li><i class="bi bi-person-check"></i><span>A budget's <strong>owner</strong>, its <strong>team lead</strong> and any <strong>extra recipients</strong> it names, as each budget chooses.</span></li>
+            <li><i class="bi bi-graph-up-arrow"></i><span><strong>Forecast alerts</strong> warn once a period when spend so far projects past the limit &mdash; while there is still time to act.</span></li>
+            <li><i class="bi bi-envelope"></i><span>In-app always; email per person, in their <a href="{% url 'notifications:preferences' %}">notification preferences</a>.</span></li>
+            <li><i class="bi bi-sign-stop"></i><span>A <strong>hard stop</strong> refuses AI Gateway requests once a budget is spent.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div>
+  <aside class="ct-alert-rail" aria-label="Alerts">
+    {% if budget_alerts or events %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-bell me-1"></i> Open alerts</span>
+        <span class="badge text-bg-secondary">{{ open_alert_count }}</span>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for alert in budget_alerts %}
+          <div class="ct-attention-item" data-ajax-row>
+            <i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title"><a href="{% url 'costs:budget_detail' alert.budget_id %}" class="text-reset">{{ alert }}</a></p>
+              <p class="ct-attention-detail">
+                {% if alert.is_forecast %}Projected ${{ alert.spend|floatformat:2|intcomma }}{% else %}${{ alert.spend|floatformat:2|intcomma }}{% endif %}
+                of ${{ alert.budget_amount|floatformat:2|intcomma }} &middot; budget alert &middot; {{ alert.created_at|naturaltime }}
+              </p>
+            </div>
+            {% if can_manage %}
+            <form method="post" action="{% url 'costs:acknowledge_alert' alert.pk %}" class="align-self-center" data-ajax-action="remove">
+              {% csrf_token %}<input type="hidden" name="next" value="{% url 'costs:governance' %}">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
+            </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+        {% for event in events %}
+          <div class="ct-attention-item" data-ajax-row>
+            <i class="bi {{ event.severity|notification_icon }} text-{{ event.severity|notification_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">{{ event.rule.name }}</p>
+              <p class="ct-attention-detail">{{ event.summary }} &middot; {{ event.created_at|naturaltime }}
+                {% if event.details.top_agents %}<br>Top contributors:
+                  {% for agent in event.details.top_agents %}{{ agent.agent }} (${{ agent.cost|floatformat:2 }}){% if not forloop.last %}, {% endif %}{% endfor %}
+                {% endif %}
+              </p>
+            </div>
+            {% if can_manage %}
+            <form method="post" action="{% url 'costs:acknowledge_event' event.pk %}" class="align-self-center" data-ajax-action="remove">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
+            </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if unbudgeted %}
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span><i class="bi bi-shield-exclamation me-1"></i> Spend no scoped budget watches</span>
+        <a class="small text-decoration-none" href="{% url 'costs:optimization' %}?category=governance">In recommendations</a>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for item in unbudgeted %}
+          <div class="ct-attention-item">
+            <i class="bi bi-wallet text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">{{ item.title }}</p>
+              <p class="ct-attention-detail">{{ item.rationale }}</p>
+            </div>
+            {% if can_manage %}<a class="btn btn-sm btn-outline-secondary align-self-center" href="{% url 'costs:budget_create' %}">Create budget</a>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if not budget_alerts and not events and not unbudgeted %}
+      {% include "partials/_alerts_empty.html" with detail="No open budget or rule alerts, and no unwatched spend." %}
+    {% endif %}
+  </aside>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

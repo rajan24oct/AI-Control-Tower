@@ -9,51 +9,9 @@
     <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
   </div></div>
 {% else %}
-
-  {% comment %}
-    An open breaker means live traffic is being steered away from a provider
-    right now, so it leads rather than sitting in a table further down.
-  {% endcomment %}
-  {% if open_circuits %}
-    <div class="ct-card mb-3">
-      <div class="ct-card-header">
-        <span><i class="bi bi-exclamation-octagon me-1"></i> Providers taken out of rotation</span>
-      </div>
-      <div class="ct-card-body py-0">
-        {% for circuit in open_circuits %}
-          <div class="ct-attention-item">
-            <i class="bi bi-plug text-danger"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title">{{ circuit.provider.name }}</p>
-              <p class="ct-attention-detail">
-                {{ circuit.consecutive_failures }} consecutive failures &mdash;
-                {{ circuit.last_error|default:"no detail reported" }}.
-                Opened {{ circuit.opened_at|naturaltime }}; a probe is allowed through
-                after the cool-off.
-              </p>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
-
-  {% if providers_without_credentials %}
-    <div class="ct-card mb-3">
-      <div class="ct-card-body d-flex gap-3 align-items-start py-2">
-        <i class="bi bi-key text-warning"></i>
-        <div class="small">
-          <strong>{{ providers_without_credentials|length }} active provider{{ providers_without_credentials|pluralize }}
-          cannot resolve a credential.</strong>
-          The gateway calls providers itself, so these will fail every attempt until their
-          environment variable is set:
-          {% for provider in providers_without_credentials %}
-            <code>{{ provider.credential_ref|default:"(no credential_ref)" }}</code>{% if not forloop.last %}, {% endif %}
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  {% endif %}
+  {# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+  <div class="ct-alert-layout">
+  <div class="ct-alert-main">
 
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-4 col-xl-2">
@@ -199,6 +157,58 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  </div>
+  <aside class="ct-alert-rail" aria-label="Alerts">
+    {% comment %}
+      An open breaker means live traffic is being steered away from a provider
+      right now, so it leads rather than sitting in a table further down.
+    {% endcomment %}
+    {% if open_circuits %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">
+          <span><i class="bi bi-exclamation-octagon me-1"></i> Providers taken out of rotation</span>
+        </div>
+        <div class="ct-card-body py-0">
+          {% for circuit in open_circuits %}
+            <div class="ct-attention-item">
+              <i class="bi bi-plug text-danger"></i>
+              <div class="flex-grow-1">
+                <p class="ct-attention-title">{{ circuit.provider.name }}</p>
+                <p class="ct-attention-detail">
+                  {{ circuit.consecutive_failures }} consecutive failures &mdash;
+                  {{ circuit.last_error|default:"no detail reported" }}.
+                  Opened {{ circuit.opened_at|naturaltime }}; a probe is allowed through
+                  after the cool-off.
+                </p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if providers_without_credentials %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-body d-flex gap-3 align-items-start py-2">
+          <i class="bi bi-key text-warning"></i>
+          <div class="small">
+            <strong>{{ providers_without_credentials|length }} active provider{{ providers_without_credentials|pluralize }}
+            cannot resolve a credential.</strong>
+            The gateway calls providers itself, so these will fail every attempt until their
+            environment variable is set:
+            {% for provider in providers_without_credentials %}
+              <code>{{ provider.credential_ref|default:"(no credential_ref)" }}</code>{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+    {% if not open_circuits and not providers_without_credentials %}
+      {% include "partials/_alerts_empty.html" with detail="Every provider is in rotation and can resolve its credential." %}
+    {% endif %}
+  </aside>
   </div>
 {% endif %}
 {% endblock %}

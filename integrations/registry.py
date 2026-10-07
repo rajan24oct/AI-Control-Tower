@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable
 
+from integrations.base.a2a import BaseA2AAdapter
 from integrations.base.agent import BaseAgentAdapter
 from integrations.base.config import AdapterConfig
 from integrations.base.cost import BaseCostAdapter
@@ -30,6 +31,7 @@ class AdapterKind:
     EXECUTION = "execution"
     TOOL = "tool"
     MCP = "mcp"
+    A2A = "a2a"
     OBSERVABILITY = "observability"
     COST = "cost"
 
@@ -40,6 +42,7 @@ _BASE_CLASSES = {
     AdapterKind.EXECUTION: BaseExecutionAdapter,
     AdapterKind.TOOL: BaseToolAdapter,
     AdapterKind.MCP: BaseMCPAdapter,
+    AdapterKind.A2A: BaseA2AAdapter,
     AdapterKind.OBSERVABILITY: BaseObservabilityAdapter,
     AdapterKind.COST: BaseCostAdapter,
 }
@@ -84,6 +87,9 @@ class AdapterRegistry:
     def register_mcp(self, key: str, adapter_class: type, **kwargs) -> type:
         return self.register(AdapterKind.MCP, key, adapter_class, **kwargs)
 
+    def register_a2a(self, key: str, adapter_class: type, **kwargs) -> type:
+        return self.register(AdapterKind.A2A, key, adapter_class, **kwargs)
+
     # -- Lookup -------------------------------------------------------------
 
     def get_class(self, kind: str, key: str) -> type:
@@ -110,6 +116,12 @@ class AdapterRegistry:
 
     def get_mcp(self, key: str, config: AdapterConfig | None = None) -> BaseMCPAdapter:
         return self.get(AdapterKind.MCP, key, config)
+
+    def get_a2a(self, key: str, config: AdapterConfig | None = None) -> BaseA2AAdapter:
+        return self.get(AdapterKind.A2A, key, config)
+
+    def get_cost(self, key: str, config: AdapterConfig | None = None) -> BaseCostAdapter:
+        return self.get(AdapterKind.COST, key, config)
 
     # -- Introspection ------------------------------------------------------
 
@@ -186,6 +198,22 @@ def register_execution(key: str, **kwargs):
 def register_mcp(key: str, **kwargs):
     def decorator(cls):
         registry.register_mcp(key, cls, **kwargs)
+        return cls
+
+    return decorator
+
+
+def register_a2a(key: str, **kwargs):
+    def decorator(cls):
+        registry.register_a2a(key, cls, **kwargs)
+        return cls
+
+    return decorator
+
+
+def register_cost(key: str, **kwargs):
+    def decorator(cls):
+        registry.register(AdapterKind.COST, key, cls, **kwargs)
         return cls
 
     return decorator

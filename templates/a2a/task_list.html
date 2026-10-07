@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% load control_tower humanize a2a_tags %}
+
+{% block title %}A2A Communications{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="results" data-ajax-region>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="{% url 'a2a:overview' %}" class="small text-decoration-none">
+      <i class="bi bi-arrow-left"></i> A2A Gateway
+    </a>
+    <form method="get" class="d-flex align-items-center gap-2 flex-wrap" data-ajax-filter="#results">
+      <input type="search" name="q" value="{{ search_query }}"
+             class="form-control form-control-sm" placeholder="Agent, skill, reason or context" style="width:15rem">
+      <select name="status" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any delivery</option>
+        {% for value, label in delivery_statuses %}
+          <option value="{{ value }}" {% if active_filters.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="state" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any state</option>
+        {% for value, label in task_states %}
+          <option value="{{ value }}" {% if active_filters.state == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="agent" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any recipient</option>
+        {% for card in cards %}
+          <option value="{{ card.pk }}" {% if active_filters.agent == card.pk|stringformat:"s" %}selected{% endif %}>{{ card.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="channel" class="form-select form-select-sm" style="width:auto">
+        <option value="">Any channel</option>
+        {% for value, label in channels %}
+          <option value="{{ value }}" {% if active_filters.channel == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+  </div>
+
+  {% if not can_view_content %}
+    <p class="small text-muted">
+      <i class="bi bi-eye-slash"></i> Message content is hidden: reading what agents sent one another needs the
+      <code>prompt.view</code> permission.
+    </p>
+  {% endif %}
+
+  <div class="ct-card mb-3">
+    {% include "partials/_pagination.html" with position="top" %}
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr>{% sort_th "When" "when" first="desc" %}{% sort_th "From" "from" %}{% sort_th "To" "to" %}<th>Skill</th>{% sort_th "Delivery" "status" %}{% sort_th "State" "state" %}<th>Data</th>{% sort_th "Hops" "hops" first="desc" %}<th>Detail</th></tr>
+        </thead>
+        <tbody>
+          {% for task in tasks %}
+            <tr>
+              <td class="small text-nowrap"><a href="{% url 'a2a:task_detail' task.pk %}" class="text-decoration-none">{{ task.created_at|naturaltime }}</a>
+                <div class="text-muted">{{ task.get_channel_display }}</div></td>
+              <td class="small">
+                {{ task.sender.name|default:"No agent named" }}
+                {% if task.service_account %}<div class="text-muted">{{ task.service_account.name }}</div>{% endif %}
+              </td>
+              <td class="small">
+                {% if task.recipient %}<a href="{% url 'a2a:card_detail' task.recipient.pk %}" class="text-decoration-none">{{ task.recipient.name }}</a>{% else %}<code>{{ task.recipient_name }}</code>{% endif %}
+              </td>
+              <td>{% if task.skill_name %}<code class="small">{{ task.skill_name }}</code>{% else %}<span class="small text-muted">—</span>{% endif %}</td>
+              <td><span class="badge badge-soft text-bg-{{ task.status|delivery_style }}">{{ task.get_status_display }}</span></td>
+              <td><span class="badge badge-soft text-bg-{{ task.state|task_state_style }}">{{ task.get_state_display }}</span></td>
+              <td class="small text-nowrap">
+                {% if task.data_classification %}<span class="badge badge-soft text-bg-{{ task.data_classification|classification_style }}">{{ task.get_data_classification_display }}</span>{% endif %}
+                {% if task.personal_data %}<div class="text-warning"><i class="bi bi-person-badge"></i> Personal data</div>{% endif %}
+              </td>
+              <td class="small text-center">{{ task.hops }}</td>
+              <td class="small" style="max-width:30rem">
+                {% if task.reason %}
+                  <div class="{% if task.status != 'delivered' %}text-danger{% endif %}">{{ task.reason|truncatechars:160 }}</div>
+                {% endif %}
+                {% if task.policies %}<div class="text-muted">Policies: {{ task.policies|join:", " }}</div>{% endif %}
+                {% if can_view_content and task.text_preview %}
+                  <div class="text-muted text-break">{{ task.text_preview|truncatechars:160 }}</div>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="9">
+              <div class="ct-empty py-5">
+                <i class="bi bi-diagram-2"></i>
+                <p class="mb-0">No hand-offs match these filters.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endif %}
+{% endblock %}

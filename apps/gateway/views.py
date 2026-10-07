@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Sum
+from django.urls import reverse
 from django.utils import timezone
-from django.views.generic import ListView, TemplateView
+from django.views.generic import RedirectView, TemplateView
 
-from apps.core.views import OrganizationScopedMixin
 from apps.executions.models import Execution, ExecutionStatusChoices
-from apps.gateway.models import CircuitState, GatewayMessage, ProviderCircuit
+from apps.gateway.models import CircuitState, ProviderCircuit
 from apps.providers.models import AIProvider
 from apps.routing.services import RoutingStats
 
@@ -68,35 +68,13 @@ class GatewayOverviewView(LoginRequiredMixin, TemplateView):
             served.select_related("agent", "model", "model__provider")
             .order_by("-started_at")[:15]
         )
-        context["messages_summary"] = (
-            GatewayMessage.objects.for_organization(organization)
-            .filter(created_at__gte=since)
-            .values("status")
-            .annotate(count=Count("id"))
-            .order_by()
-        )
         return context
 
 
-class GatewayMessageListView(OrganizationScopedMixin, ListView):
-    model = GatewayMessage
-    template_name = "gateway/message_list.html"
-    context_object_name = "messages_page"
-    paginate_by = 50
-    ordering = ["-created_at"]
-    extra_context = {
-        "page_title": "Agent Messages",
-        "page_subtitle": "Agent-to-agent traffic brokered by the gateway",
-    }
-    search_fields = ["subject", "body", "correlation_id"]
-    sort_fields = {
-        "when": "created_at",
-        "from": "sender__name",
-        "to": "recipient__name",
-        "subject": "subject",
-        "status": "status",
-    }
-    filter_fields = {"status": "status", "sender": "sender_id", "recipient": "recipient_id"}
+class GatewayMessageListView(LoginRequiredMixin, RedirectView):
+    """Agent messages moved to the A2A Gateway's log, with every other hand-off between agents."""
 
-    def get_queryset(self):
-        return super().get_queryset().select_related("sender", "recipient")
+    permanent = False
+
+    def get_redirect_url(self, *args, **kwargs):
+        return reverse("a2a:tasks") + "?channel=mailbox"

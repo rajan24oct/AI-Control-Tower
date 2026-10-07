@@ -32,9 +32,9 @@
     --rule:        #dbe3e0;
     --rule-strong: #b9c6c1;
 
-    --green:   #003f2d;
-    --green-2: #10614a;
-    --accent:  #17e88f;
+    --green:   #6e5200;
+    --green-2: #8a6600;
+    --accent:  #ffcc00;
     --teal:    #14607a;
     --amber:   #8a5810;
     --danger:  #a32b26;
@@ -77,9 +77,9 @@
       --rule:        #253630;
       --rule-strong: #385047;
 
-      --green:   #8ed3ba;
-      --green-2: #6cbfa1;
-      --accent:  #17e88f;
+      --green:   #ffd84d;
+      --green-2: #e9c64a;
+      --accent:  #ffcc00;
       --teal:    #77bcd6;
       --amber:   #e0ab5f;
       --danger:  #e58a84;
@@ -102,9 +102,9 @@
     --rule:        #253630;
     --rule-strong: #385047;
 
-    --green:   #8ed3ba;
-    --green-2: #6cbfa1;
-    --accent:  #17e88f;
+    --green:   #ffd84d;
+    --green-2: #e9c64a;
+    --accent:  #ffcc00;
     --teal:    #77bcd6;
     --amber:   #e0ab5f;
     --danger:  #e58a84;
@@ -664,6 +664,7 @@
       <li><a href="#api">API reference</a></li>
       <li><a href="#gateway">The AI Gateway</a></li>
       <li><a href="#mcp">The MCP Gateway</a></li>
+      <li><a href="#a2a">The A2A Gateway</a></li>
       <li><a href="#build">Building on the gateways</a></li>
       <li><a href="#evaluation">Evaluation Centre</a></li>
       <li><a href="#events">Event vocabulary</a></li>
@@ -806,7 +807,8 @@
               New service account</em>, ticking the agents it runs.
               Set <code>external_system</code> to the engine's name &mdash; it lands in the audit trail
               on every write. The default role, <em>AI Developer</em>, already grants
-              <code>telemetry.ingest</code>, <code>gateway.invoke</code> and <code>mcp.invoke</code>.
+              <code>telemetry.ingest</code>, <code>gateway.invoke</code>, <code>mcp.invoke</code> and
+              <code>a2a.invoke</code>.
             </p>
           </div>
         </li>
@@ -927,7 +929,8 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
       <p>
         Everything an application touches is registered before it is used: the provider it calls,
         the models behind it, the agent that does the work, the application it serves, the
-        identity it authenticates as, and the MCP servers it reaches for tools. Register in this
+        identity it authenticates as, the MCP servers it reaches for tools, and the agents it hands
+        work to. Register in this
         order &mdash; each record points at the ones before it.
       </p>
 
@@ -943,7 +946,8 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
             <tr><td>4</td><td>Application</td><td>Onboarding &rarr; New application</td><td class="path"><code>POST /applications/</code></td><td><code>application.manage</code></td></tr>
             <tr><td>5</td><td>Service account and key</td><td>Profile menu &rarr; Integrations</td><td>&mdash;</td><td>administrator</td></tr>
             <tr><td>6</td><td>MCP servers and tools</td><td>Onboarding &rarr; Register MCP server</td><td>&mdash;</td><td><code>mcp.manage</code>, <code>mcp.approve</code></td></tr>
-            <tr><td>7</td><td>Routing, policies, rules, budgets</td><td>Onboarding &rarr; New routing policy, control policy, approval rule, budget</td><td>&mdash;</td><td><code>provider.manage</code>, <code>policy.manage</code>, <code>cost.manage</code></td></tr>
+            <tr><td>7</td><td>A2A agents and contracts</td><td>Onboarding &rarr; Publish an A2A agent</td><td>&mdash;</td><td><code>a2a.manage</code>, <code>a2a.approve</code></td></tr>
+            <tr><td>8</td><td>Routing, policies, rules, budgets</td><td>Onboarding &rarr; New routing policy, control policy, approval rule, budget</td><td>&mdash;</td><td><code>provider.manage</code>, <code>policy.manage</code>, <code>cost.manage</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -952,7 +956,7 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
         every record's page links to its edit form.
         Over the API, create payloads name the <code>organization</code> and every related record by
         its <strong>UUID</strong>; only calls your application makes at run time &mdash; telemetry
-        and both gateways &mdash; accept the loose identifiers described under
+        and the gateways &mdash; accept the loose identifiers described under
         <a href="#identifiers">identifier resolution</a>.
       </p>
 
@@ -1098,7 +1102,7 @@ print(raw)   <span class="c"># act_a31771a75917_Z8AQ...  <- store this now</span
               Create one service account per application or engine &mdash; never a shared one &mdash;
               and issue it a key as in <a href="#onboarding">steps 2 and 3 above</a>. The
               <em>AI Developer</em> role grants <code>telemetry.ingest</code>,
-              <code>gateway.invoke</code> and <code>mcp.invoke</code>: everything an application
+              <code>gateway.invoke</code>, <code>mcp.invoke</code> and <code>a2a.invoke</code>: everything an application
               needs, and nothing that changes the registry's governance. Deploy the key as a secret,
               for example <code>CONTROL_TOWER_KEY</code>.
             </p>
@@ -1138,6 +1142,31 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
 
         <li class="step">
           <div>
+            <h3>Publish the agents others hand work to</h3>
+            <p>
+              On the agent's page, choose <em>Publish for A2A</em>. Choose <em>Gateway mailbox</em>
+              delivery if the agent has no A2A endpoint of its own, and declare its skills, one per
+              line. Set its clearance &mdash; the most sensitive data it may be sent &mdash; and leave
+              access <em>restricted</em> unless every agent in the organization should reach it.
+            </p>
+            <p>On its A2A page, in order:</p>
+            <ol>
+              <li><strong>Approve</strong> (<code>a2a.approve</code>) &mdash; until then no agent can send it work.</li>
+              <li><strong>Review each skill</strong> &mdash; the <em>Skill Catalog</em>'s review queue collects them across agents.</li>
+              <li><strong>Grant a contract</strong> &mdash; name the sending agent, the skills, a data
+                ceiling, a rate and an expiry.</li>
+            </ol>
+            <div class="code">
+              <div class="code-head"><span class="verb">GET</span><span>/api/v1/a2a/?agent=customer-support-agent</span></div>
+<pre><span class="c"># Every agent the sender may reach, and the skills it may ask each for.</span>
+curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
+  <span class="s">"https://tower.example.com/api/v1/a2a/?agent=customer-support-agent"</span></pre>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div>
             <h3>Set the guardrails</h3>
             <p>
               <strong>Routing</strong> is optional. With no routing policy the AI Gateway ranks every
@@ -1148,9 +1177,10 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
               in the <em>Routing Simulator</em> before any traffic depends on it.
             </p>
             <p>
-              <strong>Policies</strong> under <em>AI Governance</em> apply to both gateways: model
-              approval, provider, data classification, autonomy, cost limits, tool access and human
-              approval. A tool-access policy's <code>blocked_tools</code> covers MCP tools by name.
+              <strong>Policies</strong> under <em>AI Governance</em> apply to the gateways: model
+              approval, provider, data classification, autonomy, cost limits, tool access, human
+              approval and agent communication. A tool-access policy's <code>blocked_tools</code>
+              covers MCP tools by name.
               <strong>Budgets</strong> under <em>AI FinOps</em> set to hard-stop make the AI Gateway
               answer <code>402</code> once the period's spend is gone.
             </p>
@@ -1168,6 +1198,8 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
                 <em>Routing Decisions</em> shows which model served and why.</li>
               <li>The MCP catalog lists the tools you enabled, and a test call appears under
                 <em>MCP Gateway &rarr; Tool Calls</em>.</li>
+              <li>The A2A directory lists the agents it may reach, and a test hand-off appears under
+                <em>A2A Gateway &rarr; Communications</em>.</li>
               <li>The run shows in <em>Observability &rarr; Executions</em> with its cost.</li>
             </ul>
             <p>
@@ -1362,7 +1394,7 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
             <tr>
               <td class="path"><code>/gateway/messages/</code></td>
               <td><span class="verb-tag post">POST</span></td>
-              <td>One agent writes to another.</td>
+              <td>One agent writes to another: the original mailbox, now through the A2A Gateway.</td>
               <td><code>gateway.invoke</code></td>
             </tr>
             <tr>
@@ -1388,6 +1420,48 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
               <td><span class="verb-tag post">POST</span></td>
               <td>One enforced tool call, over plain REST.</td>
               <td><code>mcp.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>The agents a sender may reach, and the skills it may ask each for.</td>
+              <td><code>a2a.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a/{address}/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>A published agent, as an A2A server (JSON-RPC). Enforcing.</td>
+              <td><code>a2a.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a/{address}/.well-known/agent-card.json</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>The agent's card, as governance reviewed it.</td>
+              <td><code>a2a.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a-gateway/messages/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>One enforced hand-off, over plain REST.</td>
+              <td><code>a2a.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a-gateway/tasks/{id}/</code> <code>cancel/</code></td>
+              <td><span class="verb-tag">GET</span> <span class="verb-tag post">POST</span></td>
+              <td>Follow a task, or withdraw it.</td>
+              <td><code>a2a.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a-gateway/inbox/{agent}/</code></td>
+              <td><span class="verb-tag">GET</span></td>
+              <td>A mailbox agent collects its work.</td>
+              <td><code>a2a.invoke</code></td>
+            </tr>
+            <tr>
+              <td class="path"><code>/a2a-gateway/tasks/{id}/status/</code></td>
+              <td><span class="verb-tag post">POST</span></td>
+              <td>A mailbox agent reports progress, or answers.</td>
+              <td><code>a2a.invoke</code></td>
             </tr>
             <tr>
               <td class="path"><code>/approval-requests/</code></td>
@@ -1654,9 +1728,12 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
 
       <h3>Agent-to-agent messages</h3>
       <p>
-        A mailbox, not an orchestrator. One agent writes to another, the message is governed and
-        recorded, and the recipient <em>collects</em> it &mdash; the platform never calls into an
-        agent, so an agent that is down cannot slow the gateway and its messages simply wait.
+        The original mailbox still answers here, in the shape it always had. Every message sent to it
+        is now a task in <a href="#a2a">the A2A Gateway</a>, held to the same rules: the recipient
+        must be published, and a restricted one needs a contract for the sender. The recipient
+        <em>collects</em> its messages &mdash; the platform never calls into it, so an agent that is
+        down cannot slow the gateway and its messages simply wait. New code should use the A2A
+        Gateway itself.
       </p>
       <div class="code">
         <div class="code-head"><span class="verb">POST</span><span>/api/v1/gateway/messages/</span></div>
@@ -1669,8 +1746,8 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
 }</pre>
       </div>
       <p>
-        A message refused by policy returns <strong>403</strong> and is <em>kept</em>, marked
-        blocked with its reason. "Which agent tried to tell which other agent what, and why were
+        A message refused returns <strong>403</strong> and is <em>kept</em>, marked blocked with
+        its reason. "Which agent tried to tell which other agent what, and why were
         they stopped" is the question this exists to answer.
       </p>
 
@@ -1786,6 +1863,117 @@ curl -H <span class="s">"X-API-Key: $CONTROL_TOWER_KEY"</span> \
         inventory and governance, but the gateway will not reach them &mdash; it does not spawn
         processes on a web request. The <strong>mock</strong> transport makes the module
         demonstrable with no servers deployed.
+      </p>
+    </section>
+
+    <!-- ================= A2A GATEWAY ================= -->
+    <section id="a2a">
+      <p class="kicker">In-path mode</p>
+      <h2 class="sec">The A2A Gateway</h2>
+      <p>
+        One governed path for the work agents hand one another, speaking the open Agent2Agent (A2A)
+        protocol. Every agent published to it is an A2A server at its own address on the Tower,
+        whether the Tower delivers its work or it collects its work from a mailbox. Other
+        organizations' agents are registered behind the same kind of address. The platform holds
+        their credentials; your agents never do.
+      </p>
+
+      <h3>Send an agent work</h3>
+      <p>
+        Any A2A client reaches a published agent at <code>/api/v1/a2a/&lt;address&gt;/</code> with a
+        service-account key, naming the sending agent in <code>X-Agent-ID</code> (a key bound to one
+        agent sends as it). An internal agent's address is its <code>agent_id</code>, and its card is
+        at <code>.well-known/agent-card.json</code> beneath it.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">POST</span><span>/api/v1/a2a/claims-triage-agent/</span></div>
+<pre><span class="c"># Authorization: Bearer act_&hellip;   X-Agent-ID: customer-support-agent</span>
+{
+  <span class="k">"jsonrpc"</span>: <span class="s">"2.0"</span>, <span class="k">"id"</span>: 1, <span class="k">"method"</span>: <span class="s">"message/send"</span>,
+  <span class="k">"params"</span>: {
+    <span class="k">"message"</span>: {
+      <span class="k">"kind"</span>: <span class="s">"message"</span>, <span class="k">"role"</span>: <span class="s">"user"</span>, <span class="k">"messageId"</span>: <span class="s">"9b1e2c40"</span>,
+      <span class="k">"parts"</span>: [{<span class="k">"kind"</span>: <span class="s">"text"</span>, <span class="k">"text"</span>: <span class="s">"Where does CLM-4471 stand?"</span>}]
+    },
+    <span class="k">"metadata"</span>: {
+      <span class="k">"io.aicontroltower/skill"</span>: <span class="s">"claim-status"</span>,
+      <span class="k">"io.aicontroltower/dataClassification"</span>: <span class="s">"internal"</span>
+    }
+  }
+}</pre>
+      </div>
+      <p>
+        The answer is always a task. Its <code>metadata["io.aicontroltower/gateway"]</code> carries
+        the delivery <code>status</code> &mdash; <code>delivered</code>, <code>blocked</code>,
+        <code>unavailable</code> or <code>failed</code> &mdash; and, for a refusal, the
+        <code>reason</code>. A refused hand-off is a task in the <code>rejected</code> state, not a
+        JSON-RPC error, so the sending agent can adapt. Follow a task with <code>tasks/get</code> and
+        withdraw it with <code>tasks/cancel</code>; streaming and push notifications are not offered.
+        <code>GET /api/v1/a2a/?agent=&hellip;</code> lists every agent the sender may reach, and
+        <code>POST /api/v1/a2a-gateway/messages/</code> sends the same hand-off over plain REST:
+        <strong>201</strong> delivered, <strong>403</strong> refused, <strong>503</strong> out of
+        rotation, <strong>502</strong> the agent failed.
+      </p>
+
+      <h3>Agents without an A2A endpoint</h3>
+      <p>
+        Publish the agent with <em>Gateway mailbox</em> delivery and declare its skills. The gateway
+        never calls into it: its work waits until it collects it, and it answers each task over REST.
+      </p>
+      <div class="code">
+        <div class="code-head"><span class="verb">GET</span><span>/api/v1/a2a-gateway/inbox/claims-triage-agent/</span></div>
+<pre><span class="c"># Collect the waiting tasks. Each moves to "working".</span>
+curl -H <span class="s">"X-API-Key: $CLAIMS_AGENT_KEY"</span> \
+  <span class="s">"https://tower.example.com/api/v1/a2a-gateway/inbox/claims-triage-agent/"</span>
+
+<span class="c"># Answer one.</span>
+curl -X POST -H <span class="s">"X-API-Key: $CLAIMS_AGENT_KEY"</span> -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"state": "completed", "text": "CLM-4471 is with the property adjuster."}'</span> \
+  <span class="s">"https://tower.example.com/api/v1/a2a-gateway/tasks/&lt;task-id&gt;/status/"</span></pre>
+      </div>
+
+      <h3>What every hand-off must clear</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Check</th><th>Refuses when</th></tr></thead>
+          <tbody>
+            <tr><td>Identity</td><td>No sending agent is named, the key may not act as it (IRGF link 02), or its kill-switch is pulled.</td></tr>
+            <tr><td>Registry</td><td>The recipient is not published, approved or active, or the skill is disabled, withdrawn or awaiting review.</td></tr>
+            <tr><td>Access</td><td>The recipient is restricted, and the sender holds no unexpired contract covering the skill.</td></tr>
+            <tr><td>Content</td><td>The message is larger than the gateway takes, or more sensitive than the contract's ceiling or the recipient's clearance. Undeclared, it carries the sender's own classification; personal data found in it makes it at least confidential.</td></tr>
+            <tr><td>Policy</td><td>An agent-level policy denies it; <code>agent_communication</code> policies see the recipient and the hop count. A policy or approval rule requiring a person refuses: a hand-off cannot wait on one.</td></tr>
+            <tr><td>Limits</td><td>The chain is longer than <code>A2A_GATEWAY_MAX_HOPS</code> or would come back to an agent already in it, or the contract's hourly rate is spent.</td></tr>
+            <tr><td>Breaker</td><td>An agent reached over HTTP failed repeatedly and is out of rotation until a probe gets through.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Name the run in <code>io.aicontroltower/executionId</code> (or <code>X-Execution-ID</code>)
+        and the hand-off also lands on that execution's timeline. Name the task you are handing work
+        on from in <code>io.aicontroltower/parentTaskId</code>, so the chain is counted. Once
+        recorded, every hand-off is verified by the Control Plane against the sender's authorized
+        contracts and the applications' delegation graphs (IRGF link 07).
+      </p>
+
+      <div class="note warn">
+        <span class="label">Skills are reviewed, and re-reviewed</span>
+        <p>
+          An agent's card can add skills to the registry, but never makes one reachable. New skills
+          wait for review, and so does any skill whose definition changes after review. The card the
+          gateway publishes lists reviewed skills only and names the gateway as the agent's URL: the
+          endpoint governance registered is the only one the gateway sends to.
+        </p>
+      </div>
+
+      <h3>Other organizations' agents</h3>
+      <p>
+        Register one under <em>A2A Gateway &rarr; Agent Registry &rarr; Publish agent</em>, as an
+        external agent: its endpoint, where its card is (blank reads
+        <code>/.well-known/agent-card.json</code>), and the environment variable holding its
+        credential in <code>credential_ref</code>. Then <strong>Sync card</strong>,
+        <strong>Approve</strong>, review each skill, and <strong>Grant a contract</strong> with a
+        data ceiling no higher than you would hand that organization. The gateway reaches it over A2A
+        JSON-RPC and HTTP, and injects the credential.
       </p>
     </section>
 
@@ -2373,6 +2561,7 @@ def handle_ticket(question: str) -&gt; str:
             <tr><td><code>human_approval</code></td><td>&mdash;</td><td>delegates to the approval rules</td></tr>
             <tr><td><code>risk_classification</code></td><td><code>environments</code>, <code>require_countersignature</code>, <code>block_when_rescore_due</code></td><td>the agent and application carry a countersigned IRGF S2 classification</td></tr>
             <tr><td><code>deployment_authorization</code></td><td><code>environments</code>, <code>block_pending_changes</code></td><td>the agent, and the application when the check names one, hold a Gate G3 authorization in force for the environment</td></tr>
+            <tr><td><code>agent_communication</code></td><td><code>blocked_recipients</code>, <code>block_external</code>, <code>external_max_data_classification</code>, <code>max_hops</code>, <code>environments</code></td><td>nothing; evaluated for every hand-off through the A2A Gateway</td></tr>
           </tbody>
         </table>
       </div>
@@ -2814,9 +3003,10 @@ python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets i
             <p>
               No. Telemetry is always <em>pushed</em> to the Tower, and the Tower never calls into
               your runtime &mdash; not even in gateway mode, where it calls <em>providers</em>, not
-              you. Agent-to-agent messages are collected by the recipient rather than delivered to
-              it, for the same reason. Your engine needs outbound access to the Tower and nothing
-              more.
+              you. An agent without an A2A endpoint of its own collects its work from the A2A
+              Gateway's mailbox rather than having it delivered, for the same reason: the gateway
+              calls only agents that serve A2A themselves. Your engine needs outbound access to the
+              Tower and nothing more.
             </p>
           </div>
         </details>
@@ -3055,6 +3245,21 @@ python manage.py runserver       <span class="c"># ASGI via daphne, WebSockets i
               <td>MCP call <code>blocked</code>: &ldquo;Action limit (link 06) &hellip;&rdquo;</td>
               <td>The call's value, the day's total, the hourly rate or the counterparty breaks the agent's action limits.</td>
               <td>Stay within the Agent Card's limits, or change them through Gate G4. If the agent was suspended too, a person resumes it.</td>
+            </tr>
+            <tr>
+              <td>A2A task <code>rejected</code>: &ldquo;&hellip; holds no contract &hellip;&rdquo;</td>
+              <td>The recipient is restricted, and the sender has no contract for it.</td>
+              <td>Grant one on the recipient's A2A page (<code>a2a.approve</code>), or open the agent to every agent.</td>
+            </tr>
+            <tr>
+              <td>A2A task <code>rejected</code>: &ldquo;&hellip; data may not be sent to &hellip;&rdquo;</td>
+              <td>The message is more sensitive than the contract's ceiling or the recipient's clearance. Undeclared, it is read as the sender's own classification, and personal data found in it makes it at least confidential.</td>
+              <td>Declare what is sent in <code>io.aicontroltower/dataClassification</code>, or send less.</td>
+            </tr>
+            <tr>
+              <td>A2A <code>-32050</code>, or <code>404</code> on an Agent Card</td>
+              <td>Nothing is published at that address, or it is not approved yet. An internal agent's address is its <code>agent_id</code>.</td>
+              <td>Publish the agent under <em>A2A Gateway &rarr; Agent Registry</em>, and have it approved.</td>
             </tr>
           </tbody>
         </table>

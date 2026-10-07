@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from apps.a2a.models import A2AAccessMode, A2AAgentCard, A2ATask, DeliveryStatus
 from apps.accounts.roles import Role
 from apps.agents.models import AIAgent, AutonomyLevel, validate_action_limits
 from apps.agents.services import KillSwitch, KillSwitchError
@@ -14,7 +15,6 @@ from apps.api.models import APIKey, ServiceAccount
 from apps.audit.models import AuditAction, AuditLog
 from apps.core.constants import Environment, LifecycleStatus
 from apps.gateway.messaging import MessageBlocked, MessageRequest, MessagingService
-from apps.gateway.models import GatewayMessage
 from apps.gateway.services import AgentInactive, AgentSuspended, GatewayRequest, GatewayService
 from apps.mcp_gateway.services import MCPGateway
 from apps.notifications.models import Notification, NotificationCategory
@@ -105,16 +105,18 @@ class KillSwitchEnforcementTests(KillSwitchFixture):
         recipient = AIAgent.objects.create(
             organization=self.organization, name="Ledger Agent", agent_id="ledger-agent"
         )
+        A2AAgentCard.objects.create(
+            organization=self.organization, agent=recipient, is_approved=True, access_mode=A2AAccessMode.OPEN,
+        )
         self.suspend()
-        with self.assertRaises(MessageBlocked):
+        with self.assertRaises(MessageBlocked) as caught:
             MessagingService.send(
                 self.organization,
                 MessageRequest(sender=self.agent, recipient=recipient, body="Pay 400"),
             )
+        self.assertIn("kill-switch", caught.exception.message)
         self.assertTrue(
-            GatewayMessage.objects.filter(
-                sender=self.agent, status=GatewayMessage.Status.BLOCKED
-            ).exists()
+            A2ATask.objects.filter(sender=self.agent, status=DeliveryStatus.BLOCKED).exists()
         )
 
     def test_the_mcp_gateway_refuses_a_suspended_agent_before_anything_else(self):

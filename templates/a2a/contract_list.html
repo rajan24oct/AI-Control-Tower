@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load control_tower humanize a2a_tags %}
+
+{% block title %}A2A Contracts{% endblock %}
+
+{% block content %}
+<div class="ct-irgf-intro mb-3">
+  <strong>The communication graph as governance granted it.</strong> On a restricted agent only a sender holding a
+  contract gets through -- for the skills it names, with data up to its ceiling, at most at its rate. A contract is part
+  of the sender's authorized configuration: a new or wider one for an agent authorized at Gate G3 is recorded as a
+  change, and from Tier 3 waits at Gate G4.
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>Contracts</span>
+    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Sender, recipient or purpose">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Recipient</label>
+        <select name="recipient" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for card in cards %}
+            <option value="{{ card.pk }}" {% if active_filters.recipient == card.pk|stringformat:"s" %}selected{% endif %}>{{ card.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">State</label>
+        <select name="state" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="active" {% if request.GET.state == "active" %}selected{% endif %}>In force</option>
+          <option value="expired" {% if request.GET.state == "expired" %}selected{% endif %}>Expired</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "Sender" "sender" %}{% sort_th "Recipient" "recipient" %}<th>Skills</th>
+          {% sort_th "Ceiling" "ceiling" %}{% sort_th "Rate" "rate" first="desc" %}{% sort_th "Expires" "expires" %}
+          <th class="text-end">Sent (7d)</th><th class="text-end"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for contract in contracts %}
+          <tr>
+            <td class="small">
+              <a href="{% url 'inventory:agent_detail' contract.sender.pk %}" class="fw-semibold text-decoration-none">{{ contract.sender.name }}</a>
+              {% if contract.purpose %}<div class="text-muted" style="max-width:22rem">{{ contract.purpose|truncatechars:110 }}</div>{% endif %}
+            </td>
+            <td class="small">
+              <a href="{% url 'a2a:card_detail' contract.recipient.pk %}" class="text-decoration-none">{{ contract.recipient.name }}</a>
+              {% if contract.recipient.is_external %}<div><span class="badge badge-soft text-bg-light text-dark">External</span></div>{% endif %}
+            </td>
+            <td class="small">{% if contract.allowed_skills %}{% for skill in contract.allowed_skills %}<code>{{ skill }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}<span class="text-muted">All enabled</span>{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ contract.ceiling|classification_style }}">{{ contract.ceiling|capfirst }}</span></td>
+            <td class="small">{% if contract.max_messages_per_hour %}{{ contract.max_messages_per_hour }}/hour{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="small text-nowrap">
+              {% if contract.is_expired %}<span class="badge badge-soft text-bg-danger">Expired</span>
+              {% elif contract.expires_at %}{{ contract.expires_at|date:"j M Y" }}
+              {% else %}<span class="text-muted">No expiry</span>{% endif %}
+            </td>
+            <td class="small text-end">{{ contract.sent_week }}</td>
+            <td class="text-end small text-nowrap">
+              {% if can_approve %}
+                <a href="{% url 'a2a:contract_edit' contract.pk %}" class="text-decoration-none">Edit</a>
+                <form method="post" action="{% url 'a2a:contract_revoke' contract.pk %}" class="d-inline m-0 ms-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button type="submit" class="btn btn-link p-0 small text-danger text-decoration-none align-baseline">Revoke</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8">
+            <div class="ct-empty"><i class="bi bi-diagram-2"></i>
+              <p class="mb-0">No contracts match these filters. Grant one on the recipient's A2A page.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

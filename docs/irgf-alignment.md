@@ -1,7 +1,7 @@
 # AI Control Tower and the IRGF
 
 How AI Control Tower applies the **Intent-to-Runtime Governance Framework** (IRGF v1.0,
-<https://www.irgframework.org/>), what Phases 1 to 4 implement, and what comes next. Stage (S0–S10), gate
+<https://www.irgframework.org/>), what Phases 1 to 5 implement, and what comes next. Stage (S0–S10), gate
 (G1–G5), dimension (D1–D5) and module (M1–M20) identifiers are IRGF's own.
 
 For installation, configuration and the full API, see the [Technical Guide](technical-guide.md).
@@ -20,7 +20,8 @@ For installation, configuration and the full API, see the [Technical Guide](tech
 10. [Phase 2: Gates G3 and G4, and M17 exceptions](#10-phase-2-gates-g3-and-g4-and-m17-exceptions)
 11. [Phase 3: the Control Plane](#11-phase-3-the-control-plane)
 12. [Phase 4: applications and composite authority](#12-phase-4-applications-and-composite-authority)
-13. [Mapping and roadmap](#13-mapping-and-roadmap)
+13. [Phase 5: agent-to-agent communication](#13-phase-5-agent-to-agent-communication)
+14. [Mapping and roadmap](#14-mapping-and-roadmap)
 
 ---
 
@@ -34,13 +35,16 @@ an immutable audit trail, cost and tool-definition drift. Phase 1 adds the part 
 off: a **tier for every system**, set at **S2** and **countersigned**, and puts it to work in the
 controls, in agent identity and in a kill-switch.
 
-Phases 2 to 4 build on that tier:
+Phases 2 to 5 build on that tier:
 - **Phase 2** adds the gates that follow it: deployment authorization at **G3**, change control at
   **G4** and time-boxed exceptions under **M17** ([section 10](#10-phase-2-gates-g3-and-g4-and-m17-exceptions)).
 - **Phase 3** adds the **Control Plane**, which compares what runs with what was authorized
   ([section 11](#11-phase-3-the-control-plane)).
 - **Phase 4** extends authorization from agents to **applications**
   ([section 12](#12-phase-4-applications-and-composite-authority)).
+- **Phase 5** governs the work agents hand one another. Every agent-to-agent message goes through the
+  **A2A Gateway**, under contracts that are part of what G3 authorizes
+  ([section 13](#13-phase-5-agent-to-agent-communication)).
 
 ## 2. What Phase 1 adds
 
@@ -170,9 +174,10 @@ IRGF asks that every agent act under a registered identity of its own. A service
 | Unbound service account | **Tier 3–4 agent** | `403 identity_not_bound` |
 | Person signed in to the Control Tower | Any | Governed by their role, as before |
 
-The rule applies to the AI Gateway (`/gateway/chat/`), agent messaging (the sender, and the agent
-collecting), the MCP endpoint (`/mcp/` — refused as a JSON-RPC error with HTTP 403) and the MCP REST
-pair. Existing integrations keep working until an agent reaches Tier 3, which is the point at which
+The rule applies to the AI Gateway (`/gateway/chat/`), the MCP endpoint (`/mcp/` — refused as a
+JSON-RPC error with HTTP 403) and the MCP REST pair. It also applies to the A2A Gateway: to the agent
+sending, to the agent collecting its work or answering it, and to the agent following a task
+(Phase 5). Existing integrations keep working until an agent reaches Tier 3, which is the point at which
 IRGF insists on the separation.
 
 ## 6. The kill-switch: chain link 06
@@ -182,7 +187,8 @@ Gate G3 requires a pre-approved kill-switch for every agent that acts. Each agen
 - **Suspend** from the agent page (*Kill-switch → Suspend agent*, with a reason) or over the API:
   `POST /api/v1/agents/{id}/suspend/` with `{"reason": "..."}`.
 - **Effect, on the next request:** the AI Gateway answers `403 agent_suspended`; the MCP Gateway
-  blocks every tool call with the reason; the agent cannot send or collect messages. The AI Gateway
+  blocks every tool call with the reason; the A2A Gateway refuses the work the agent sends and any
+  sent to it, and the agent cannot collect its inbox. The AI Gateway
   also refuses agents whose status is inactive or retired (`403 agent_inactive`) — at S10 access is
   revoked.
 - **Resume** from the agent page, with an optional note. **Only a person can resume**: a service
@@ -225,7 +231,7 @@ Each agent page also shows the **eight-link chain (M10)** and where the agent st
 |---|---|
 | 01 Agent | Purpose and out-of-scope are both stated |
 | 02 Identity | A service account is bound to it (a gap at Tier 3–4 without one) |
-| 03 Permission | Autonomy level, approval requirement and MCP grants are recorded, and a Gate G3 authorization is in force (Phase 2) |
+| 03 Permission | Autonomy level, approval requirement, MCP grants and A2A contracts are recorded, and a Gate G3 authorization is in force (Phase 2) |
 | 04 Tool | It has an explicit allow-list |
 | 05 Policy | At least one deny or approval policy in scope can stop it |
 | 06 Action | Action limits and kill-switch conditions are declared and it is not suspended; at Tier 3–4, at least one kill-switch trigger is automatic (Phase 3) |
@@ -244,6 +250,8 @@ Each agent page also shows the **eight-link chain (M10)** and where the agent st
 | Request a G3 authorization or an exception | System owner, delivery team | `agent.manage` / `application.manage`, or being the system's owner | AI Developer, AI Platform Administrator, Org Admin, and owners |
 | Decide at G3, G4 or M17 | By tier ([section 10](#10-phase-2-gates-g3-and-g4-and-m17-exceptions)): at Tier 1–2 the system owner (G3) or the Risk and Compliance Lead (G4, M17), or the AI Governance Body; at Tier 3 the Body; at Tier 4 the Body, then the Enterprise Governance Sponsor | Ownership, `risk.manage`, `gate.decide`, `gate.sponsor` | Owners, Risk Manager, AI Governance Manager, Org Admin |
 | Mark a tool's action-limit arguments (link 06) | Tool reviewer | `mcp.approve` | AI Governance Manager, Org Admin |
+| Publish an agent for A2A, or register another organization's (Phase 5) | System owner, delivery team | `a2a.manage` | AI Developer, AI Platform Administrator, Org Admin |
+| Approve an A2A agent, review its skills, grant a contract (link 03, Phase 5) | Tool reviewer; Gate G4 then decides a contract for an authorized sender | `a2a.approve` | AI Governance Manager, Org Admin |
 | Revert or ratify drift (M13) | System owner, risk function or AI Governance Body | Ownership, `risk.manage` or `gate.decide` | Owners, AI Governance Manager, Risk Manager, Org Admin |
 | Except or escalate drift; run the Control Plane (M12) | Risk function or AI Governance Body | `risk.manage` or `gate.decide` | AI Governance Manager, Risk Manager, Org Admin |
 
@@ -620,12 +628,12 @@ the agent belongs to.
   authorized configuration. Running in production without an authorization is structural drift, and
   so is running an agent outside the authorized membership. A model outside it is configuration
   drift.
-- **Delegation.** Every agent-to-agent message through the gateway is a delegation. The Control Plane
-  checks it against the declared graphs of the authorized applications that either agent belongs
-  to.
+- **Delegation.** Every hand-off through the A2A Gateway is a delegation
+  ([section 13](#13-phase-5-agent-to-agent-communication)). The Control Plane checks it against the
+  declared graphs of the authorized applications that either agent belongs to.
   - A path none of those graphs declares is integration drift, recorded against each of those
     applications.
-  - Messages are verified like tool calls (link 07), and they are listed under *Verifications*.
+  - Hand-offs are verified like tool calls (link 07), and they are listed under *Verifications*.
 - **Policy.** The `deployment_authorization` policy holds an application to its own authorization
   whenever a check names one: the policy check API, or telemetry that names the application.
 
@@ -649,8 +657,8 @@ the agent belongs to.
   Document Extractor. The portal cannot be authorized yet: the extractor runs in development and
   holds no authorization for production. Its request page shows that.
 - **An undeclared delegation.** The support agent asks the claims agent about a claim, through the
-  gateway. The Claims Processing Platform declares no such delegation, so the Control Plane records
-  integration drift against it.
+  A2A Gateway and under a contract. The Claims Processing Platform declares no such delegation, so
+  the Control Plane records integration drift against it.
 - **Unauthorized applications.** Production runs of the Fraud Operations Console, the Employee
   Knowledge Hub and the Customer Support Portal are structural drift, because none of the three
   holds an authorization.
@@ -659,7 +667,116 @@ the agent belongs to.
 
 ![An application's page: its authorization, and its composition](screenshots/47-application-composition.png)
 
-## 13. Mapping and roadmap
+## 13. Phase 5: agent-to-agent communication
+
+Phase 4 recorded delegation between agents and checked it once it had happened. Phase 5 puts it in
+the request path. Every hand-off goes through the **A2A Gateway**, which speaks the open Agent2Agent
+(A2A) protocol and governs the hand-off before it is delivered. That holds for agents in the
+registry and for other organizations' agents registered behind the gateway.
+
+### What is governed
+
+| Record | IRGF | What it holds |
+|---|---|---|
+| A2A agent | Link 01 Agent · chapter 16 | An agent in the registry, published at its `agent_id`, or an external agent registered with its endpoint and credential reference. Nothing reaches it until it is approved. It carries a **clearance**: the most sensitive data it may be sent |
+| Skill | Link 04 Tool | What the agent offers. A skill is reviewed before any agent can ask for it, and one whose definition changes goes back to review, as MCP tools do |
+| Contract | Link 03 Permission | One sender and one recipient: the skills, a data ceiling no higher than the recipient's clearance, a rate, an expiry and a purpose. A restricted agent takes work only under a contract |
+| Task | Links 07 and 08 | Each hand-off, delivered or refused, with the gateway's reasons and every state it passed through |
+
+### Before delivery
+
+A hand-off must clear, in order:
+
+1. **Identity (links 02 and 06).** The sending agent is named, the key may act as it, and its
+   kill-switch is not pulled.
+2. **Registry.** The recipient is published, approved and active, and the skill is enabled.
+3. **Contract (link 03).** A restricted recipient needs an unexpired contract covering the skill.
+4. **Data.** The message is held to the contract's ceiling and to the recipient's clearance. It
+   carries the classification the sender declares, else the sender's own. Personal data found in it
+   raises that to at least confidential.
+5. **Policy (link 05).** Policies are evaluated with the recipient and the hop count. The
+   `agent_communication` type can keep work inside the organization, or cap what may leave it. A
+   policy or approval rule that requires a person refuses, because a hand-off cannot wait for one.
+6. **Chain (chapter 16).** Work may be handed on only so many times, and never back to an agent
+   already in the chain.
+7. **Rate and breaker.** The contract's hourly rate holds, and an external agent that keeps failing
+   is taken out of rotation.
+
+A refusal comes back as an A2A task in the `rejected` state, with the reason, so the sending agent
+can adapt. The refusal is kept.
+
+### Gates G3 and G4
+
+- **G3.** An agent's authorized configuration records the contracts it holds: to whom, and for which
+  skills.
+- **G4.** A contract granted or widened after that is a change (`peer_added`). An agent the system
+  can hand work to is authority it can use, and a path for data to leave by, so it is classed as a
+  new tool is:
+  - material at Tier 1–2
+  - major at Tier 3–4: S2 re-scored, then G2 and G4
+
+  A contract revoked or narrowed is minor (`peer_removed`).
+- **Authorizations signed before Phase 5** never recorded contracts: until then, any agent could
+  message any other. For them the field reads *not recorded*, not *empty*, and it is not compared
+  until the agent is authorized again. Upgrading therefore raises no changes and suspends nothing.
+- **Applications.** A delegation graph may name an external agent by its A2A address. The request
+  page adds a check that does not block: whether the gateway would carry each declared delegation,
+  because it has a contract or reaches an agent open to every agent.
+
+### At runtime (M12, link 07)
+
+Every hand-off is verified once it is recorded.
+
+- **Outside the communication boundary.** A hand-off under a contract the sender's authorization does
+  not hold — one granted or widened after G3 and not yet through G4 — is security drift and an
+  incident. It fires the sender's `boundary_divergence` kill-switch trigger, if the agent pre-approved
+  it. A hand-off to an open agent needs no contract: governance's decision on that agent puts it
+  inside the boundary.
+- **Undeclared delegation.** The hand-off is checked against the delegation graphs of the authorized
+  applications either agent belongs to, as in Phase 4.
+- Hand-offs are listed under *Verifications* as *A2A hand-off*.
+
+### Upgrading from agent messaging
+
+The original mailbox endpoints keep working, and every message sent through them is an A2A task under
+the rules above. On upgrade, a migration keeps the traffic that already worked working:
+- it publishes every agent that had received messages, approved and restricted, and cleared for the
+  most sensitive data it or its senders handle
+- it grants a contract for each pair of agents whose messages had got through; pairs that were only
+  ever blocked stay blocked
+
+### What Phase 5 leaves out
+
+- **Streaming and push notifications.** A sender follows a task by asking for it.
+- **Answers.** What agents answer is recorded but not classified.
+- **Direct calls.** Agents that call each other directly bypass the gateway. Keep external agents'
+  credentials in the platform alone, and the gateway becomes the only way to reach them.
+- **Across organizations.** A hand-off never crosses tenants: another organization's agent is
+  registered as an external agent.
+
+### In the demo
+
+- **Contoso Re**, a reinsurer's agent, is approved and cleared for internal data. The claims agent
+  holds a contract for two of its skills, and every hand-off it makes is refused, each for a
+  different reason:
+  - a quote request declared internal names the claimant and the payee account: personal data
+  - one skill is outside the contract
+  - another changed its description after review, to ask for the claimant's personal details
+  - the default *High autonomy agents* approval rule applies: the claims agent acts at autonomy 3,
+    and a hand-off cannot wait for a human
+- **Adatum Market Signals** answers the research agent twice, then goes down. After five failures
+  its breaker takes it out of rotation.
+- **Fabrikam KYC** is registered and waiting for its security review, so nothing can reach it.
+- The **Regulatory Change Monitor** is published but not approved. The **Internal Knowledge
+  Assistant** is open to every agent, and answers the monitor without a contract. Its own question
+  to the claims agent is refused: it holds no contract.
+- The fraud agent writes to the support agent through the original mailbox and is refused: the
+  support agent was never published.
+- The research agent's contract with Adatum was granted after Gate G3 authorized the agent. It waits
+  at Gate G4, and until then the Control Plane reports traffic along it as outside the agent's
+  boundary.
+
+## 14. Mapping and roadmap
 
 | IRGF element | Status |
 |---|---|
@@ -680,6 +797,12 @@ the agent belongs to.
 | Authorizing applications, not only agents: models, providers, member agents | **Phase 4** |
 | Chapter 16: composite reachable authority, D2 scored against it, a declared delegation graph | **Phase 4** |
 | Delegation at runtime: agent-to-agent messages checked against the declared graphs | **Phase 4** |
+| Agent chain 03 Permission for agent-to-agent work: a contract per pair of agents, recorded at G3 and changed through G4 | **Phase 5** |
+| Delegation enforced before it happens: a recipient that is not published, approved or contracted is refused at the gateway | **Phase 5** |
+| Data leaving with a delegation: contract ceilings, the recipient's clearance, personal data found in the message | **Phase 5** |
+| Chapter 16 delegation to agents outside the organization: registered, reviewed and reached only through the gateway | **Phase 5** |
+| M12 comparing agent-to-agent traffic with the authorized contracts | **Phase 5** |
 | Caller-authority delegations widening an invoked agent's boundary at runtime | Next |
 | M17 exceptions for applications | Next |
+| Streaming and push notifications for A2A tasks; classifying what agents answer | Next |
 | Design-time records (Use-Case Canvas, ADRs, pattern library, benefit and capability records) | Kept in architecture tooling; applications link to them |

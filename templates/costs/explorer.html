@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Cost Explorer{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div data-finops-explorer data-url="{{ data_url }}" data-state="{{ initial_state_json }}">
+
+  <div class="ct-card mb-3">
+    <div class="ct-card-body d-flex flex-column gap-3">
+      <div class="ct-toolbar justify-content-between">
+        <div class="ct-toolbar">
+          <span class="ct-toolbar-label">Group by</span>
+          <div class="ct-chips" role="group" aria-label="Group spend by">
+            <button type="button" class="ct-chip" data-dim="department"><i class="bi bi-building"></i>Department</button>
+            <button type="button" class="ct-chip" data-dim="team"><i class="bi bi-people"></i>Team</button>
+            <button type="button" class="ct-chip" data-dim="application"><i class="bi bi-window-stack"></i>Application</button>
+            <button type="button" class="ct-chip" data-dim="agent"><i class="bi bi-robot"></i>Agent</button>
+            <button type="button" class="ct-chip" data-dim="model"><i class="bi bi-cpu"></i>Model</button>
+            <button type="button" class="ct-chip" data-dim="provider"><i class="bi bi-hdd-network"></i>Provider</button>
+            <button type="button" class="ct-chip" data-dim="user"><i class="bi bi-person"></i>Individual</button>
+            <button type="button" class="ct-chip" data-dim="environment"><i class="bi bi-layers"></i>Environment</button>
+          </div>
+        </div>
+        <div class="ct-toolbar">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Measure">
+            <button type="button" class="btn btn-outline-secondary" data-metric="cost">Cost</button>
+            <button type="button" class="btn btn-outline-secondary" data-metric="tokens">Tokens</button>
+            <button type="button" class="btn btn-outline-secondary" data-metric="runs">Runs</button>
+          </div>
+          <select class="form-select form-select-sm" style="width:auto" data-days aria-label="Period">
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-export><i class="bi bi-download"></i> CSV</button>
+        </div>
+      </div>
+      <nav class="ct-breadcrumbs" aria-label="Drill-down path" data-breadcrumbs></nav>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-8">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="ct-metric h-100">
+            <span class="ct-metric-label">Spend</span>
+            <div class="ct-metric-value" data-total="cost">—</div>
+            <div class="ct-metric-hint" data-total="change"></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="ct-metric h-100">
+            <span class="ct-metric-label">Runs</span>
+            <div class="ct-metric-value" data-total="runs">—</div>
+            <div class="ct-metric-hint" data-total="items"></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="ct-metric h-100">
+            <span class="ct-metric-label">Tokens</span>
+            <div class="ct-metric-value" data-total="tokens">—</div>
+            <div class="ct-metric-hint" data-period></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="ct-metric h-100">
+            <span class="ct-metric-label">Avg / Run</span>
+            <div class="ct-metric-value" data-total="avg">—</div>
+            <div class="ct-metric-hint">Spend divided by runs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="ct-card h-100">
+        <div class="ct-card-header"><span><i class="bi bi-lightbulb me-1"></i> What stands out</span></div>
+        <div class="ct-card-body"><ul class="ct-insights" data-insights></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-6">
+      <div class="ct-card h-100">
+        <div class="ct-card-header"><span data-title="bars">Spend</span></div>
+        <div class="ct-card-body">
+          <p class="ct-chart-summary small text-muted mb-2" data-next-hint></p>
+          <div style="height:300px"><canvas data-chart="bars" role="img" aria-label="Spend by the selected dimension; the table below lists the same values"></canvas></div>
+          <p class="text-muted small text-center py-5 mb-0" data-empty style="display:none">No spend in this slice for the period.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="ct-card h-100">
+        <div class="ct-card-header"><span data-title="trend">Daily spend</span></div>
+        <div class="ct-card-body">
+          <p class="ct-chart-summary small text-muted mb-2">Each colour is the same entity as in the chart beside it; the rest are grouped as Other.</p>
+          <div style="height:300px"><canvas data-chart="trend" role="img" aria-label="Daily spend for the top entities, stacked"></canvas></div>
+          <p class="text-muted small text-center py-5 mb-0" data-empty style="display:none">No spend in this slice for the period.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ct-card">
+    <div class="ct-card-header">
+      <span><i class="bi bi-table me-1"></i> Breakdown</span>
+      <span class="small text-muted">Drill with <i class="bi bi-zoom-in"></i>, or pick any dimension from its menu</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table ct-table align-middle mb-0" data-table>
+        <thead>
+          <tr>
+            <th data-table-label>Name</th><th class="text-end">Cost</th><th data-table-share>Share</th>
+            <th class="text-end">vs previous</th><th class="text-end">Runs</th><th class="text-end">Tokens</th>
+            <th class="text-end">Avg / run</th><th class="text-end">Failed runs' cost</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ct-card mt-3">
+    <div class="ct-card-body d-flex align-items-start gap-3 py-2 small text-muted">
+      <i class="bi bi-info-circle text-primary mt-1"></i>
+      <div>
+        Department and team come from the registry: a run belongs to its application's department and team, or, if it
+        served no registered application, to its agent's team. Individuals appear where the run was attributed to a
+        person (AI Gateway calls with a user, or telemetry that names one). Developer-tool licences are on
+        <a href="{% url 'costs:developer_tools' %}">Developer Tools</a>.
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/finops.js' %}"></script>
+{% endblock %}

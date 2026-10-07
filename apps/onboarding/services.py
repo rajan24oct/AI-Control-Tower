@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from django.urls import reverse
 
+from apps.a2a.models import A2AAgentCard, A2AContract, A2ASkill, SkillStatus
 from apps.accounts.roles import Perm
 from apps.agents.models import AIAgent
 from apps.applications_registry.models import AIApplication
@@ -47,6 +48,7 @@ CREATE_LINKS = (
     (Perm.APPLICATION_MANAGE, "Application", "inventory:application_create", "bi-window-stack", "Made of agents"),
     (Perm.PROVIDER_MANAGE, "Routing policy", "routing:create", "bi-signpost-split", "AI Gateway"),
     (Perm.MCP_MANAGE, "MCP server", "mcp_gateway:server_create", "bi-hdd-stack", "MCP Gateway"),
+    (Perm.A2A_MANAGE, "A2A agent", "a2a:card_create", "bi-diagram-2", "A2A Gateway"),
     (Perm.POLICY_MANAGE, "Control policy", "policies:create", "bi-file-earmark-ruled", "Both gateways enforce it"),
     (Perm.POLICY_MANAGE, "Approval rule", "approvals:rule_create", "bi-person-check", "When a person decides"),
     (Perm.RISK_MANAGE, "Risk", "risks:create", "bi-clipboard-data", "In the risk register"),
@@ -83,6 +85,7 @@ def checklist(organization, allowed) -> list[Step]:
         _applications(organization, allowed),
         _routing(organization, allowed),
         _mcp(organization, allowed),
+        _a2a(organization, allowed),
         _guardrails(organization, allowed),
         _budgets(organization, allowed),
         _risks(organization, allowed),
@@ -184,6 +187,30 @@ def _mcp(organization, allowed) -> Step:
         "Every tool server behind one governed endpoint: approved, its tools reviewed, agents granted access.",
         state, facts, _action(allowed, Perm.MCP_MANAGE, "Register MCP server", "mcp_gateway:server_create"),
         [_link("Server registry", "mcp_gateway:servers"), _link("Tool catalog", "mcp_gateway:tools")],
+    )
+
+
+def _a2a(organization, allowed) -> Step:
+    cards = A2AAgentCard.objects.for_organization(organization)
+    active = cards.filter(status=LifecycleStatus.ACTIVE)
+    unapproved = active.filter(is_approved=False).count()
+    pending = A2ASkill.objects.for_organization(organization).filter(
+        status=SkillStatus.PENDING_REVIEW, card__status=LifecycleStatus.ACTIVE
+    ).count()
+    contracts = A2AContract.objects.for_organization(organization).count()
+    facts = [(_count(cards.count(), "agent") + " published", "secondary"),
+             (_count(contracts, "contract"), "secondary")]
+    if unapproved:
+        facts.append((f"{unapproved} not approved", "warning"))
+    if pending:
+        facts.append((_count(pending, "skill") + " awaiting review", "warning"))
+    state = OPTIONAL if not active.exists() else ATTENTION if unapproved or pending else DONE
+    return Step(
+        "Agent-to-agent (A2A)",
+        "The agents that may hand each other work: published and approved, their skills reviewed, "
+        "and a contract for each pair that talks.",
+        state, facts, _action(allowed, Perm.A2A_MANAGE, "Publish an A2A agent", "a2a:card_create"),
+        [_link("Agent registry", "a2a:agents"), _link("Contracts", "a2a:contracts")],
     )
 
 

@@ -9,6 +9,9 @@
     <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
   </div></div>
 {% else %}
+  {# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+  <div class="ct-alert-layout">
+  <div class="ct-alert-main">
 
   {# Section 34: the eight questions, answered in one band. #}
   <div class="ct-posture mb-3">
@@ -76,34 +79,8 @@
   </div>
 
   <div class="row g-3">
-    <div class="col-12 col-xxl-4">
-      <div class="ct-card h-100">
-        <div class="ct-card-header">
-          <span><i class="bi bi-bell me-1"></i> Needs Attention</span>
-          <span class="badge text-bg-secondary">{{ attention|length }}</span>
-        </div>
-        <div class="ct-card-body py-0" style="max-height:640px;overflow-y:auto">
-          {% for item in attention %}
-            <a href="{{ item.url }}" class="ct-attention-item">
-              <i class="bi {{ item.severity|severity_icon }} text-{{ item.severity|severity_style }}"></i>
-              <div class="flex-grow-1">
-                <p class="ct-attention-title">{{ item.title }}</p>
-                {% if item.detail %}<p class="ct-attention-detail">{{ item.detail }}</p>{% endif %}
-              </div>
-              <i class="bi bi-chevron-right text-muted small align-self-center"></i>
-            </a>
-          {% empty %}
-            <div class="ct-empty">
-              <i class="bi bi-check-circle"></i>
-              <p class="mb-0">Nothing needs attention.</p>
-              <p class="small mb-0">No incidents, autonomy exceptions or pending decisions.</p>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
 
-    <div class="col-12 col-xxl-8">
+    <div class="col-12">
       <div class="ct-card">
         <div class="ct-card-header">
           <span><i class="bi bi-diagram-3 me-1"></i> AI Landscape</span>
@@ -211,6 +188,35 @@
         </div>
       </div>
     </div>
+  </div>
+
+  </div>
+  <aside class="ct-alert-rail" aria-label="Alerts">
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span><i class="bi bi-bell me-1"></i> Needs Attention</span>
+        <span class="badge text-bg-secondary">{{ attention|length }}</span>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for item in attention %}
+          <a href="{{ item.url }}" class="ct-attention-item">
+            <i class="bi {{ item.severity|severity_icon }} text-{{ item.severity|severity_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">{{ item.title }}</p>
+              {% if item.detail %}<p class="ct-attention-detail">{{ item.detail }}</p>{% endif %}
+            </div>
+            <i class="bi bi-chevron-right text-muted small align-self-center"></i>
+          </a>
+        {% empty %}
+          <div class="ct-empty">
+            <i class="bi bi-check-circle"></i>
+            <p class="mb-0">Nothing needs attention.</p>
+            <p class="small mb-0">No incidents, autonomy exceptions or pending decisions.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </aside>
   </div>
 {% endif %}
 {% endblock %}

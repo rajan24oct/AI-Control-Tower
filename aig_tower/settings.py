@@ -72,6 +72,7 @@ LOCAL_APPS = [
     "apps.routing",
     "apps.gateway",
     "apps.mcp_gateway",
+    "apps.a2a",
     "apps.evaluations",
     "apps.notifications",
     "apps.inventory",
@@ -307,6 +308,31 @@ CONTROL_TOWER = {
         # Browser origins allowed to reach the MCP endpoint, in addition to
         # CSRF_TRUSTED_ORIGINS. Clients that are not browsers send no Origin.
         "ALLOWED_ORIGINS": env_list("MCP_GATEWAY_ALLOWED_ORIGINS"),
+    },
+    # A2A Gateway. Agent-to-agent traffic, on the same terms as the other two
+    # gateways: an external agent that hangs must not hang the sender, one that
+    # keeps failing is taken out of the path, and nothing reaches an agent that
+    # governance has not reviewed.
+    "A2A_GATEWAY": {
+        "CALL_TIMEOUT_SECONDS": float(os.environ.get("A2A_GATEWAY_CALL_TIMEOUT", "30")),
+        "CIRCUIT_FAILURE_THRESHOLD": int(os.environ.get("A2A_GATEWAY_CIRCUIT_THRESHOLD", "5")),
+        "CIRCUIT_COOL_OFF_SECONDS": int(os.environ.get("A2A_GATEWAY_CIRCUIT_COOL_OFF", "30")),
+        # A skill a card starts advertising cannot be asked for until someone
+        # has reviewed it -- and neither can one whose definition changes.
+        "REVIEW_NEW_SKILLS": env_bool("A2A_GATEWAY_REVIEW_NEW_SKILLS", True),
+        # Message and answer text in the log of exchanges with agents reached
+        # over HTTP, shown only to holders of prompt.view. A mailbox message is
+        # the delivery itself, so it is kept whatever this says.
+        "RECORD_CONTENT": env_bool("A2A_GATEWAY_RECORD_CONTENT", True),
+        "MAX_RECORDED_CHARS": 2000,
+        # How far work may be handed on: A asks B, B asks C, ... A chain
+        # longer than this, or one that comes back to an agent already in it,
+        # is refused.
+        "MAX_HOPS": int(os.environ.get("A2A_GATEWAY_MAX_HOPS", "4")),
+        "MAX_MESSAGE_BYTES": int(os.environ.get("A2A_GATEWAY_MAX_MESSAGE_KB", "256")) * 1024,
+        # Browser origins allowed to reach the A2A endpoint, in addition to
+        # CSRF_TRUSTED_ORIGINS. Agents that are not browsers send no Origin.
+        "ALLOWED_ORIGINS": env_list("A2A_GATEWAY_ALLOWED_ORIGINS"),
     },
     "PROMPT_DISPLAY": {
         "MAX_CHARS": 1200,

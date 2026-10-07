@@ -49,6 +49,10 @@ class PolicyContext:
     data_classification: str = ""
     environment: str = ""
     estimated_cost: Decimal = Decimal("0")
+    #: For an agent-to-agent message: the A2A card it is addressed to, and how
+    #: many agents the work will have passed through once it arrives.
+    recipient: Any = None
+    hops: int = 0
 
     @property
     def effective_provider(self):
@@ -114,6 +118,7 @@ class PolicyContext:
             "agent": str(self.agent) if self.agent else "",
             "provider": str(self.effective_provider) if self.effective_provider else "",
             "model": str(self.effective_model) if self.effective_model else "",
+            "recipient": str(self.recipient) if self.recipient else "",
         }
 
 
@@ -474,6 +479,48 @@ def _authorization_denial(policy: Policy, subject, environment: str) -> str | No
     return None
 
 
+_SENSITIVITY = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
+
+
+def _check_agent_communication(policy: Policy, context: PolicyContext) -> str | None:
+    """Who agents may hand work to, and what may leave the organization with it.
+
+    Evaluated for messages through the A2A Gateway. The data ceiling is only
+    checked when the message's classification is known, so asking which agents
+    a sender may reach at all is answered without guessing at content.
+    """
+    recipient = context.recipient
+    if recipient is None:
+        return None
+
+    environments = policy.option("environments", []) or []
+    if environments and context.effective_environment not in environments:
+        return None
+
+    names = {recipient.slug, recipient.name, getattr(recipient, "address", "")}
+    if set(policy.option("blocked_recipients", []) or []) & names:
+        return f"Agents may not send work to '{recipient.name}'."
+
+    external = getattr(recipient, "is_external", False)
+    if external and policy.option("block_external", False):
+        return f"'{recipient.name}' is outside the organization, and agents may not send it work."
+
+    ceiling = policy.option("external_max_data_classification")
+    classification = context.data_classification
+    if external and ceiling and classification and (
+        _SENSITIVITY.get(classification, 0) > _SENSITIVITY.get(ceiling, 0)
+    ):
+        return (
+            f"{classification.capitalize()} data may not leave the organization: "
+            f"external agents may be sent {ceiling} data at most."
+        )
+
+    max_hops = policy.option("max_hops")
+    if max_hops is not None and context.hops and context.hops > int(max_hops):
+        return f"Work may be handed on {max_hops} times at most; this would be hand-off {context.hops}."
+    return None
+
+
 def excepted_policy_ids(organization, agent) -> set:
     """Policies an active IRGF M17 exception sets aside for this agent."""
     if agent is None or getattr(agent, "pk", None) is None:
@@ -493,6 +540,7 @@ EVALUATORS: dict[str, Callable[[Policy, PolicyContext], "str | None"]] = {
     PolicyType.TOOL_ACCESS: _check_tool_access,
     PolicyType.HUMAN_APPROVAL: _check_human_approval,
     PolicyType.RISK_CLASSIFICATION: _check_risk_classification,
+    PolicyType.AGENT_COMMUNICATION: _check_agent_communication,
 }
 
 

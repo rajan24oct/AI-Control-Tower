@@ -4,33 +4,9 @@
 {% block title %}Budgets{% endblock %}
 
 {% block content %}
-{% if alerts %}
-  <div class="ct-card mb-3">
-    <div class="ct-card-header">
-      <span><i class="bi bi-bell me-1"></i> Unacknowledged Alerts</span>
-      <span class="badge text-bg-secondary">{{ alerts|length }}</span>
-    </div>
-    <div class="ct-card-body py-0">
-      {% for alert in alerts %}
-        <div class="ct-attention-item" data-ajax-row>
-          <i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
-          <div class="flex-grow-1">
-            <p class="ct-attention-title">{{ alert.budget.name }} reached {{ alert.threshold }}%</p>
-            <p class="ct-attention-detail">
-              ${{ alert.spend|floatformat:2 }} of ${{ alert.budget_amount|floatformat:2 }}
-              &middot; period from {{ alert.period_start }}
-            </p>
-          </div>
-          <form method="post" action="{% url 'costs:acknowledge_alert' alert.pk %}" class="align-self-center"
-                data-ajax-action="remove">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
-          </form>
-        </div>
-      {% endfor %}
-    </div>
-  </div>
-{% endif %}
+{# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+<div class="ct-alert-layout">
+<div class="ct-alert-main">
 
 <div class="ct-card" id="results" data-ajax-region>
   <div class="ct-card-header">
@@ -58,13 +34,14 @@
         {% for state in budget_states %}
           <tr>
             <td class="fw-semibold small">
+              <a href="{% url 'costs:budget_detail' state.budget.pk %}" class="text-decoration-none">{{ state.budget.name }}</a>
               {% if "cost.manage" in org_perms %}
-                <a href="{% url 'costs:budget_edit' state.budget.pk %}" class="text-decoration-none">{{ state.budget.name }}</a>
-              {% else %}{{ state.budget.name }}{% endif %}
+                <a href="{% url 'costs:budget_edit' state.budget.pk %}" class="text-muted ms-1" title="Edit"><i class="bi bi-pencil"></i></a>
+              {% endif %}
             </td>
             <td class="small">
               {{ state.budget.get_scope_display }}
-              <div class="text-muted">{{ state.budget.scope_label }}</div>
+              <div class="text-muted">{{ state.budget.scope_label }}{% if state.budget.cost_source != "runtime" %} &middot; {% if state.budget.cost_source == "all" %}incl. dev tools{% else %}dev tools{% endif %}{% endif %}</div>
             </td>
             <td class="small">{{ state.budget.get_period_display }}</td>
             <td class="small text-end text-nowrap">${{ state.amount|floatformat:2 }}</td>
@@ -83,6 +60,8 @@
                 {{ state.percentage|floatformat:1 }}%
                 {% if state.is_over %}
                   <span class="badge badge-soft text-bg-danger ms-1">Over budget</span>
+                {% elif state.health == "at_risk" %}
+                  <span class="badge badge-soft text-bg-warning ms-1">Forecast {{ state.forecast_percentage|floatformat:0 }}%</span>
                 {% elif state.highest_threshold %}
                   <span class="badge badge-soft text-bg-warning ms-1">{{ state.highest_threshold }}% crossed</span>
                 {% endif %}
@@ -104,5 +83,40 @@
   </div>
 
   {% include "partials/_pagination.html" %}
+</div>
+
+</div>
+<aside class="ct-alert-rail" aria-label="Alerts">
+  {% if alerts %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-bell me-1"></i> Unacknowledged Alerts</span>
+        <span class="badge text-bg-secondary">{{ alerts|length }}</span>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for alert in alerts %}
+          <div class="ct-attention-item" data-ajax-row>
+            <i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title"><a href="{% url 'costs:budget_detail' alert.budget_id %}" class="text-reset">{% if alert.is_forecast %}{{ alert.budget.name }} is forecast to exceed its budget{% else %}{{ alert.budget.name }} reached {{ alert.threshold }}%{% endif %}</a></p>
+              <p class="ct-attention-detail">
+                {% if alert.is_forecast %}Projected {% endif %}${{ alert.spend|floatformat:2 }} of ${{ alert.budget_amount|floatformat:2 }}
+                &middot; period from {{ alert.period_start }}
+              </p>
+            </div>
+            <form method="post" action="{% url 'costs:acknowledge_alert' alert.pk %}" class="align-self-center"
+                  data-ajax-action="remove">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Acknowledge</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  {% if not alerts %}
+    {% include "partials/_alerts_empty.html" with detail="No unacknowledged budget alerts." %}
+  {% endif %}
+</aside>
 </div>
 {% endblock %}

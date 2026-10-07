@@ -1,5 +1,6 @@
 """Abstract interfaces every external AI system is reached through."""
 
+from integrations.base.a2a import BaseA2AAdapter
 from integrations.base.agent import BaseAgentAdapter
 from integrations.base.capabilities import Capability
 from integrations.base.config import AdapterConfig
@@ -26,6 +27,7 @@ __all__ = [
     "AdapterDependencyMissing",
     "AdapterError",
     "AdapterNotFound",
+    "BaseA2AAdapter",
     "BaseAIProviderAdapter",
     "BaseAgentAdapter",
     "BaseCostAdapter",

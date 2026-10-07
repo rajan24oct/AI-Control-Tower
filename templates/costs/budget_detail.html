@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load static control_tower humanize %}
+
+{% block title %}{{ budget.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <a href="{% url 'costs:governance' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Cost Governance</a>
+  {% if can_manage %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'costs:budget_edit' budget.pk %}"><i class="bi bi-pencil"></i> Edit budget</a>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Spent</span>
+    <div class="ct-metric-value">${{ state.spend|floatformat:2|intcomma }}</div>
+    <div class="ct-metric-hint">{{ state.period_start|date:"j M" }} &ndash; today{% if state.devtools_spend %} &middot; ${{ state.devtools_spend|floatformat:2 }} dev tools{% endif %}</div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Limit</span>
+    <div class="ct-metric-value">${{ state.amount|floatformat:0|intcomma }}</div>
+    <div class="ct-metric-hint">{{ budget.get_period_display }}, to {{ state.period_last|date:"j M Y" }}</div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Used</span>
+    <div class="ct-metric-value">{{ state.percentage|floatformat:1 }}%</div>
+    <div class="ct-metric-hint">Day {{ state.elapsed_days }} of {{ state.total_days }}</div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Forecast</span>
+    <div class="ct-metric-value">{% if state.forecast_ready %}${{ state.forecast|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</div>
+    <div class="ct-metric-hint">{% if state.forecast_ready %}{{ state.forecast_percentage|floatformat:0 }}% of the limit by period end{% else %}Too early in the period{% endif %}</div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Remaining</span>
+    <div class="ct-metric-value {% if state.remaining < 0 %}text-danger{% endif %}">${{ state.remaining|floatformat:2|intcomma }}</div>
+    <div class="ct-metric-hint">Of this period's limit</div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Health</span>
+    <div class="ct-metric-value"><span class="badge badge-soft text-bg-{{ state.health_style }} fs-6">{{ state.health_label }}</span></div>
+    <div class="ct-metric-hint">{% if budget.is_enforcing %}Hard stop at 100%{% else %}Alerts only{% endif %}</div></div></div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-xl-8">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-graph-up me-1"></i> Burn-down</span></div>
+      <div class="ct-card-body">
+        <p class="ct-chart-summary small text-muted mb-2">
+          Cumulative spend against the limit; the dashed line projects the rate so far to the end of the period, and the
+          dotted lines are the alert thresholds.
+        </p>
+        <div style="height:280px"><canvas data-burn="burn-data" role="img" aria-label="Cumulative spend, forecast and budget limit for this period"></canvas></div>
+        <script type="application/json" id="burn-data">{{ burn_json|safe }}</script>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-gear me-1"></i> Configuration</span></div>
+      <div class="ct-card-body small">
+        <dl class="row mb-0">
+          <dt class="col-5 text-muted fw-normal">Scope</dt><dd class="col-7">{{ budget.get_scope_display }} &middot; {{ budget.scope_label }}</dd>
+          <dt class="col-5 text-muted fw-normal">Counts</dt><dd class="col-7">{{ budget.get_cost_source_display }}</dd>
+          <dt class="col-5 text-muted fw-normal">Thresholds</dt>
+          <dd class="col-7">{% for t in budget.thresholds %}<span class="badge text-bg-light me-1">{{ t }}%</span>{% endfor %}</dd>
+          <dt class="col-5 text-muted fw-normal">Forecast alert</dt><dd class="col-7">{{ budget.forecast_alerts|yesno:"On,Off" }}</dd>
+          <dt class="col-5 text-muted fw-normal">Enforcement</dt><dd class="col-7">{{ budget.get_enforcement_display }}</dd>
+          <dt class="col-5 text-muted fw-normal">Owner</dt><dd class="col-7">{{ budget.owner.get_full_name|default:"—" }}</dd>
+          <dt class="col-5 text-muted fw-normal">Notifies</dt>
+          <dd class="col-7">Cost managers{% for person in recipients %}, {{ person.get_full_name|default:person.email }}{% endfor %}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  {% if contributors.agents %}
+  <div class="col-12 col-xl-6">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-robot me-1"></i> Biggest contributors: agents</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Agent</th><th class="text-end">Runs</th><th class="text-end">Cost</th><th class="text-end">Share</th></tr></thead>
+          <tbody>
+            {% for row in contributors.agents %}
+              <tr><td class="small">{{ row.label }}</td><td class="small text-end">{{ row.runs|intcomma }}</td>
+                <td class="small text-end">${{ row.cost|floatformat:2|intcomma }}</td>
+                <td class="small text-end text-muted">{% if state.spend %}{% widthratio row.cost state.spend 100 %}%{% endif %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if contributors.seats %}
+  <div class="col-12 col-xl-6">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-github me-1"></i> Biggest contributors: Copilot seats</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Person</th><th>Login</th><th class="text-end">Cost</th></tr></thead>
+          <tbody>
+            {% for row in contributors.seats %}
+              <tr><td class="small">{{ row.label }}</td><td class="small text-muted">{{ row.login }}</td>
+                <td class="small text-end">${{ row.cost|floatformat:2|intcomma }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="ct-card">
+  <div class="ct-card-header"><span><i class="bi bi-clock-history me-1"></i> Alert history</span></div>
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr><th>Raised</th><th>Alert</th><th>Period</th><th class="text-end">Spend</th><th>Acknowledged</th></tr></thead>
+      <tbody>
+        {% for alert in alerts %}
+          <tr>
+            <td class="small text-nowrap">{{ alert.created_at|date:"j M Y H:i" }}</td>
+            <td class="small"><i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
+              {% if alert.is_forecast %}Forecast to exceed ({{ alert.percentage|floatformat:0 }}%){% else %}Reached {{ alert.threshold }}%{% endif %}</td>
+            <td class="small">{{ alert.period_start|date:"j M" }} &ndash; {{ alert.period_end|date:"j M Y" }}</td>
+            <td class="small text-end">${{ alert.spend|floatformat:2|intcomma }}</td>
+            <td class="small">{% if alert.acknowledged_at %}{{ alert.acknowledged_by.get_full_name|default:"—" }}, {{ alert.acknowledged_at|naturaltime }}{% else %}<span class="text-muted">Open</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="text-center text-muted small py-4">No alerts raised yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/finops.js' %}"></script>
+{% endblock %}

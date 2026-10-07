@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load control_tower a2a_tags %}
+
+{% block title %}A2A Agent Registry{% endblock %}
+
+{% block content %}
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span>A2A Agents</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+      {% if can_manage %}
+        <a class="btn btn-sm btn-primary" href="{% url 'a2a:card_create' %}">
+          <i class="bi bi-plus-lg"></i> Publish agent
+        </a>
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm"
+               placeholder="Name, address, publisher or endpoint">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Origin</label>
+        <select name="origin" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in origins %}
+            <option value="{{ value }}" {% if active_filters.origin == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Approval</label>
+        <select name="approved" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="True" {% if active_filters.approved == "True" %}selected{% endif %}>Approved</option>
+          <option value="False" {% if active_filters.approved == "False" %}selected{% endif %}>Not approved</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Who may send it work</label>
+        <select name="access" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for value, label in access_modes %}
+            <option value="{{ value }}" {% if active_filters.access == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  {% include "partials/_pagination.html" with position="top" %}
+
+  <div class="table-responsive">
+    <table class="table ct-table align-middle">
+      <thead>
+        <tr>
+          {% sort_th "Agent" "agent" %}{% sort_th "Origin" "origin" %}{% sort_th "Delivery" "transport" %}
+          {% sort_th "Skills" "skills" first="desc" %}{% sort_th "Contracts" "contracts" first="desc" %}
+          {% sort_th "Access" "access" %}<th>Clearance</th>{% sort_th "Health" "health" %}
+          {% sort_th "Approved" "approved" %}{% sort_th "Status" "status" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for card in cards %}
+          <tr>
+            <td>
+              <a href="{% url 'a2a:card_detail' card.pk %}" class="fw-semibold text-decoration-none">{{ card.name }}</a>
+              <div class="small text-muted text-truncate" style="max-width:260px">
+                <code>{{ card.slug }}</code>{% if card.publisher %} &middot; {{ card.publisher }}{% endif %}
+              </div>
+            </td>
+            <td class="small">{% if card.is_external %}External{% else %}Internal{% endif %}</td>
+            <td class="small">
+              {{ card.get_transport_display }}
+              {% if not card.is_gateway_reachable %}
+                <div><span class="badge badge-soft text-bg-secondary">Registry only</span></div>
+              {% endif %}
+            </td>
+            <td class="small text-nowrap">
+              {{ card.enabled_skills }} enabled
+              {% if card.pending_skills %}
+                <div><span class="badge badge-soft text-bg-warning">{{ card.pending_skills }} to review</span></div>
+              {% endif %}
+            </td>
+            <td class="small">{{ card.contract_count }}</td>
+            <td class="small">{% if card.access_mode == "open" %}Any agent{% else %}Contracts only{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ card.data_classification|classification_style }}">{{ card.get_data_classification_display }}</span></td>
+            <td>
+              <span class="badge badge-soft text-bg-{{ card.health_status|health_style }}">{{ card.get_health_status_display }}</span>
+              {% if card.circuit_state == "open" %}
+                <div><span class="badge badge-soft text-bg-danger">Out of rotation</span></div>
+              {% endif %}
+            </td>
+            <td>
+              {% if card.is_approved %}
+                <span class="badge badge-soft text-bg-success">Yes</span>
+              {% else %}
+                <span class="badge badge-soft text-bg-warning">No</span>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-soft text-bg-{{ card.status|status_style }}">{{ card.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="10">
+            <div class="ct-empty"><i class="bi bi-diagram-2"></i>
+              <p class="mb-0">No A2A agents match these filters.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

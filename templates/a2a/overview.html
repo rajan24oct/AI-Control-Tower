@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% load control_tower humanize mcp_tags a2a_tags %}
+
+{% block title %}A2A Gateway{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+{# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+<div class="ct-alert-layout">
+<div class="ct-alert-main">
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Agents reachable</span>
+        <div class="ct-metric-value">{{ stats.serving }} <span class="fs-6 text-muted">of {{ stats.agents }}</span></div>
+        <div class="ct-metric-hint">Approved and reachable &middot; {{ stats.external }} external</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Skills enabled</span>
+        <div class="ct-metric-value">{{ stats.skills_enabled|intcomma }}</div>
+        <div class="ct-metric-hint {% if stats.skills_pending %}text-warning{% endif %}">{{ stats.skills_pending }} awaiting review</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Contracts</span>
+        <div class="ct-metric-value">{{ stats.contracts|intcomma }}</div>
+        <div class="ct-metric-hint">In force: who may send work to whom</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Hand-offs (24h)</span>
+        <div class="ct-metric-value">{{ stats.tasks|intcomma }}</div>
+        <div class="ct-metric-hint">Avg {{ stats.avg_latency|floatformat:0 }} ms to external agents</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Refused (24h)</span>
+        <div class="ct-metric-value {% if stats.blocked %}text-danger{% endif %}">{{ stats.blocked|intcomma }}</div>
+        <div class="ct-metric-hint">{{ stats.failed }} failed or unavailable</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="ct-metric">
+        <span class="ct-metric-label">Personal data (24h)</span>
+        <div class="ct-metric-value {% if stats.personal_data %}text-warning{% endif %}">{{ stats.personal_data|intcomma }}</div>
+        <div class="ct-metric-hint">Messages where it was found</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-7">
+      <div class="ct-card h-100">
+        <div class="ct-card-header">
+          <span>Communication Map</span>
+          <a href="{% url 'a2a:contracts' %}" class="small text-decoration-none">Contracts</a>
+        </div>
+        {% if map.rows %}
+          <div class="table-responsive">
+            <table class="table ct-table align-middle mb-0">
+              <thead>
+                <tr>
+                  <th class="small text-muted fw-normal">From &darr; &middot; to &rarr;</th>
+                  {% for card in map.columns %}
+                    <th class="small text-center">
+                      <a href="{% url 'a2a:card_detail' card.pk %}" class="text-decoration-none">{{ card.name }}</a>
+                      {% if card.is_external %}<div><span class="badge badge-soft text-bg-light text-dark">External</span></div>{% endif %}
+                    </th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in map.rows %}
+                  <tr>
+                    <td class="small fw-semibold">
+                      <a href="{% url 'inventory:agent_detail' row.sender.pk %}" class="text-decoration-none">{{ row.sender.name }}</a>
+                    </td>
+                    {% for cell in row.cells %}
+                      <td class="text-center small">
+                        {% if cell %}
+                          {% if cell.contract %}
+                            {% if cell.contract.is_expired %}
+                              <span class="badge badge-soft text-bg-secondary">Expired</span>
+                            {% else %}
+                              <span class="badge badge-soft text-bg-success" title="Up to {{ cell.contract.ceiling }} data">Contract</span>
+                            {% endif %}
+                          {% endif %}
+                          {% if cell.total %}
+                            <div class="text-muted">{{ cell.delivered }} sent{% if cell.blocked %} &middot; <span class="text-danger">{{ cell.blocked }} refused</span>{% endif %}</div>
+                          {% endif %}
+                        {% else %}
+                          <span class="text-muted">&middot;</span>
+                        {% endif %}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="ct-card-body py-2 small text-muted border-top">
+            A cell is a contract, the last {{ map.days }} days of traffic, or both. Traffic without a contract reached
+            an agent open to every agent, or was refused.
+          </div>
+        {% else %}
+          <div class="ct-card-body ct-empty py-4">
+            <i class="bi bi-diagram-2"></i>
+            <p class="mb-0">No contracts and no traffic yet. Publish an agent, then grant contracts on its page.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">
+          <span>One Address per Agent</span>
+          <span class="small text-muted">A2A 0.3 &middot; JSON-RPC &middot; stateless</span>
+        </div>
+        <div class="ct-card-body">
+          <p class="small mb-3">
+            Every published agent has its own address, with its Agent Card at the usual well-known path. The sender
+            is named in <code>X-Agent-ID</code>, or is the one agent its key is bound to. A refused message comes
+            back as a <code>rejected</code> task saying why.
+          </p>
+          <dl class="ct-kv mb-3">
+            <dt>Directory</dt><dd><code class="text-break">{{ directory_url }}?agent=&lt;sender&gt;</code></dd>
+            <dt>An agent</dt><dd><code class="text-break">{{ directory_url }}&lt;address&gt;/</code></dd>
+            <dt>Its card</dt><dd><code class="text-break">{{ directory_url }}&lt;address&gt;/.well-known/agent-card.json</code></dd>
+            <dt>Credential</dt><dd>A service-account key: <code>Authorization: Bearer act_&hellip;</code> or <code>X-API-Key</code></dd>
+            <dt>Permission</dt><dd><code>a2a.invoke</code></dd>
+          </dl>
+<pre class="small bg-body-tertiary border rounded p-2 mb-0" style="white-space:pre-wrap">curl {{ directory_url }}&lt;address&gt;/ \
+  -H "Authorization: Bearer act_&hellip;" -H "X-Agent-ID: &lt;sender&gt;" \
+  -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "id": 1,
+  "method": "message/send", "params": {"message": {"role": "user",
+  "messageId": "m-1", "parts": [{"kind": "text", "text": "&hellip;"}],
+  "metadata": {"io.aicontroltower/skill": "&lt;skill&gt;"}}}}'</pre>
+        </div>
+      </div>
+
+      <div class="ct-card">
+        <div class="ct-card-header">
+          <span>Refused by a Limit (24h)</span>
+          <a href="{% url 'a2a:tasks' %}?status=blocked" class="small text-decoration-none">All refusals</a>
+        </div>
+        <div class="ct-card-body">
+          {% for row in refusals %}
+            <div class="d-flex justify-content-between small">
+              <span>{{ row.limit_breached|limit_label }}</span><span class="fw-semibold">{{ row.total }}</span>
+            </div>
+          {% empty %}
+            <p class="small text-muted mb-0">No message hit a data ceiling, a rate, a size or a chain limit in the last 24 hours.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ct-card">
+    <div class="ct-card-header">
+      <span>Recent Hand-offs</span>
+      <a href="{% url 'a2a:tasks' %}" class="small text-decoration-none">All communications</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table ct-table mb-0">
+        <thead>
+          <tr><th>When</th><th>From</th><th>To</th><th>Skill</th><th>Delivery</th><th>State</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          {% for task in recent %}
+            <tr>
+              <td class="small text-nowrap"><a href="{% url 'a2a:task_detail' task.pk %}" class="text-decoration-none">{{ task.created_at|naturaltime }}</a></td>
+              <td class="small">{{ task.sender.name|default:"—" }}</td>
+              <td class="small">{% if task.recipient %}{{ task.recipient.name }}{% else %}<code>{{ task.recipient_name }}</code>{% endif %}</td>
+              <td>{% if task.skill_name %}<code class="small">{{ task.skill_name }}</code>{% else %}<span class="small text-muted">—</span>{% endif %}</td>
+              <td><span class="badge badge-soft text-bg-{{ task.status|delivery_style }}">{{ task.get_status_display }}</span></td>
+              <td><span class="badge badge-soft text-bg-{{ task.state|task_state_style }}">{{ task.get_state_display }}</span></td>
+              <td class="small text-muted">{{ task.reason|truncatechars:90|default:"" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7">
+              <div class="ct-empty py-4">
+                <i class="bi bi-diagram-2"></i>
+                <p class="mb-0">No agent has handed another work through the gateway yet.</p>
+              </div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+<aside class="ct-alert-rail" aria-label="Alerts">
+  {% comment %}
+    Everything here needs a person: an agent out of rotation, a skill nobody has
+    reviewed or that changed after review, an agent nobody approved, a contract
+    about to lapse. It leads the page for that reason.
+  {% endcomment %}
+  {% if open_circuits or pending_skills or awaiting_approval or sync_failures or missing_credentials or expiring %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-exclamation-diamond me-1"></i> Needs attention</span>
+        <a href="{% url 'a2a:skills' %}?status=pending_review" class="small text-decoration-none">Review queue</a>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for card in open_circuits %}
+          <div class="ct-attention-item">
+            <i class="bi bi-plug text-danger"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                <a href="{% url 'a2a:card_detail' card.pk %}" class="text-decoration-none">{{ card.name }}</a> is out of rotation
+              </p>
+              <p class="ct-attention-detail">
+                {{ card.consecutive_failures }} consecutive failures &mdash; {{ card.last_error|default:"no detail reported" }}<br>
+                Opened {{ card.circuit_opened_at|naturaltime }}; a probe is let through after the cool-off.
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for skill in pending_skills %}
+          <div class="ct-attention-item">
+            <i class="bi bi-hourglass-split {% if skill.changed_since_review %}text-danger{% else %}text-warning{% endif %}"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title"><code>{{ skill.qualified_name }}</code> awaits review</p>
+              <p class="ct-attention-detail">
+                {% if skill.changed_since_review %}
+                  Its definition changed on {{ skill.card.name }} after it was reviewed, so no agent can ask for it
+                  until someone looks again.
+                {% else %}
+                  New on {{ skill.card.name }}. No agent can ask for it until it is enabled.
+                {% endif %}
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for card in awaiting_approval %}
+          <div class="ct-attention-item">
+            <i class="bi bi-shield-exclamation text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                <a href="{% url 'a2a:card_detail' card.pk %}" class="text-decoration-none">{{ card.name }}</a>
+                is published but not approved
+              </p>
+              <p class="ct-attention-detail">No agent can send it work until governance approves it.</p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for card in sync_failures %}
+          <div class="ct-attention-item">
+            <i class="bi bi-arrow-repeat text-danger"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                Could not read the card of <a href="{% url 'a2a:card_detail' card.pk %}" class="text-decoration-none">{{ card.name }}</a>
+              </p>
+              <p class="ct-attention-detail">{{ card.last_sync_error }}</p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for card in missing_credentials %}
+          <div class="ct-attention-item">
+            <i class="bi bi-key text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                <a href="{% url 'a2a:card_detail' card.pk %}" class="text-decoration-none">{{ card.name }}</a>
+                cannot resolve its credential
+              </p>
+              <p class="ct-attention-detail">
+                Set <code>{{ card.credential_ref }}</code> in the platform's environment. The gateway holds the
+                credential so the agents sending work never do; every delivery fails until it resolves.
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for contract in expiring %}
+          <div class="ct-attention-item">
+            <i class="bi bi-calendar-x text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                {{ contract.sender.name }} &rarr;
+                <a href="{% url 'a2a:card_detail' contract.recipient.pk %}" class="text-decoration-none">{{ contract.recipient.name }}</a>
+                ends {{ contract.expires_at|naturaltime }}
+              </p>
+              <p class="ct-attention-detail">Renew the contract, or the sender's hand-offs are refused from then on.</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  {% if not open_circuits and not pending_skills and not awaiting_approval and not sync_failures and not missing_credentials and not expiring %}
+    {% include "partials/_alerts_empty.html" with detail="No agent out of rotation, skill awaiting review or contract about to lapse." %}
+  {% endif %}
+</aside>
+</div>
+{% endif %}
+{% endblock %}

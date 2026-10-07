@@ -14,8 +14,8 @@ from django.utils import timezone
 from apps.costs.models import (
     Budget,
     BudgetAlert,
+    BudgetAlertKind,
     BudgetPeriod,
-    BudgetScope,
     DailyUsageRollup,
     ModelPricing,
 )
@@ -129,65 +129,136 @@ def period_window(period: str, on: date | None = None) -> tuple[date, date]:
     return start, start + timedelta(days=last_day)
 
 
+class BudgetHealth:
+    OVER = "over"
+    AT_RISK = "at_risk"  # forecast to pass the budget by period end
+    WATCH = "watch"  # past the first alert threshold
+    ON_TRACK = "on_track"
+
+    LABELS = {OVER: "Over budget", AT_RISK: "Forecast to exceed", WATCH: "Watch", ON_TRACK: "On track"}
+    STYLES = {OVER: "danger", AT_RISK: "warning", WATCH: "info", ON_TRACK: "success"}
+
+
 class BudgetService:
     """Evaluates budgets and raises threshold alerts (section 16)."""
 
-    SCOPE_FILTERS = {
-        BudgetScope.APPLICATION: "application",
-        BudgetScope.AGENT: "agent",
-        BudgetScope.PROVIDER: "provider",
-        BudgetScope.MODEL: "model",
-    }
+    #: A forecast from the first day or so of a period is mostly noise.
+    MIN_FORECAST_FRACTION = Decimal("0.1")
 
     @classmethod
     def executions_for(cls, budget: Budget, start: date, end: date):
+        from apps.costs.attribution import scope_executions
+
         queryset = Execution.objects.for_organization(budget.organization).filter(
             started_at__date__gte=start, started_at__date__lt=end
         )
+        return scope_executions(queryset, budget)
 
-        if budget.scope == BudgetScope.TEAM and budget.team_id:
-            # Executions carry no team; ownership comes via the application or
-            # the agent that ran them.
-            return queryset.filter(
-                Q(application__team_id=budget.team_id) | Q(agent__team_id=budget.team_id)
-            )
+    @classmethod
+    def seats_for(cls, budget: Budget):
+        from apps.costs.attribution import scope_seats
+        from apps.costs.models import DevToolSeat
 
-        field = cls.SCOPE_FILTERS.get(budget.scope)
-        if field:
-            target_id = getattr(budget, f"{field}_id")
-            return queryset.filter(**{f"{field}_id": target_id}) if target_id else queryset.none()
-
-        return queryset
+        seats = DevToolSeat.objects.for_organization(budget.organization).filter(
+            subscription__status="active"
+        )
+        return scope_seats(seats, budget)
 
     @classmethod
     def status_for(cls, budget: Budget, on: date | None = None) -> dict:
         start, end = period_window(budget.period, on)
-        spend = cls.executions_for(budget, start, end).aggregate(total=Sum("cost"))["total"] or ZERO
+        today = on or timezone.now().date()
+
+        runtime = ZERO
+        if budget.counts_runtime:
+            runtime = cls.executions_for(budget, start, end).aggregate(total=Sum("cost"))["total"] or ZERO
+        devtools = ZERO
+        if budget.counts_developer_tools:
+            from apps.costs.devtools import DevToolCostService
+
+            # Up to today: a licence is not spent before the day it covers.
+            devtools = DevToolCostService.total(
+                cls.seats_for(budget), start, min(end, today + timedelta(days=1))
+            )
+        spend = runtime + devtools
         amount = budget.amount or ZERO
         percentage = (spend / amount * 100) if amount else ZERO
 
+        total_days = (end - start).days
+        elapsed = min(max((today - start).days + 1, 1), total_days)
+        forecast = (spend / Decimal(elapsed) * Decimal(total_days)).quantize(Decimal("0.01"))
+        forecast_percentage = (forecast / amount * 100) if amount else ZERO
+        forecast_ready = Decimal(elapsed) / Decimal(total_days) >= cls.MIN_FORECAST_FRACTION
+
         crossed = [t for t in budget.thresholds if percentage >= t]
+        is_over = spend > amount and amount > 0
+        if is_over:
+            health = BudgetHealth.OVER
+        elif forecast_ready and forecast_percentage >= 100:
+            health = BudgetHealth.AT_RISK
+        elif crossed:
+            health = BudgetHealth.WATCH
+        else:
+            health = BudgetHealth.ON_TRACK
+
         return {
             "budget": budget,
             "period_start": start,
             "period_end": end,
+            #: The last day in the period, for display: `period_end` is exclusive.
+            "period_last": end - timedelta(days=1),
+            "runtime_spend": runtime,
+            "devtools_spend": devtools,
             "spend": spend,
             "amount": amount,
             "remaining": amount - spend,
             "percentage": percentage,
+            "forecast": forecast,
+            "forecast_percentage": forecast_percentage,
+            "forecast_ready": forecast_ready,
+            "elapsed_days": elapsed,
+            "total_days": total_days,
             "highest_threshold": max(crossed) if crossed else None,
-            "is_over": spend > amount and amount > 0,
+            "is_over": is_over,
+            "health": health,
+            "health_label": BudgetHealth.LABELS[health],
+            "health_style": BudgetHealth.STYLES[health],
         }
 
     @classmethod
     def evaluate(cls, budget: Budget, on: date | None = None) -> list[BudgetAlert]:
         """Raise alerts for thresholds newly crossed this period.
 
-        `get_or_create` on (budget, period, threshold) makes this safe to run on
-        a schedule: a budget sitting at 95% alerts once, not on every sweep.
+        `get_or_create` on (budget, period, kind, threshold) makes this safe to
+        run on a schedule: a budget sitting at 95% alerts once, not on every
+        sweep. A forecast alert is raised at most once per period, and only
+        while the budget is not already over -- by then it has nothing to add.
         """
         status = cls.status_for(budget, on)
         raised: list[BudgetAlert] = []
+
+        if (
+            budget.forecast_alerts
+            and status["forecast_ready"]
+            and not status["is_over"]
+            and status["forecast_percentage"] >= 100
+        ):
+            alert, created = BudgetAlert.objects.get_or_create(
+                budget=budget,
+                period_start=status["period_start"],
+                kind=BudgetAlertKind.FORECAST,
+                threshold=100,
+                defaults={
+                    "organization": budget.organization,
+                    "period_end": status["period_end"],
+                    "spend": status["forecast"],
+                    "budget_amount": status["amount"],
+                    "percentage": status["forecast_percentage"],
+                    "currency": budget.currency,
+                },
+            )
+            if created:
+                raised.append(alert)
 
         for threshold in budget.thresholds:
             if status["percentage"] < threshold:
@@ -196,6 +267,7 @@ class BudgetService:
             alert, created = BudgetAlert.objects.get_or_create(
                 budget=budget,
                 period_start=status["period_start"],
+                kind=BudgetAlertKind.THRESHOLD,
                 threshold=threshold,
                 defaults={
                     "organization": budget.organization,
@@ -214,8 +286,11 @@ class BudgetService:
 
             # Every threshold crossing is recorded, but a budget that jumps
             # straight past three thresholds warrants one notification about
-            # the worst of them, not three.
-            emitters.budget_alert(max(raised, key=lambda alert: alert.threshold))
+            # the worst of them, not three. A crossed threshold outranks a
+            # forecast: what happened beats what might.
+            emitters.budget_alert(
+                max(raised, key=lambda alert: (not alert.is_forecast, alert.threshold))
+            )
 
         return raised
 

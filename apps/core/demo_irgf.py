@@ -319,8 +319,10 @@ DELEGATIONS = {
 
 def seed_systems(organization, agents: dict, applications: dict, users: dict) -> dict:
     """Phase 4: an application at Gate G3, delegation graphs, and a delegation nobody declared."""
-    from apps.gateway.messaging import MessageBlocked, MessageRequest, MessagingService
-    from apps.gateway.models import GatewayMessage
+    import uuid
+
+    from apps.a2a.models import A2ATask
+    from apps.a2a.services import A2AGateway, SendRequest, UnknownRecipient
     from apps.lifecycle.models import AuthorizationStatus, DeploymentAuthorization
     from apps.lifecycle.services import AuthorizationService, LifecycleError
 
@@ -350,18 +352,23 @@ def seed_systems(organization, agents: dict, applications: dict, users: dict) ->
         except LifecycleError:
             pass  # the entry criteria are the story if they are not met
 
-    # The support agent asks the claims agent about a claim: a delegation nobody declared.
+    # The support agent asks the claims agent about a claim, through the A2A Gateway and
+    # under its contract: a delegation the Claims Processing Platform never declared.
     support, claims = agents.get("Customer Support Agent"), agents.get("Claims Triage Agent")
     if support is not None and claims is not None:
-        GatewayMessage.objects.filter(organization=organization, correlation_id="demo-undeclared-delegation").delete()
+        A2ATask.objects.filter(organization=organization, context_id="demo-undeclared-delegation").delete()
         try:
-            MessagingService.send(organization, MessageRequest(
-                sender=support, recipient=claims, subject="Claim status",
-                body="The customer on ticket INC0012873 asks where claim CLM-4471 stands.",
-                correlation_id="demo-undeclared-delegation",
-            ))
-        except MessageBlocked:
-            pass
+            A2AGateway.send(organization, SendRequest(
+                sender=support, skill="claim-status", subject="Claim status",
+                message={
+                    "kind": "message", "role": "user", "messageId": str(uuid.uuid4()),
+                    "contextId": "demo-undeclared-delegation",
+                    "parts": [{"kind": "text",
+                               "text": "The customer on ticket INC0012873 asks where claim CLM-4471 stands."}],
+                },
+            ), recipient=claims)
+        except UnknownRecipient:
+            pass  # the claims agent is not published: there is nobody to delegate to
 
     return {
         "authorized": DeploymentAuthorization.objects.filter(
@@ -538,13 +545,15 @@ def seed_control_plane(organization, agents: dict, users: dict) -> dict:
         ControlPlane.verify_execution(
             execution, baselines=baselines, now=execution.created_at + timedelta(seconds=rng.randint(5, 65))
         )
-    # Messages between agents are delegations, verified as the gateway records them.
-    from apps.gateway.models import GatewayMessage
+    # Hand-offs between agents are delegations, verified as the A2A Gateway records them.
+    from apps.a2a.models import A2ATask
 
-    for message in GatewayMessage.objects.filter(
-        organization=organization, verification__isnull=True
-    ).select_related("sender", "recipient").order_by("created_at"):
-        ControlPlane.verify_message(message, now=message.created_at + timedelta(milliseconds=rng.randint(40, 400)))
+    for task in A2ATask.objects.filter(organization=organization, verification__isnull=True).select_related(
+        "sender", "recipient", "service_account", "execution"
+    ).order_by("created_at"):
+        ControlPlane.verify_a2a_task(
+            task, baselines=baselines, now=task.created_at + timedelta(milliseconds=rng.randint(40, 400))
+        )
     ControlPlane.sweep(organization, settle=timedelta(0))
 
     support.refresh_from_db()

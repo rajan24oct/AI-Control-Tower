@@ -17,6 +17,7 @@ from rest_framework import serializers, status as http_status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from apps.a2a.wire import legacy_message
 from apps.accounts.roles import Perm
 from apps.api.execution_views import caller_organization, caller_service_account
 from apps.api.identity import IdentityRefused, acting_agent
@@ -24,7 +25,6 @@ from apps.api.permissions import IsAuthenticatedOrganizationMember
 from apps.core.constants import Environment
 from apps.executions.services import AssetResolver
 from apps.gateway.messaging import MessageBlocked, MessageRequest, MessagingService
-from apps.gateway.models import GatewayMessage
 from apps.gateway.services import GatewayError, GatewayRequest, GatewayService
 from apps.models_registry.models import ModelType
 
@@ -182,23 +182,15 @@ class MessageSerializer(serializers.Serializer):
     metadata = serializers.JSONField(required=False)
 
 
-class GatewayMessageSerializer(serializers.ModelSerializer):
-    sender = serializers.CharField(source="sender.agent_id", read_only=True)
-    recipient = serializers.CharField(source="recipient.agent_id", read_only=True)
-
-    class Meta:
-        model = GatewayMessage
-        fields = [
-            "id", "sender", "recipient", "subject", "body", "correlation_id",
-            "metadata", "status", "blocked_reason", "created_at", "read_at",
-        ]
-        read_only_fields = fields
-
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticatedOrganizationMember])
 def send_message(request):
-    """POST /api/v1/gateway/messages/ -- one agent writes to another."""
+    """POST /api/v1/gateway/messages/ -- one agent writes to another.
+
+    The original mailbox, kept for the engines that speak it. The message goes
+    through the A2A Gateway under the same rules as any other hand-off, and
+    the answer keeps the shape this endpoint always had.
+    """
     organization = caller_organization(request)
     if organization is None:
         return Response(
@@ -226,7 +218,7 @@ def send_message(request):
             return _identity_refused(exc)
 
     try:
-        message = MessagingService.send(
+        task = MessagingService.send(
             organization,
             MessageRequest(
                 sender=sender,
@@ -245,9 +237,7 @@ def send_message(request):
             status=http_status.HTTP_403_FORBIDDEN,
         )
 
-    return Response(
-        GatewayMessageSerializer(message).data, status=http_status.HTTP_201_CREATED
-    )
+    return Response(legacy_message(task), status=http_status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -291,6 +281,6 @@ def collect_messages(request, agent_id):
         {
             "agent": agent.agent_id,
             "count": len(messages),
-            "messages": GatewayMessageSerializer(messages, many=True).data,
+            "messages": [legacy_message(task) for task in messages],
         }
     )

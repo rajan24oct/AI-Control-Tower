@@ -250,7 +250,7 @@ class EmitterTests(NotificationFixtureMixin, TestCase):
     def test_a_budget_alert_notifies_cost_managers(self):
         budget = Budget.objects.create(
             organization=self.organization, name="Monthly", scope=BudgetScope.ORGANIZATION,
-            amount=Decimal("10.00"),
+            amount=Decimal("10.00"), forecast_alerts=False,
         )
         Execution.objects.create(
             organization=self.organization, external_id="e1", provider=self.provider,

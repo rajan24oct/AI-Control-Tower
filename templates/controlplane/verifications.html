@@ -6,8 +6,8 @@
 {% block content %}
 <div class="ct-irgf-intro mb-3">
   <strong>IRGF agent chain link 07 · Verification.</strong> Every action is checked after it happens against the agent's authorized
-  state: every MCP tool call, and every run an engine reports. IRGF's point is timing: a check that runs weekly does not constrain an
-  agent that acts hourly. Each tier has a ceiling, and a verification that misses it is marked late.
+  state: every MCP tool call, every hand-off to another agent, and every run an engine reports. IRGF's point is timing: a check that
+  runs weekly does not constrain an agent that acts hourly. Each tier has a ceiling, and a verification that misses it is marked late.
 </div>
 
 <div class="row g-3 mb-3">
@@ -48,7 +48,8 @@
           <option value="">All</option>
           <option value="tool_call" {% if request.GET.kind == "tool_call" %}selected{% endif %}>Tool calls</option>
           <option value="execution" {% if request.GET.kind == "execution" %}selected{% endif %}>Runs</option>
-          <option value="message" {% if request.GET.kind == "message" %}selected{% endif %}>Delegations</option>
+          <option value="a2a_task" {% if request.GET.kind == "a2a_task" %}selected{% endif %}>Agent-to-agent</option>
+          <option value="message" {% if request.GET.kind == "message" %}selected{% endif %}>Mailbox, before A2A</option>
         </select>
       </div>
       <div class="col-6 col-md-2">
@@ -77,6 +78,8 @@
             <td class="small">
               {% if verification.tool_call %}
                 <span class="text-muted">Tool call</span> <code>{{ verification.tool_call.tool_name }}</code>
+              {% elif verification.a2a_task %}
+                <span class="text-muted">Hand-off</span> <a href="{% url 'a2a:task_detail' verification.a2a_task.pk %}"><code>{{ verification.a2a_task.sender_label }} → {{ verification.a2a_task.recipient_name }}</code></a>
               {% elif verification.message %}
                 <span class="text-muted">Delegation</span> <code>{{ verification.message.sender.agent_id }} → {{ verification.message.recipient.agent_id }}</code>
               {% else %}

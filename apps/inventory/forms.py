@@ -372,13 +372,21 @@ class ApplicationForm(OrganizationModelForm):
         agent_ids = [("", "—")] + [
             (agent.agent_id, agent.name) for agent in self.fields["agents"].queryset.order_by("name")
         ]
+        from apps.a2a.models import A2AAgentCard, CardOrigin
+
+        # Work may also be handed outside the organization, to an agent published for A2A.
+        self.external_agents = dict(
+            A2AAgentCard.objects.filter(organization=self.organization, origin=CardOrigin.EXTERNAL)
+            .order_by("name").values_list("slug", "name")
+        )
+        targets = agent_ids + [(slug, f"{name} · external") for slug, name in self.external_agents.items()]
         for index in range(self.delegation_rows):
             edge = existing[index] if index < len(existing) else {}
             self.fields[f"delegation_{index}_from"] = forms.ChoiceField(
                 label="Agent" if index == 0 else "", choices=agent_ids, required=False, initial=edge.get("from", ""),
             )
             self.fields[f"delegation_{index}_to"] = forms.ChoiceField(
-                label="May invoke" if index == 0 else "", choices=agent_ids, required=False,
+                label="May invoke" if index == 0 else "", choices=targets, required=False,
                 initial=edge.get("to", ""),
             )
             self.fields[f"delegation_{index}_authority"] = forms.ChoiceField(
@@ -403,9 +411,9 @@ class ApplicationForm(OrganizationModelForm):
             ("Composition", "What the application is made of. Its composite authority is what its agents can reach together.",
              ["agents", "link_dependencies", "ai_models", "providers", "tools"], {"tag": "IRGF chapter 16"}),
             ("Delegation graph",
-             "Which of its agents may invoke which, and with whose authority. Declared, never inferred from "
-             "traffic; the Control Plane flags any delegation not declared here. Tier 3-4 applications with more "
-             "than one acting agent need one at Gate G3.",
+             "Which of its agents may invoke which -- or which external agent published for A2A -- and with whose "
+             "authority. Declared, never inferred from traffic; the Control Plane flags any delegation not declared "
+             "here. Tier 3-4 applications with more than one acting agent need one at Gate G3.",
              rows, {"tag": "IRGF chapter 16"}),
         )
 
@@ -429,7 +437,7 @@ class ApplicationForm(OrganizationModelForm):
                 self.add_error(f"delegation_{index}_to" if source else f"delegation_{index}_from",
                                "A delegation names both agents.")
                 continue
-            outside = sorted({source, target} - members)
+            outside = sorted(({source} - members) | ({target} - members - set(self.external_agents)))
             if outside:
                 self.add_error(f"delegation_{index}_from", f"Not an agent of this application: {', '.join(outside)}.")
                 continue

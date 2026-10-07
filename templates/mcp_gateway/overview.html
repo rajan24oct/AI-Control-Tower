@@ -9,92 +9,9 @@
     <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
   </div></div>
 {% else %}
-
-  {% comment %}
-    Everything here needs a person: a server out of rotation, a tool nobody has
-    reviewed, a server nobody has approved. It leads the page for that reason.
-  {% endcomment %}
-  {% if open_circuits or pending_tools or awaiting_approval or sync_failures or missing_credentials %}
-    <div class="ct-card mb-3">
-      <div class="ct-card-header">
-        <span><i class="bi bi-exclamation-diamond me-1"></i> Needs attention</span>
-        <a href="{% url 'mcp_gateway:tools' %}?status=pending_review" class="small text-decoration-none">Review queue</a>
-      </div>
-      <div class="ct-card-body py-0">
-        {% for server in open_circuits %}
-          <div class="ct-attention-item">
-            <i class="bi bi-plug text-danger"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title">
-                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
-                is out of rotation
-              </p>
-              <p class="ct-attention-detail">
-                {{ server.consecutive_failures }} consecutive failures &mdash;
-                {{ server.last_error|default:"no detail reported" }}<br>
-                Opened {{ server.circuit_opened_at|naturaltime }}; a probe is let through after the cool-off.
-              </p>
-            </div>
-          </div>
-        {% endfor %}
-        {% for tool in pending_tools %}
-          <div class="ct-attention-item">
-            <i class="bi bi-hourglass-split text-warning"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title"><code>{{ tool.qualified_name }}</code> awaits review</p>
-              <p class="ct-attention-detail">
-                {% if tool.changed_since_review %}
-                  Its definition changed on {{ tool.server.name }} after it was reviewed, so it was
-                  withdrawn from agents until someone looks again.
-                {% else %}
-                  New on {{ tool.server.name }}. No agent can see it until it is enabled.
-                {% endif %}
-              </p>
-            </div>
-          </div>
-        {% endfor %}
-        {% for server in awaiting_approval %}
-          <div class="ct-attention-item">
-            <i class="bi bi-shield-exclamation text-warning"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title">
-                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
-                is registered but not approved
-              </p>
-              <p class="ct-attention-detail">No agent can reach it through the gateway until governance approves it.</p>
-            </div>
-          </div>
-        {% endfor %}
-        {% for server in sync_failures %}
-          <div class="ct-attention-item">
-            <i class="bi bi-arrow-repeat text-danger"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title">
-                Discovery failed for
-                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
-              </p>
-              <p class="ct-attention-detail">{{ server.last_sync_error }}</p>
-            </div>
-          </div>
-        {% endfor %}
-        {% for server in missing_credentials %}
-          <div class="ct-attention-item">
-            <i class="bi bi-key text-warning"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title">
-                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
-                cannot resolve its credential
-              </p>
-              <p class="ct-attention-detail">
-                Set <code>{{ server.credential_ref }}</code> in the platform's environment. The gateway
-                holds the credential so agents never do; every call fails until it resolves.
-              </p>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
+{# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+<div class="ct-alert-layout">
+<div class="ct-alert-main">
 
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-4 col-xl-2">
@@ -236,5 +153,98 @@
       </table>
     </div>
   </div>
+
+</div>
+<aside class="ct-alert-rail" aria-label="Alerts">
+  {% comment %}
+    Everything here needs a person: a server out of rotation, a tool nobody has
+    reviewed, a server nobody has approved. It leads the page for that reason.
+  {% endcomment %}
+  {% if open_circuits or pending_tools or awaiting_approval or sync_failures or missing_credentials %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-exclamation-diamond me-1"></i> Needs attention</span>
+        <a href="{% url 'mcp_gateway:tools' %}?status=pending_review" class="small text-decoration-none">Review queue</a>
+      </div>
+      <div class="ct-card-body py-0">
+        {% for server in open_circuits %}
+          <div class="ct-attention-item">
+            <i class="bi bi-plug text-danger"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
+                is out of rotation
+              </p>
+              <p class="ct-attention-detail">
+                {{ server.consecutive_failures }} consecutive failures &mdash;
+                {{ server.last_error|default:"no detail reported" }}<br>
+                Opened {{ server.circuit_opened_at|naturaltime }}; a probe is let through after the cool-off.
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for tool in pending_tools %}
+          <div class="ct-attention-item">
+            <i class="bi bi-hourglass-split text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title"><code>{{ tool.qualified_name }}</code> awaits review</p>
+              <p class="ct-attention-detail">
+                {% if tool.changed_since_review %}
+                  Its definition changed on {{ tool.server.name }} after it was reviewed, so it was
+                  withdrawn from agents until someone looks again.
+                {% else %}
+                  New on {{ tool.server.name }}. No agent can see it until it is enabled.
+                {% endif %}
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for server in awaiting_approval %}
+          <div class="ct-attention-item">
+            <i class="bi bi-shield-exclamation text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
+                is registered but not approved
+              </p>
+              <p class="ct-attention-detail">No agent can reach it through the gateway until governance approves it.</p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for server in sync_failures %}
+          <div class="ct-attention-item">
+            <i class="bi bi-arrow-repeat text-danger"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                Discovery failed for
+                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
+              </p>
+              <p class="ct-attention-detail">{{ server.last_sync_error }}</p>
+            </div>
+          </div>
+        {% endfor %}
+        {% for server in missing_credentials %}
+          <div class="ct-attention-item">
+            <i class="bi bi-key text-warning"></i>
+            <div class="flex-grow-1">
+              <p class="ct-attention-title">
+                <a href="{% url 'mcp_gateway:server_detail' server.pk %}" class="text-decoration-none">{{ server.name }}</a>
+                cannot resolve its credential
+              </p>
+              <p class="ct-attention-detail">
+                Set <code>{{ server.credential_ref }}</code> in the platform's environment. The gateway
+                holds the credential so agents never do; every call fails until it resolves.
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  {% if not open_circuits and not pending_tools and not awaiting_approval and not sync_failures and not missing_credentials %}
+    {% include "partials/_alerts_empty.html" with detail="No server out of rotation, tool awaiting review or missing credential." %}
+  {% endif %}
+</aside>
+</div>
 {% endif %}
 {% endblock %}

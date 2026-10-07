@@ -22,6 +22,10 @@ ADAPTER_MODULES = [
     "integrations.webhooks.generic",
     "integrations.mcp.mock",
     "integrations.mcp.streamable_http",
+    "integrations.a2a.mock",
+    "integrations.a2a.jsonrpc",
+    "integrations.devtools.mock",
+    "integrations.devtools.github_copilot",
 ]
 
 _loaded = False

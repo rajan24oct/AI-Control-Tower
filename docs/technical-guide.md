@@ -30,11 +30,12 @@ Related documents:
      [4.4 Email](#44-email) ·
      [4.5 AI Gateway](#45-ai-gateway) ·
      [4.6 MCP Gateway](#46-mcp-gateway) ·
-     [4.7 Content display](#47-content-display) ·
-     [4.8 Settings that live in code](#48-settings-that-live-in-code) ·
-     [4.9 Credentials](#49-credentials) ·
-     [4.10 Provider and MCP server options](#410-provider-and-mcp-server-options) ·
-     [4.11 Example environment files](#411-example-environment-files)
+     [4.7 A2A Gateway](#47-a2a-gateway) ·
+     [4.8 Content display](#48-content-display) ·
+     [4.9 Settings that live in code](#49-settings-that-live-in-code) ·
+     [4.10 Credentials](#410-credentials) ·
+     [4.11 Provider, MCP server and A2A agent options](#411-provider-mcp-server-and-a2a-agent-options) ·
+     [4.12 Example environment files](#412-example-environment-files)
 5. [Integrations](#5-integrations)
    - [5.1 Choosing an integration pattern](#51-choosing-an-integration-pattern) ·
      [5.2 Authentication](#52-authentication) ·
@@ -46,7 +47,7 @@ Related documents:
      [5.8 Policy check API](#58-policy-check-api) ·
      [5.9 Approval requests API](#59-approval-requests-api) ·
      [5.10 AI Gateway](#510-ai-gateway) ·
-     [5.11 Agent-to-agent messaging](#511-agent-to-agent-messaging) ·
+     [5.11 A2A Gateway](#511-a2a-gateway) ·
      [5.12 MCP Gateway](#512-mcp-gateway) ·
      [5.13 Live monitor WebSocket](#513-live-monitor-websocket) ·
      [5.14 Extending with adapters](#514-extending-with-adapters)
@@ -77,15 +78,15 @@ AI Control Tower gives an organization one control plane for its AI estate:
   - deployment authorization (Gate G3) and change control (Gate G4)
   - time-boxed exceptions (M17)
   - a Control Plane that compares what runs with what was authorized (M12–M13)
-- **Enforcement.** Two gateways in the request path — the **AI Gateway** for model calls and the
-  **MCP Gateway** for tool calls — that turn governance into real refusals and hold the upstream
-  credentials, so applications never do.
+- **Enforcement.** Three gateways in the request path — the **AI Gateway** for model calls, the
+  **MCP Gateway** for tool calls and the **A2A Gateway** for work one agent hands another — that turn
+  governance into real refusals and hold the upstream credentials, so applications never do.
 
 Each application chooses how closely it integrates. The two modes run side by side:
 
 | | Reporting mode | Gateway mode |
 |---|---|---|
-| How the application reaches AI | Directly, with its own provider and tool credentials | Through `/api/v1/gateway/chat/` and `/api/v1/mcp/` |
+| How the application reaches AI | Directly, with its own provider and tool credentials | Through `/api/v1/gateway/chat/`, `/api/v1/mcp/` and `/api/v1/a2a/` |
 | What it sends the Tower | Telemetry: runs and their events | The calls themselves |
 | Policy | Advisory: ask `/api/v1/policy/check/` and act on the answer | Enforced: `deny` refuses, `require_approval` holds |
 | Budgets | Alerts | Alerts, and hard stops where configured |
@@ -127,6 +128,7 @@ flowchart TB
         api["REST API /api/v1/"]
         aigw["AI Gateway pipeline"]
         mcpgw["MCP Gateway pipeline"]
+        a2agw["A2A Gateway pipeline"]
         ws["WebSocket consumer /ws/executions/"]
     end
 
@@ -143,23 +145,29 @@ flowchart TB
     redis[("Redis")]
     upstream["Model providers"]
     mcpservers["MCP servers"]
+    peers["External A2A agents"]
 
     browser --> ui
     browser <--> ws
     apps --> aigw
     apps --> mcpgw
+    apps --> a2agw
     mcpc --> mcpgw
     engines --> api
     ui --> domain
     api --> domain
     aigw --> gov
     mcpgw --> gov
+    a2agw --> gov
     mcpgw --> irgf
+    a2agw --> irgf
     workers --> irgf
     aigw --> adapters
     mcpgw --> adapters
+    a2agw --> adapters
     adapters --> upstream
     adapters --> mcpservers
+    adapters --> peers
     domain --> db
     workers --> db
     workers --> adapters
@@ -189,9 +197,10 @@ local memory.
 | `apps.access` | People, teams, service accounts and API keys, managed in the web UI; organizations, for site administrators |
 | `apps.executions` | Executions, events, traces and the live monitor consumer |
 | `apps.telemetry` | Payload ingestion through execution adapters; raw payload retention |
-| `apps.gateway` | AI Gateway pipeline, provider circuit breakers, agent-to-agent messaging |
+| `apps.gateway` | AI Gateway pipeline, provider circuit breakers; the original agent mailbox, now a door into the A2A Gateway |
 | `apps.routing` | Routing policies, the routing simulator and routing decisions |
 | `apps.mcp_gateway` | MCP server registry, tool discovery and review, access grants, the unified MCP endpoint |
+| `apps.a2a` | A2A Gateway: agent cards for internal and external agents, skill review, contracts, the A2A endpoint, the mailbox and the log of hand-offs |
 | `apps.costs` | Pricing, spend, rollups, budgets and alerts |
 | `apps.risks` | Risk register and heat map |
 | `apps.approvals` | Approval rules, approval requests and the Approval Centre |
@@ -233,6 +242,21 @@ local memory.
 | Record | A tool-call log entry; arguments and a result preview if `MCP_GATEWAY_RECORD_ARGUMENTS=1`; the call goes onto the caller's execution timeline when the caller names one | — |
 | Verify | Once the record commits, the Control Plane checks the call against the agent's authorized configuration (IRGF link 07). A divergence becomes a drift record; the caller's answer is not delayed | — |
 
+**A2A Gateway** — `identity → registry → access → content → policy → limits → breaker → deliver → record → verify`
+
+| Stage | Checks | Outcome when it fails |
+|---|---|---|
+| Identity | API key, `a2a.invoke`, the browser `Origin`, and the sending agent: named in `X-Agent-ID`, or the one agent the key is bound to (IRGF link 02). The sender is active and its kill-switch is not pulled | HTTP 401, 403 or 404; a suspended or inactive sender gets a `rejected` task |
+| Registry | The address names an agent that is published, active and approved; an internal agent is active and not suspended; the skill asked for is enabled, not awaiting review, disabled or withdrawn | `blocked`: a `rejected` task |
+| Access | On a restricted agent, the sender holds an unexpired contract that covers the skill. An open agent needs no contract, but a contract the sender holds still binds it | `blocked` |
+| Content | The message's size, and its data classification — as declared, else the sender's own, raised to confidential when personal data is found — against the contract's ceiling and the recipient's clearance | `blocked` |
+| Policy | The policy engine evaluates the hand-off with action `a2a.message`, the recipient and the hop count | `blocked`, naming the policies |
+| Limits | The chain: at most `A2A_GATEWAY_MAX_HOPS` hand-offs, and never back to an agent already in it. The contract's messages per hour | `blocked` |
+| Breaker | For an agent reached over HTTP: its circuit is closed, or its cool-off has elapsed | `unavailable` |
+| Deliver | A mailbox agent's task is queued for it to collect. An agent reached over HTTP gets `message/send` at the endpoint governance registered, under `A2A_GATEWAY_CALL_TIMEOUT`, with the platform injecting its credential | `failed`, or `delivered` with the agent's own task state |
+| Record | An A2A task: the message, the answer, the states it passed through and the gateway's decision. For an agent reached over HTTP, content is kept only while `A2A_GATEWAY_RECORD_CONTENT=1`; a mailbox message is the delivery itself | — |
+| Verify | Once the record commits, the Control Plane checks the hand-off against the sender's authorized contracts and the delegation graphs of the applications either agent belongs to (IRGF link 07) | — |
+
 **Telemetry ingestion** — an engine posts a run to `/api/v1/executions/`, or a whole payload to
 `/api/v1/telemetry/webhook/`. For webhook payloads the raw body is stored first, so a rejected
 payload survives for diagnosis. An execution adapter normalizes the payload. The execution is created
@@ -272,6 +296,9 @@ Every role holds the six read permissions: `inventory.view`, `execution.view`, `
 | `mcp.manage` | ✓ | ✓ | | | | | | |
 | `mcp.approve` | ✓ | | | ✓ | | | | |
 | `mcp.invoke` | ✓ | ✓ | ✓ | | | | | |
+| `a2a.manage` (publish agents for A2A; register external ones) | ✓ | ✓ | ✓ | | | | | |
+| `a2a.approve` (approve A2A agents, review skills, grant contracts) | ✓ | | | ✓ | | | | |
+| `a2a.invoke` | ✓ | ✓ | ✓ | | | | | |
 | `cost.manage` | ✓ | ✓ | | | | | | |
 | `risk.manage` | ✓ | | | ✓ | ✓ | | | |
 | `approval.decide` | ✓ | | | ✓ | | ✓ | | |
@@ -303,6 +330,8 @@ outside the platform.
 | execution | `generic_webhook` | Normalizes engine payloads posted to `/api/v1/telemetry/webhook/` |
 | mcp | `streamable_http` | The MCP Streamable HTTP transport |
 | mcp | `mock` | An in-process MCP server for demos and tests |
+| a2a | `jsonrpc` | An A2A agent over JSON-RPC 2.0 and HTTP (A2A 0.3): its card, `message/send`, `tasks/get`, `tasks/cancel` |
+| a2a | `mock` | An in-process A2A agent for demos and tests, with a simulated outage |
 
 The `tool`, `observability` and `cost` kinds have contracts but no built-in adapters.
 `GET /api/v1/adapters/` lists what the running installation has loaded ([5.14](#514-extending-with-adapters)).
@@ -524,7 +553,7 @@ location / {
   builds absolute URLs, add `SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")` to
   `aig_tower/settings.py`.
 
-The environment for production is in [4.11](#411-example-environment-files); the hardening checklist
+The environment for production is in [4.12](#412-example-environment-files); the hardening checklist
 is in [7.2](#72-hardening-checklist).
 
 ### 2.6 Verify the installation
@@ -577,7 +606,8 @@ so gateway calls succeed without any real provider credentials.
 It also runs the IRGF lifecycle:
 - eleven risk classifications
 - deployment authorizations for three agents and the Claims Processing Platform
-- a change waiting at Gate G4, and an exception waiting for its decision
+- two changes waiting at Gate G4, one of them a contract granted after G3, and an exception waiting
+  for its decision
 - the Control Plane over all the traffic, which leaves 13 drift records open, two of them incidents
 
 [SETUP.md](../SETUP.md#6-first-sign-in-and-the-demo-estate) shows the summary the command prints,
@@ -631,8 +661,9 @@ can be rotated without touching anything else.
 
 1. **Create the account** from the profile menu: **Integrations** → **New service account**. Give it
    a name, the external system it represents, a role, and the agents it may act as.
-   - **AI Developer** (the default) grants `telemetry.ingest`, `gateway.invoke` and `mcp.invoke`,
-     and can manage agents and applications. It is everything a running application needs.
+   - **AI Developer** (the default) grants `telemetry.ingest`, `gateway.invoke`, `mcp.invoke` and
+     `a2a.invoke`, and can manage agents and applications. It is everything a running application
+     needs.
    - **AI Platform Administrator** also manages providers, models, costs and MCP servers. Use it only
      for a provisioning pipeline that registers providers and models over the API.
    - Administrator roles are not offered: a leaked key must never be able to hand out access.
@@ -655,11 +686,12 @@ Register records in dependency order; each one refers to the ones before it.
 | 3 | Agents | **Onboarding → New agent**, or `POST /api/v1/agents/` | Give it a stable `agent_id` — the identifier your code sends. It cannot change once saved |
 | 4 | Applications | **Onboarding → New application**, or `POST /api/v1/applications/` | Link its agents, models and providers, and declare its delegation graph |
 | 5 | MCP servers | **Onboarding → Register MCP server** | On its page: **Health check → Approve → Sync tools →** review each tool **→ Grant an agent** access; mark the action-limit arguments of tools that move value |
-| 6 | Service accounts | Profile menu → **Integrations** | One per application, bound to the agents it runs ([3.3](#33-service-accounts-and-api-keys)) |
-| 7 | Guardrails | **Onboarding** → routing policy, control policy, approval rule, budget | Optional: without a routing policy, the gateway ranks every active model of the requested type |
-| 8 | Classification (IRGF S2) | **AI Governance → Risk Classification** | Score each agent and application; someone outside its delivery line countersigns. Complete each acting agent's Agent Card, and bind a service account to every Tier 3–4 agent |
-| 9 | Authorization (IRGF Gate G3) | **Request authorization** on each agent's page, then on the application's | The request page lists the entry criteria for the tier. To enforce S2 and G3 at the gateways, add `risk_classification` and `deployment_authorization` policies with effect `deny` |
-| 10 | Prove it | — | A gateway call naming the agent returns `200`; the MCP catalog lists the tools you enabled; both appear under Executions and MCP Tool Calls, and the Control Plane lists them as verified |
+| 6 | A2A agents | **Onboarding → Publish an A2A agent**, or *Publish for A2A* on an agent's page | Declare a mailbox agent's skills, or register an external agent and **Sync card**; then **Approve →** review each skill **→ Grant a contract** to each agent that may send it work |
+| 7 | Service accounts | Profile menu → **Integrations** | One per application, bound to the agents it runs ([3.3](#33-service-accounts-and-api-keys)) |
+| 8 | Guardrails | **Onboarding** → routing policy, control policy, approval rule, budget | Optional: without a routing policy, the gateway ranks every active model of the requested type |
+| 9 | Classification (IRGF S2) | **AI Governance → Risk Classification** | Score each agent and application; someone outside its delivery line countersigns. Complete each acting agent's Agent Card, and bind a service account to every Tier 3–4 agent |
+| 10 | Authorization (IRGF Gate G3) | **Request authorization** on each agent's page, then on the application's | The request page lists the entry criteria for the tier. To enforce S2 and G3 at the gateways, add `risk_classification` and `deployment_authorization` policies with effect `deny` |
+| 11 | Prove it | — | A gateway call naming the agent returns `200`; the MCP catalog lists the tools you enabled; the A2A directory lists the agents it may reach; all of it appears under Executions, MCP Tool Calls and *A2A Gateway → Communications*, and the Control Plane lists it as verified |
 
 The **Onboarding hub** (`/onboarding/`, *Onboarding* in the header) shows these steps with the
 organization's progress on each. It lists what still needs attention, such as credentials the
@@ -683,6 +715,8 @@ accounts are managed from the profile menu, and site administrators create organ
 | Routing policy | Onboarding → New routing policy | `provider.manage` | A provider cannot be both allowed and blocked |
 | MCP server | Onboarding → Register MCP server | `mcp.manage` | The tool prefix is fixed once saved; approval and tool review need `mcp.approve` |
 | MCP access grant | *Grant an agent* on the server's page | `mcp.approve` | Edited or revoked from the same page |
+| A2A agent | Onboarding → Publish an A2A agent, or *Publish for A2A* on an agent's page | `a2a.manage` | An internal agent's address is its `agent_id`; an external agent's is fixed once saved. A mailbox agent's declared skills are read at once and wait for review; approval and review need `a2a.approve` |
+| A2A contract | *Grant a contract* on the recipient's A2A page | `a2a.approve` | The ceiling cannot exceed the recipient's clearance. Edited or revoked from the same page; a change for Gate G4 when the sender is authorized |
 | Control policy | Onboarding → New control policy | `policy.manage` | Settings checked against the type's schema and value types; IRGF tiers as boxes |
 | Approval rule | Onboarding → New approval rule | `policy.manage` | Needs at least one condition; inactive rules stay listed in the Approval Centre |
 | Risk | Onboarding → New risk | `risk.manage` | Numbered and scored on save; residual needs both likelihood and impact |
@@ -852,7 +886,24 @@ Stored under `CONTROL_TOWER["MCP_GATEWAY"]`.
 
 Recorded arguments and results are capped at 2,000 characters (`MAX_RECORDED_CHARS`, set in code).
 
-### 4.7 Content display
+### 4.7 A2A Gateway
+
+Stored under `CONTROL_TOWER["A2A_GATEWAY"]`.
+
+| Variable | Default | Setting | Purpose |
+|---|---|---|---|
+| `A2A_GATEWAY_CALL_TIMEOUT` | `30` | `CALL_TIMEOUT_SECONDS` | Seconds before one delivery to, or question of, an agent reached over HTTP is abandoned. |
+| `A2A_GATEWAY_CIRCUIT_THRESHOLD` | `5` | `CIRCUIT_FAILURE_THRESHOLD` | Consecutive failures before an agent is taken out of rotation. |
+| `A2A_GATEWAY_CIRCUIT_COOL_OFF` | `30` | `CIRCUIT_COOL_OFF_SECONDS` | Seconds before an open breaker lets one probe through. |
+| `A2A_GATEWAY_REVIEW_NEW_SKILLS` | `1` | `REVIEW_NEW_SKILLS` | New skills, and skills whose definition changes after review, wait for review before any agent can ask for them. `0` trusts every agent's card. |
+| `A2A_GATEWAY_RECORD_CONTENT` | `1` | `RECORD_CONTENT` | Keep message and answer text in the log of exchanges with agents reached over HTTP, shown only to `prompt.view` holders. A mailbox message, and a mailbox agent's answer, are the delivery itself and are kept either way. |
+| `A2A_GATEWAY_MAX_HOPS` | `4` | `MAX_HOPS` | How many times work may be handed on. A chain that would come back to an agent already in it is refused at any length. |
+| `A2A_GATEWAY_MAX_MESSAGE_KB` | `256` | `MAX_MESSAGE_BYTES` | The largest message, or answer, the gateway takes, in KB. |
+| `A2A_GATEWAY_ALLOWED_ORIGINS` | empty | `ALLOWED_ORIGINS` | Browser origins allowed to call the A2A endpoints, in addition to `DJANGO_CSRF_TRUSTED_ORIGINS`. |
+
+Message previews in the log are capped at 2,000 characters (`MAX_RECORDED_CHARS`, set in code).
+
+### 4.8 Content display
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -860,7 +911,7 @@ Recorded arguments and results are capped at 2,000 characters (`MAX_RECORDED_CHA
 
 Displayed prompt text is capped at 1,200 characters (`PROMPT_DISPLAY["MAX_CHARS"]`, set in code).
 
-### 4.8 Settings that live in code
+### 4.9 Settings that live in code
 
 These have no environment variable. Change them in `aig_tower/settings.py` or `aig_tower/celery.py`.
 
@@ -876,10 +927,11 @@ These have no environment variable. Change them in `aig_tower/settings.py` or `a
 | `app.conf.beat_schedule` | See [8.2](#82-scheduled-jobs) | The periodic job cadence |
 | `CONTROL_PLANE["VERIFICATION_CEILING_SECONDS"]` | Not set: `{1: 86400, 2: 3600, 3: 900, 4: 300}` | IRGF link 07: seconds from recording an action to verifying it, per tier. A verification after its ceiling is marked late |
 
-### 4.9 Credentials
+### 4.10 Credentials
 
-The database never stores a credential. A provider or MCP server record holds `credential_ref`: the
-**name** of an environment variable. The adapter reads the variable when it makes a call.
+The database never stores a credential. A provider, MCP server or external A2A agent record holds
+`credential_ref`: the **name** of an environment variable. The adapter reads the variable when it
+makes a call.
 
 - Set the variable wherever the platform runs — `.env`, the container environment or your secret
   manager — for the web processes **and** the Celery workers, which run provider health checks.
@@ -890,7 +942,7 @@ The database never stores a credential. A provider or MCP server record holds `c
 - `.env.example` lists common names — `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
   `GOOGLE_API_KEY`, `AWS_BEDROCK_ACCESS_KEY`, `MISTRAL_API_KEY` — but any name works.
 
-### 4.10 Provider and MCP server options
+### 4.11 Provider, MCP server and A2A agent options
 
 **`generic_rest` providers** are described entirely by the provider's `options` JSON. Every key is
 optional; these defaults fit an OpenAI-shaped API:
@@ -927,7 +979,21 @@ OpenAI-compatible service. `credential_ref` is required.
 
 The server's slug prefixes every tool it contributes: `github__create_issue`.
 
-### 4.11 Example environment files
+**A2A agents**:
+
+| Field | Values |
+|---|---|
+| Agent | *An agent in this registry*, published by the platform; or *an external agent* another organization runs |
+| Delivery | *Gateway mailbox*: the agent collects its work and needs no endpoint (internal agents only). *A2A JSON-RPC over HTTP*: the gateway calls the agent's endpoint. *Mock*: for demos and tests |
+| Endpoint | Where the gateway sends. The URL on the agent's own card is never followed |
+| Agent Card URL | Where its card is read; blank means `/.well-known/agent-card.json` at the endpoint's origin, then `agent.json` |
+| Auth method, credential ref, header | As for MCP servers |
+| Skills | For a mailbox agent: declared by its owner, one per line as `id: what it does` |
+| Clearance | The most sensitive data it may be sent. A contract can lower the ceiling, never raise it |
+| Access | `restricted` — only agents holding a contract (the default); `open` — any agent in the organization |
+| Options | Static, non-secret headers: `{"headers": {"X-Tenant": "acme"}}` |
+
+### 4.12 Example environment files
 
 **Local, SQLite:**
 
@@ -984,7 +1050,7 @@ GITHUB_MCP_TOKEN=<from your secret manager>
 | Ask "may I?" before acting, while keeping the call yourself | Policy check API | [5.8](#58-policy-check-api) |
 | Pause a run until a person decides | Approval requests API | [5.9](#59-approval-requests-api) |
 | Make governed model calls with no provider keys in the application | AI Gateway | [5.10](#510-ai-gateway) |
-| Hand work from one agent to another | Agent-to-agent messaging | [5.11](#511-agent-to-agent-messaging) |
+| Hand work from one agent to another, inside the organization or out | A2A Gateway | [5.11](#511-a2a-gateway) |
 | Give any MCP client governed access to every approved tool | MCP Gateway | [5.12](#512-mcp-gateway) |
 | Keep the registries in step with CI or a CMDB | Registry API | [5.5](#55-registry-api) |
 | Support a new vendor, engine payload or transport | Adapters | [5.14](#514-extending-with-adapters) |
@@ -1000,7 +1066,7 @@ Code authenticates as a **service account** with an API key ([3.3](#33-service-a
 |---|---|
 | `X-API-Key: act_<prefix>_<secret>` | Every endpoint |
 | `Authorization: Api-Key act_<prefix>_<secret>` | Every endpoint |
-| `Authorization: Bearer act_<prefix>_<secret>` | The MCP endpoint `/api/v1/mcp/` only |
+| `Authorization: Bearer act_<prefix>_<secret>` | The MCP endpoint `/api/v1/mcp/` and the A2A endpoints under `/api/v1/a2a/` only |
 
 - **Organization.** A service account belongs to one organization, and every request it makes is
   scoped to it. A signed-in person (browser session) acts in their active organization, or their
@@ -1015,8 +1081,8 @@ Code authenticates as a **service account** with an API key ([3.3](#33-service-a
 - **Attribution.** Each authenticated call updates the key's `last_used_at`, and audit entries record
   the actor as `<service account name> (service account)` with source `api`, the key prefix, the
   client IP and the user agent.
-- **Keep keys out of browsers.** Call the API and gateways from your backend. The MCP endpoint
-  refuses browser origins nobody configured.
+- **Keep keys out of browsers.** Call the API and gateways from your backend. The MCP and A2A
+  endpoints refuse browser origins nobody configured.
 
 | Status | Body `detail` | Meaning |
 |---|---|---|
@@ -1077,11 +1143,19 @@ unknown agent.
 | `/approval-requests/` | GET, POST | Raise and list approval requests | `approval.view` / `telemetry.ingest` |
 | `/approval-requests/{id}/status/` | GET | Poll one decision | `approval.view` |
 | `/gateway/chat/` | POST | A governed model call, JSON or server-sent events | `gateway.invoke` |
-| `/gateway/messages/` | POST | Send a message to another agent | `gateway.invoke` |
+| `/gateway/messages/` | POST | Send a message to another agent: the original mailbox, now through the A2A Gateway | `gateway.invoke` |
 | `/gateway/messages/{agent}/` | GET | Collect an agent's messages | `gateway.invoke` |
 | `/mcp/` and `/mcp/{agent}/` | POST | The MCP Gateway as an MCP server | `mcp.invoke` |
 | `/mcp-gateway/tools/` | GET | An agent's governed tool catalog | `mcp.invoke` |
 | `/mcp-gateway/tools/call/` | POST | One governed tool call over REST | `mcp.invoke` |
+| `/a2a/` | GET | The agents a sender may reach, and the skills it may ask each for | `a2a.invoke` |
+| `/a2a/{address}/` | POST | A published agent as an A2A server: `message/send`, `tasks/get`, `tasks/cancel` | `a2a.invoke` |
+| `/a2a/{address}/.well-known/agent-card.json` | GET | The agent's card, as governance reviewed it | `a2a.invoke` |
+| `/a2a-gateway/messages/` | POST | One hand-off over REST | `a2a.invoke` |
+| `/a2a-gateway/tasks/{id}/` `cancel/` | GET, POST | Follow or withdraw a task | `a2a.invoke` |
+| `/a2a-gateway/inbox/{agent}/` | GET | A mailbox agent collects its work | `a2a.invoke` |
+| `/a2a-gateway/tasks/{id}/status/` | POST | A mailbox agent reports progress or answers | `a2a.invoke` |
+| `/a2a-cards/` | GET | The A2A registry, with skill and contract counts | `inventory.view` |
 
 All paths are relative to `/api/v1/`. Superusers pass every permission check.
 
@@ -1094,13 +1168,15 @@ All paths are relative to `/api/v1/`. Superusers pass every permission check.
 | `/agents/` | `agent.manage` | `framework`, `environment`, `risk_level`, `autonomy_level`, `status` | name, agent id, description | `name`, `created_at`, `autonomy_level` |
 | `/applications/` | `application.manage` | `environment`, `criticality`, `risk_level`, `status`, `team` | name, description, department | `name`, `created_at` |
 | `/mcp-servers/` | read-only | `transport`, `status`, `is_approved`, `access_mode`, `health_status` | name, slug, description, publisher | `name`, `created_at` |
+| `/a2a-cards/` | read-only | `origin`, `transport`, `status`, `is_approved`, `access_mode`, `health_status` | name, slug, description, publisher | `name`, `created_at` |
 
 - `id` and timestamps are read-only everywhere; `slug` is generated for providers and applications.
   A provider's capabilities and health fields are maintained by the platform: the scheduled health
   checks, and the **Health check** and **Refresh capabilities** buttons on the provider's page.
 - A write names the owning `organization` by UUID; `GET /api/v1/organizations/` lists yours.
-- **The MCP registry is read-only over the API.** Registering, approving and reviewing MCP servers are
-  governed acts with an audit trail, made in the Control Tower UI.
+- **The MCP and A2A registries are read-only over the API.** Registering, approving and reviewing MCP
+  servers, and publishing, approving, reviewing and granting contracts for A2A agents, are governed
+  acts with an audit trail, made in the Control Tower UI.
 - Approvals are not registry writes either: governance approves providers and models on their pages
   in the web UI, which needs `model.approve`.
 
@@ -1527,32 +1603,117 @@ def ask_streaming(prompt: str, agent: str = "customer-support-agent") -> None:
 The client timeout (90 s) is longer than `GATEWAY_DEADLINE` (60 s by default), so the gateway, not
 the client, decides when a request has run out of time.
 
-### 5.11 Agent-to-agent messaging
+### 5.11 A2A Gateway
 
-A governed mailbox between agents. The gateway never calls into an agent: messages wait until the
-recipient collects them, so an agent that is down cannot slow anything else.
+Agent-to-agent communication through one governed path. The gateway speaks the Agent2Agent (A2A)
+protocol, revision 0.3: each published agent is an A2A server at its own address, and any A2A client
+reaches it with a URL and a key.
 
-`POST /api/v1/gateway/messages/`:
-
-| Field | Notes |
+| | |
 |---|---|
-| `sender`, `recipient` | **Required.** Loose agent identifiers |
-| `body` | **Required** |
-| `subject`, `correlation_id` | Optional; `correlation_id` threads a conversation |
-| `environment` | Defaults to `production` |
-| `metadata` | Optional object |
+| Agent address | `/api/v1/a2a/<address>/`, also without the trailing slash. An internal agent's address is its `agent_id` |
+| Agent Card | `/api/v1/a2a/<address>/.well-known/agent-card.json`, and the older `agent.json`. Only reviewed skills are on it, and its `url` is the gateway's |
+| Directory | `GET /api/v1/a2a/?agent=<sender>`: every agent the sender may reach, the skills it may ask each for, and its contract |
+| Transport | JSON-RPC 2.0 over HTTP POST, **stateless** |
+| Methods | `message/send`, `tasks/get`, `tasks/cancel`, `agent/getAuthenticatedExtendedCard`. `message/stream` and `tasks/resubscribe` answer `-32004`; the push-notification methods answer `-32003`. Notifications are accepted and not answered; batches are supported |
+| Auth | `Authorization: Bearer act_...` or `X-API-Key: act_...`; the role needs `a2a.invoke` |
 
-The answer is `201` with the message — `id`, `sender`, `recipient`, `subject`, `body`,
-`correlation_id`, `metadata`, `status`, `blocked_reason`, `created_at`, `read_at` — or `403` with
-`{"error": "message_blocked", "detail", "policies"}` when policy forbids it.
+| Header | Effect |
+|---|---|
+| `X-Agent-ID` | The sending agent. Without it, a key bound to exactly one agent sends as that agent |
+| `X-Environment` | The environment policies see; defaults to the sender's, else `production` |
+| `X-Execution-ID` | Puts every hand-off in the request onto that run's timeline |
 
-`GET /api/v1/gateway/messages/{agent}/` returns `{"agent", "count", "messages": [...]}` for the
-recipient, or `404` for an unknown agent.
+**What a message carries.** A message is A2A's own: `role: "user"`, a `messageId` and one or more
+`parts` — `text`, `file` or `data`. The gateway reads these keys from the message's `metadata`, then
+the request's:
 
-In IRGF's terms every message is a delegation (chapter 16). Once a message is recorded, the Control
-Plane checks it against the delegation graphs of the authorized applications that either agent
-belongs to. A path that none of those graphs declares becomes integration drift; the message is
-still delivered.
+| Key | Meaning |
+|---|---|
+| `io.aicontroltower/skill` | The skill asked for. Required when the sender's contract names skills |
+| `io.aicontroltower/dataClassification` | How sensitive the message is: `public`, `internal`, `confidential` or `restricted`. Undeclared, it is taken to be the sender's own classification, and personal data found in it makes it at least `confidential` |
+| `io.aicontroltower/parentTaskId` | The task the sender is handing on work from, so the chain is counted; `referenceTaskIds[0]` serves too. Only a task the sender itself was given counts |
+| `io.aicontroltower/executionId` | The run the hand-off belongs to |
+
+A message whose `taskId` names a task waiting for the sender — `input-required` or `auth-required` —
+continues that task, under the same rules.
+
+**The answer is always a task**, with the gateway's view in `metadata["io.aicontroltower/gateway"]`:
+the delivery `status` (`delivered`, `blocked`, `unavailable`, `failed`), the recipient, the skill, the
+hop count, the data classification, and for a refusal the `reason` and any `policies`. A refused
+message is a task in the `rejected` state whose status message gives the reason. It is not a JSON-RPC
+error, so the sending agent can adapt: ask another agent, or tell its user why it cannot help.
+
+```json
+{
+  "kind": "task",
+  "id": "<task uuid>",
+  "contextId": "<conversation>",
+  "status": {
+    "state": "rejected",
+    "message": {"kind": "message", "role": "agent", "parts": [{"kind": "text",
+      "text": "Refused by the A2A Gateway: Agent 'Internal Knowledge Assistant' holds no contract to send work to 'Claims Triage Agent'."}]}
+  },
+  "artifacts": [],
+  "metadata": {"io.aicontroltower/gateway": {"status": "blocked", "recipient": "claims-triage-agent",
+    "skill": "claim-status", "hops": 1, "dataClassification": "internal", "reason": "…"}}
+}
+```
+
+JSON-RPC errors: `-32700` parse error, `-32600` invalid request, `-32601` method not found, `-32602`
+invalid params (a malformed message, or a follow-up to a task that is not waiting), `-32603` internal
+error, `-32001` task not found, `-32002` task not cancelable, `-32003` push notifications not
+supported, `-32004` unsupported operation, `-32050` no agent published at that address.
+
+| HTTP status | When |
+|---|---|
+| 200 | A JSON-RPC reply, refusals and JSON-RPC errors included |
+| 202 | The request held only notifications |
+| 400 | The body is not JSON, or no organization resolved for the caller |
+| 401 | Missing or invalid key |
+| 403 | The role lacks `a2a.invoke`, the key may not act as that sender, or a browser `Origin` nobody configured |
+| 404 | No agent published at that address (`-32050`), or an unknown `X-Agent-ID` |
+| 405 | `GET` or `DELETE`: the endpoint is stateless |
+
+**Mailbox agents** have no A2A endpoint of their own. They collect their work, and answer it, over
+REST; the gateway never calls into them:
+
+```bash
+# Collect the waiting tasks. Each moves to "working".
+curl -H "X-API-Key: $CLAIMS_AGENT_KEY" http://localhost:8000/api/v1/a2a-gateway/inbox/claims-triage-agent/
+
+# Answer one: "working", "input-required", "auth-required", "completed", "failed" or "rejected".
+curl -X POST http://localhost:8000/api/v1/a2a-gateway/tasks/<task-id>/status/ \
+  -H "X-API-Key: $CLAIMS_AGENT_KEY" -H "Content-Type: application/json" \
+  -d '{"state": "completed", "text": "CLM-4471 is with the property adjuster."}'
+```
+
+A plain-text `completed` answer is kept as the task's artifact; an A2A `message` and `artifacts` may be
+sent instead. Only the recipient answers a task, and only its sender and its recipient can read it.
+
+**The same over REST**, for code that would rather not speak JSON-RPC:
+
+| Endpoint | Method | Does |
+|---|---|---|
+| `/a2a-gateway/messages/` | POST | Send. `agent` (the sender), `recipient`, and `text`, `parts` or `data`; optionally `skill`, `data_classification`, `context_id`, `task_id` (to continue a waiting task), `parent_task_id`, `execution_id`, `environment`, `metadata` |
+| `/a2a-gateway/tasks/{id}/?agent=` | GET | Where a task stands. For a task at an agent reached over HTTP, the sender's view asks that agent again |
+| `/a2a-gateway/tasks/{id}/cancel/` | POST | The sender withdraws a task |
+
+A send answers `201` delivered (`200` for a continued task), `403` refused, `503` the agent is out of
+rotation or misconfigured, `502` it failed, `404` no such agent or task, and `409` for a follow-up to a
+task that is not waiting. The body holds the task, with `status`, `state`, `reason`, `policies`,
+`data_classification`, `personal_data`, `hops`, `latency_ms` and `answer` at the top level.
+
+**The original mailbox.** `POST /api/v1/gateway/messages/` and `GET /api/v1/gateway/messages/{agent}/`
+still answer in the shape they always had. A message sent there is an A2A task, held to the same rules:
+the recipient must be published, and a restricted one needs a contract for the sender. Collecting a
+message there finishes it. On upgrade, a migration publishes every agent that had already received
+messages, and grants a contract to each agent whose messages to it got through, so traffic that
+worked keeps working.
+
+In IRGF's terms every hand-off is a delegation (chapter 16). The Control Plane checks it against the
+sender's authorized contracts and the delegation graphs of the authorized applications either agent
+belongs to ([6.10](#610-control-plane)).
 
 ### 5.12 MCP Gateway
 
@@ -1726,7 +1887,7 @@ The Live Monitor (`/executions/live/`) receives execution updates over a WebSock
 ### 5.14 Extending with adapters
 
 `GET /api/v1/adapters/` returns one list per adapter kind — `provider`, `agent`, `execution`,
-`tool`, `mcp`, `observability` and `cost` — each entry giving `key`, `kind`, `class`,
+`tool`, `mcp`, `a2a`, `observability` and `cost` — each entry giving `key`, `kind`, `class`,
 `display_name`, `capabilities` and `framework`. Trimmed to two entries:
 
 ```json
@@ -1869,6 +2030,11 @@ Notes for adapter authors:
 **MCP transports.** The gateway calls servers over Streamable HTTP only. To govern a server that
 speaks stdio, run it behind a stdio-to-Streamable-HTTP MCP proxy and register the proxy's URL.
 
+**A2A transports** subclass `BaseA2AAdapter` in `integrations/base/a2a.py` and implement
+`get_card()`, `send_message()`, `get_task()` and `cancel_task()`, speaking A2A's own shapes —
+messages made of parts, tasks with a state. Register one with `@register_a2a("<key>")`; an A2A agent
+whose delivery is that key is then reachable. `integrations/a2a/mock.py` is a complete reference.
+
 ---
 
 ## 6. Governance internals
@@ -1891,6 +2057,7 @@ cannot quietly switch a control off.
 | `human_approval` | — | Delegates to the approval rules |
 | `risk_classification` | `environments`, `require_countersignature`, `block_when_rescore_due` | The agent and application must carry a countersigned IRGF S2 classification |
 | `deployment_authorization` | `environments`, `block_pending_changes` | The agent, and the application when the check names one, must each hold a deployment authorization in force for the environment (IRGF S7 · Gate G3); a suspended one counts as none |
+| `agent_communication` | `blocked_recipients` (addresses or names), `block_external`, `external_max_data_classification`, `max_hops`, `environments` | No restrictions. Evaluated for every hand-off through the A2A Gateway |
 
 Every type also accepts `tiers`: a list of IRGF risk tiers (1–4). The policy then applies only when
 the higher of the agent's and application's tier is listed, and an unclassified system matches no
@@ -1926,7 +2093,9 @@ Where policies are evaluated:
   candidate model the router picks.
 - **MCP Gateway** — on every tool call, with action `mcp.tool_call`. `deny` tool-access policies also
   filter the catalog.
-- **Agent-to-agent messaging** — a blocked message returns `403 message_blocked`.
+- **A2A Gateway** — on every hand-off, with action `a2a.message`, the recipient and the hop count.
+  `deny` agent-communication policies also filter the directory. A refused message is a `rejected`
+  task: `403` over REST, and `403 message_blocked` on the original mailbox endpoint.
 
 ![Policies](screenshots/21-policies.png)
 
@@ -1979,8 +2148,8 @@ environment, without sending anything.
 
 ### 6.4 Circuit breakers
 
-Both gateways protect themselves from upstreams that keep failing. The AI Gateway keeps a breaker
-per provider; the MCP Gateway keeps one per server.
+The gateways protect themselves from upstreams that keep failing. The AI Gateway keeps a breaker
+per provider, the MCP Gateway one per server, and the A2A Gateway one per agent it reaches over HTTP.
 
 | State | Behaviour |
 |---|---|
@@ -1995,16 +2164,94 @@ shows the current states and trip counts.
 
 | Aspect | Values |
 |---|---|
-| Scope | `organization`, `team`, `application`, `agent`, `provider`, `model` |
+| Scope | `organization`, `department`, `team`, `user` (an individual), `application`, `agent`, `provider`, `model` |
+| Counts (`cost_source`) | `runtime` (default): execution cost. `developer_tools`: GitHub Copilot licences and premium-request overage. `all`: both. |
 | Period | `daily`, `weekly`, `monthly` (default), `quarterly`, `annual` |
 | Amount | A decimal amount with a currency (default `USD`) |
 | Alert thresholds | Percentages; default `[50, 75, 90, 100]` |
+| Forecast alert | On by default: one alert a period when spend so far, projected straight-line to period end, passes the limit |
+| Recipients | Cost managers (`cost.manage`) always; the owner, the team's lead and `extra_recipients` as chosen |
 | Enforcement | `advisory` (default): alert only. `hard_stop`: refuse gateway requests once spent. |
 
 Threshold alerts are raised by a scheduled check every 15 minutes. A hard stop acts only where the
 platform holds the request — the AI Gateway — and answers `402 budget_exceeded`.
 `GATEWAY_ENFORCE_BUDGETS=0` makes every hard stop advisory at once. Choose `hard_stop` deliberately:
-it turns a finance control into an outage for whatever the budget covers.
+it turns a finance control into an outage for whatever the budget covers. An individual or
+developer-tool budget never holds gateway traffic: the gateway attributes a request to an agent, and
+it cannot stop Copilot.
+
+A forecast needs a tenth of the period to have passed, so the first day of a month does not cry
+wolf. Health on the governance page is **over** (spent past the limit), **forecast to exceed**,
+**watch** (a threshold crossed) or **on track**. Budget coverage is the share of this month's
+runtime spend that some budget narrower than the organization's watches.
+
+#### Attribution
+
+Executions record the application, agent, model, provider and, where known, the person. Department
+and team come from the registry, in one place (`apps/costs/attribution.py`) shared by budgets, alert
+rules and the cost explorer: a run belongs to its **application's** department and team, and only
+when it served no registered application, to its **agent's** team. A department budget with no
+department, or any scoped budget missing its target, counts nothing rather than everything.
+
+#### Cost alert rules
+
+A rule watches a rolling window (`1`, `24` or `168` hours) of AI runtime spend in a budget-style
+scope:
+
+| Metric | Value compared with the threshold |
+|---|---|
+| `spend` | Spend in the window |
+| `spend_increase` | Percentage rise on the average of the four preceding windows; not evaluated without a baseline |
+| `cost_per_run` | Spend divided by runs |
+| `failed_spend` | Spend on failed and timed-out runs |
+| `tokens` | Tokens in the window |
+
+`minimum_spend` skips windows too small to matter, and `cooldown_hours` (default 24) keeps one
+incident from alerting every 15 minutes. Each firing is a `CostAlertEvent` carrying the top three
+contributing agents, and a **Cost Alert** notification to cost managers (unless the rule opts out),
+its owner and its `recipients`. Rules are checked with the budgets, and on demand with **Check now**.
+
+#### Developer tools (GitHub Copilot)
+
+A `DevToolSubscription` names a GitHub organization, a `credential_ref` and the rates: monthly seat
+prices for Business and Enterprise, each plan's included premium requests, and the overage price
+(GitHub's list prices by default). The `github_copilot` cost adapter reads:
+
+| Data | Endpoint |
+|---|---|
+| Seats, plan, granting team, last activity | `GET /orgs/{org}/copilot/billing/seats` |
+| Premium requests per person per day | `GET /organizations/{org}/settings/billing/premium_request/usage?user=&year=&month=&day=` |
+
+Usage is one call per seat per day, bounded by the `max_usage_calls` option (default 2,000); the
+first sync reads back to the start of last month, later ones the last two days again plus anything
+new. Seats map to people by e-mail or the `login_map` option, and to teams by the granting GitHub
+team's slug or the person's team; a mapping made by hand is kept. A seat no longer in GitHub is
+marked removed. `mock_github_copilot` serves deterministic demo data from `options.seats`.
+
+Licences are prorated by day. Premium requests are charged only past each seat's monthly allowance,
+replaying the month from its first day so a window is charged only for the overage that fell inside
+it.
+
+#### Optimization recommendations
+
+`OptimizationService` reads the last 30 days and writes `CostRecommendation`s keyed by a fingerprint,
+so a daily run refreshes figures, keeps dismissals, and marks what no longer applies **No longer
+applies** rather than deleting it. Estimates are conservative; the assumptions are constants in
+`apps/costs/optimization.py` and are shown as each recommendation's evidence.
+
+| Kind | Raised when | Estimated saving |
+|---|---|---|
+| Right-size the model | An approved model of the same type, fitting the largest run, costs at most 60% as much for the agent's token mix | Spend × (1 − cost ratio) × share of traffic assumed movable: 80% low risk, 60% moderate, 35% high, 20% critical |
+| Cache repeated prompt input | ≥ 75% of tokens are input and runs average ≥ 1,000 input tokens | Input cost × 50% cacheable × the cached-input discount (the price list's, else 50%) |
+| Cap verbose output | Output per run ≥ 2× the estate median and ≥ 50% of the agent's cost | Output cost × 25% |
+| Stop paying for failed runs | ≥ 5% of runs failed | Failure spend × 70% |
+| Reclaim idle Copilot seats | No activity for 30 days (seats under 14 days old excepted) | The seats' licences |
+| Downgrade Copilot seats | Enterprise seats that never used more than a Business allowance in three months | The price difference |
+| Upgrade heavy Copilot users | Business seats whose overage costs more than Enterprise would | The difference in total cost |
+| Put a budget on unbudgeted spend | An agent with ≥ 5% of runtime spend and no budget narrower than the organization's, or Copilot spend with no developer-tool budget | — (a risk control) |
+
+The noise floor is 1% of the estate's 30-day runtime spend, between $0.10 and $1.00 a month.
+Decisions (accept, done, dismiss, reopen) are recorded with a note and written to the audit trail.
 
 ### 6.6 Evaluations
 
@@ -2062,7 +2309,7 @@ its records.
 |---|---|---|---|
 | Risk classification (S2) | `apps.classification` | Scoring an agent or application; a countersignature confirms it | The tier: `tiers` on policies and approval rules, identity binding at Tier 3–4, gate decision rights, drift response windows and verification ceilings |
 | Deployment authorization (G3) | `apps.lifecycle` | *Request authorization*, then the signatures its tier needs | The authorized configuration: the baseline for change detection and for the Control Plane, and what the `deployment_authorization` policy looks for |
-| Change record (G4) | `apps.lifecycle` | Automatically, when an authorized agent or application, its MCP grants, its bound identities or its tier change | Minor changes move the baseline; material ones wait for G4; major ones suspend the authorization until G4 decides |
+| Change record (G4) | `apps.lifecycle` | Automatically, when an authorized agent or application, its MCP grants, its A2A contracts, its bound identities or its tier change | Minor changes move the baseline; material ones wait for G4; major ones suspend the authorization until G4 decides |
 | Exception (M17) | `apps.lifecycle` | Requested for one agent and one policy, or for one drift record | The policy engine skips the excepted policy for that agent, for at most 90 days |
 
 - **Change detection** runs on model signals, so an edit made through the web UI, the admin, the API
@@ -2076,6 +2323,10 @@ its records.
   signed. It also expires exceptions, warning seven days ahead.
 - **Re-score triggers** flag the current S2 record when autonomy rises, data classification rises,
   an application moves to production, or a Tier 3–4 annual review falls due.
+- **Fields added later.** An agent's authorized configuration records its A2A contracts. An
+  authorization signed before contracts were recorded never recorded them — before the A2A Gateway
+  any agent could message any other — so for it the field reads *not recorded*, not *empty*, and is
+  not compared until the agent is authorized again (`LATER_FIELDS` in `apps/lifecycle/services.py`).
 
 ### 6.10 Control Plane
 
@@ -2085,7 +2336,7 @@ records each divergence as drift (M13).
 | Observed | When | Checked against |
 |---|---|---|
 | MCP tool calls | As each is recorded, once the transaction commits | Allow-list and grants, restricted tools, identity, the data classification behind the tool, environment |
-| Agent-to-agent messages | As each is recorded | The delegation graphs of the authorized applications that either agent belongs to |
+| Agent-to-agent hand-offs (A2A tasks) | As each is recorded, once the transaction commits | The sender's environment, identity and authorized contracts; the delegation graphs of the authorized applications that either agent belongs to |
 | Runs, reported or served | By the sweep, once a run has been quiet for 30 seconds | Environment, model, identity, the tools the run reports; membership of the application the run names |
 | Evaluations, policies, budgets, tool definitions | By the sweep, every minute | The evaluation pass relied on at G3; policies whose substance changed since; budget alerts at 100%; reviewed tools that changed |
 
@@ -2098,7 +2349,7 @@ records each divergence as drift (M13).
 - **Resolution** is in the web UI: revert, ratify, except or escalate. `GET /api/v1/drift-records/`
   is read-only.
 - **Verification** writes one row per action, with its latency from recording to verification and
-  its tier's ceiling (`CONTROL_PLANE["VERIFICATION_CEILING_SECONDS"]`, [4.8](#48-settings-that-live-in-code)).
+  its tier's ceiling (`CONTROL_PLANE["VERIFICATION_CEILING_SECONDS"]`, [4.9](#49-settings-that-live-in-code)).
   A late verification shows link 07 as a gap on the agent's page.
 - **Automatic action** is limited to the kill-switch triggers an agent pre-approved at G3:
   `action_limit_breach`, `boundary_divergence` and `unbound_identity`. The stricter of the registry
@@ -2125,6 +2376,7 @@ records each divergence as drift (M13).
 | Authorization | Role-based, per organization, on every page, action and API call ([1.6](#16-tenancy-and-access-control)). |
 | Content | Reading prompt text is its own permission (`prompt.view`); text from confidential and restricted agents is redacted on screen; MCP arguments are recorded only if enabled. |
 | MCP tools | New and changed tools wait for review; servers are restricted to granted agents by default; an agent's `restricted_tools` are enforced; the endpoint refuses unconfigured browser origins (the MCP specification's defence against DNS rebinding). |
+| Agent-to-agent (A2A) | An agent can be sent work only once published and approved, and a restricted one only by a sender holding an unexpired contract. New and changed skills wait for review. Every message is held to its contract's data ceiling and the recipient's clearance, personal data raising what it carries. Chains stop at a hop limit and never return to an agent already in them. The gateway sends to the endpoint governance registered, never to one a card names, and holds external agents' credentials. A hand-off never crosses organizations, and is not even recorded if it would. |
 | Agent runtime (IRGF) | Tier 3–4 agents answer only to service accounts bound to them. Any on-call role can pull a kill-switch; only a person can release it. Action limits are checked before each MCP tool call, and every action is verified against the authorized configuration within a per-tier ceiling. |
 | Separation of duties | Gate decisions follow IRGF decision rights: from Tier 3 no owner or requester signs, Tier 4 needs two different people, and service accounts never sign. |
 | Audit | Append-only, hashed entries with actor attribution; `verify_audit_log` detects tampering. |
@@ -2144,6 +2396,8 @@ records each divergence as drift (M13).
 - [ ] One service account and one key per application, with the least role that works; expiry dates
       on keys
 - [ ] `MCP_GATEWAY_REVIEW_NEW_TOOLS=1`; restricted access mode on MCP servers with side effects
+- [ ] `A2A_GATEWAY_REVIEW_NEW_SKILLS=1`; restricted access on every A2A agent that acts, and a
+      contract per pair of agents that talk, with a data ceiling
 - [ ] Default policies reviewed and tailored ([3.2](#32-your-own-organization))
 - [ ] `python manage.py check --deploy` passes
 - [ ] Database backups scheduled and restores tested ([8.5](#85-backup-and-restore))
@@ -2174,6 +2428,13 @@ records each divergence as drift (M13).
   application's own authorization is checked only where a caller or telemetry names it.
 - **Business calendar.** Drift response windows skip weekends and close at 18:00, but know no public
   holidays.
+- **A2A scope.** The A2A Gateway neither streams nor sends push notifications: senders follow a task
+  with `tasks/get`. Answers are recorded but not classified, and a file part is recorded by name, not
+  read.
+- **Content detection is pattern matching.** Personal data found in a message raises its
+  classification; a message where nothing matched may still carry personal data.
+- **Agents that call each other directly** bypass the A2A Gateway entirely. Keep external agents'
+  credentials in the platform alone, and the gateway becomes the only way to reach them.
 
 ---
 
@@ -2200,8 +2461,10 @@ Defined in [`aig_tower/celery.py`](../aig_tower/celery.py):
 | Job | Task | Every | What it does |
 |---|---|---|---|
 | Provider health checks | `apps.providers.tasks.run_provider_health_checks` | 5 minutes | Probes every provider through its adapter and records health transitions |
-| Budget threshold checks | `apps.costs.tasks.check_budgets` | 15 minutes | Raises alerts as budgets cross their thresholds |
+| Budget threshold checks | `apps.costs.tasks.check_budgets` | 15 minutes | Raises budget threshold and forecast alerts, and evaluates cost alert rules |
 | Usage rollups | `apps.costs.tasks.rebuild_daily_rollups` | hour | Rebuilds the daily cost rollups behind the FinOps charts |
+| Developer-tool sync | `apps.costs.tasks.sync_developer_tools` | 6 hours | Pulls GitHub Copilot seats and premium-request usage |
+| Cost optimization | `apps.costs.tasks.analyse_cost_optimizations` | day | Refreshes the optimization recommendations |
 | Expire stale approvals | `apps.approvals.tasks.expire_stale_approvals` | 10 minutes | Expires approval requests past their deadline |
 | Expiring-approval reminders | `apps.notifications.tasks.notify_expiring_approvals` | 30 minutes | Warns approvers before a request expires |
 | Overdue risk reviews | `apps.notifications.tasks.notify_overdue_risk_reviews` | day | Reminds owners of risks past their review date |
@@ -2235,6 +2498,9 @@ alerting on:
 | `apps.mcp_gateway.services` | `MCP circuit opened for …` | An MCP server was taken out of rotation |
 | `apps.gateway.services` | `Gateway stream broke mid-flight on …` | An upstream failed during a streamed answer |
 | `apps.mcp_gateway.protocol` | `MCP endpoint failed while handling …` | An internal error answered as JSON-RPC `-32603` |
+| `apps.mcp_gateway.services` | `A2A circuit opened for …` | An A2A agent was taken out of rotation (the breaker is shared with the MCP Gateway) |
+| `apps.a2a.services` | `A2A Gateway could not record a message to …` | The log could not be written. For a mailbox agent that means nothing was delivered |
+| `apps.a2a.protocol` | `A2A endpoint failed while handling …` | An internal error answered as JSON-RPC `-32603` |
 
 Checks for a monitoring system:
 
@@ -2286,7 +2552,8 @@ Back up the database before migrating in production.
   beat.
 - **The gateways** hold a connection open for the whole upstream call. Size web capacity for
   concurrent calls × `GATEWAY_DEADLINE`, and keep proxy timeouts above that deadline.
-- **The MCP endpoint** is stateless, so no session affinity is needed.
+- **The MCP and A2A endpoints** are stateless, so no session affinity is needed. An A2A task is
+  followed by its id, which any instance can answer.
 
 ### 8.8 Resetting a local install
 
@@ -2385,7 +2652,25 @@ To refresh only the demo telemetry: `python manage.py generate_executions --purg
 | `blocked` — *… is not a number* | The tool's value argument carries something that cannot be read as an amount, so the call cannot be held to the agent's value limits. |
 | A value limit never refuses anything | Nobody told the gateway which argument carries the value. Set the tool's action-limit arguments on its server's page. |
 
-### 9.5 Web UI
+### 9.5 A2A Gateway
+
+| Symptom | Cause and fix |
+|---|---|
+| `404` / `-32050` | Nothing is published at that address in the key's organization. An internal agent's address is its `agent_id`. The Agent Card answers `404` too while the agent is not approved |
+| `403` naming the key | The key is bound to other agents: send as one of them in `X-Agent-ID`, or bind the key to this sender |
+| `rejected` — *needs the agent sending it* | No `X-Agent-ID`, and the key is bound to no agent or to several. Name the sender |
+| `rejected` — *holds no contract* | The recipient is restricted. Grant the sender a contract on the recipient's A2A page, or open the agent to every agent |
+| `rejected` — *does not include …* or *covers only …: name the skill* | The contract names skills. Name one of them in `io.aicontroltower/skill`, or widen the contract |
+| `rejected` — *… data may not be sent to …* | The message is more sensitive than the contract's ceiling or the recipient's clearance. Undeclared, it is read as the sender's own classification; personal data found in it makes it at least confidential. Declare what is sent, or send less |
+| `rejected` — *changed … after it was reviewed* | The agent's card changed that skill's definition. Review it again in the Skill Catalog |
+| `rejected` — *would come back to …* or *handed on … times at most* | The chain returns to an agent already in it, or is longer than `A2A_GATEWAY_MAX_HOPS`. Answer the agent that asked instead of handing the work back |
+| `rejected` — *allows … messages an hour* | The contract's rate. Raise it, or wait |
+| `unavailable` — *taken out of rotation* | The agent's breaker is open. One probe goes through after the cool-off |
+| `unavailable` — *… unset or empty* | The variable named by the agent's `credential_ref` is not set for the web processes |
+| A mailbox agent's inbox is empty | Tasks wait only for an agent whose delivery is the mailbox, and only until collected: each is collected once |
+| A new contract shows as a change awaiting Gate G4 | Contracts are part of the sender's authorized configuration. Decide it under *AI Governance → Changes · G4*; until then the Control Plane reports traffic along it as outside the agent's boundary |
+
+### 9.6 Web UI
 
 | Symptom | Cause and fix |
 |---|---|
@@ -2440,13 +2725,14 @@ organizations. A person can belong to several, with a different role in each.
 It keeps what integrations send it and what the gateways record about each call. Prompt and
 completion text is shown only to roles with `prompt.view`, and is redacted for agents classified
 confidential or restricted. MCP tool arguments are recorded only while
-`MCP_GATEWAY_RECORD_ARGUMENTS=1`.
+`MCP_GATEWAY_RECORD_ARGUMENTS=1`, and the text of exchanges with A2A agents reached over HTTP only
+while `A2A_GATEWAY_RECORD_CONTENT=1`.
 
 ### Installation and configuration
 
 **Can it run without Redis?**
 Yes, with `USE_SQLITE=1` and `CELERY_TASK_ALWAYS_EAGER=1`, for local use. Scheduled jobs do not run
-then. The Control Plane still verifies tool calls and agent messages as they are recorded, and
+then. The Control Plane still verifies tool calls and agent-to-agent hand-offs as they are recorded, and
 *Run the Control Plane now*, on its page, does the rest by hand. With PostgreSQL (`USE_SQLITE=0`), Redis is required: it carries the cache and the WebSocket
 channel layer as well as Celery.
 
@@ -2524,6 +2810,25 @@ server silently changing what an approved tool does. Review it again on the serv
 **Can an agent still reach an MCP server directly?**
 Only if it holds the server's credential. Keep upstream credentials in the platform alone, and the
 gateway becomes the only way in.
+
+**Does an agent need an A2A endpoint of its own to take part?**
+No. An agent without one takes its work from the gateway's mailbox: it collects its tasks and answers
+each over REST. An agent that already serves A2A is reached at its endpoint instead. Either way
+other agents reach it at the same gateway address.
+
+**Can our agents work with another company's agents?**
+Yes: register the external agent with its endpoint and a `credential_ref`, sync its card, approve it,
+review its skills and grant contracts — with a data ceiling no higher than you would hand that
+company. An `agent_communication` policy can keep sensitive data inside the organization, or keep
+work there altogether.
+
+**Why did a skill disappear from an agent's card?**
+Its definition changed after it was reviewed, so it went back to review — the same defence the MCP
+Gateway applies to tools. Review it again in the Skill Catalog.
+
+**What happened to agent messaging?**
+It became the A2A Gateway. The original endpoints still work, and every message sent through them is
+an A2A task under the same rules. Upgrading keeps the pairs of agents that already talked talking.
 
 ### Governance and security
 
@@ -2624,6 +2929,9 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 
 | Term | Meaning |
 |---|---|
+| A2A (Agent2Agent) | The open protocol agents use to hand one another work: messages made of parts, tasks with a state. The A2A Gateway speaks it |
+| A2A agent card | An agent's self-description in A2A: who it is and the skills it offers. The gateway publishes a reviewed one for each agent — not to be confused with IRGF's Agent Card |
+| A2A contract | Permission for one agent to send work to another through the A2A Gateway: the skills, a data ceiling, a rate and an expiry. Part of the sender's authorized configuration |
 | Access grant | Permission for one agent to use a restricted MCP server, optionally limited to some tools and given an expiry |
 | Action-limit arguments | The tool arguments carrying a call's value and counterparty, which the MCP Gateway holds to agents' action limits (IRGF link 06) |
 | Adapter | A class that translates one vendor, engine or transport into the platform's normalized types |
@@ -2648,10 +2956,12 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 | Execution | One run of an agent or application, with its events, tokens, cost and latency |
 | Fallback chain | The ordered models the AI Gateway will try for one request |
 | Gateway mode | Integration where calls go through the gateways, which enforce governance |
+| Hand-off | One agent sending another work through the A2A Gateway: an A2A task, recorded whether delivered or refused |
 | Hard stop | A budget enforcement setting that refuses gateway requests once the budget is spent |
 | IRGF | The Intent-to-Runtime Governance Framework the platform applies; see [IRGF alignment](irgf-alignment.md) |
 | Kill-switch | Suspending an agent so both gateways refuse it until a person resumes it (IRGF link 06) |
 | Kill-switch trigger | A kill-switch condition a machine can evaluate, pre-approved at Gate G3; the Control Plane pulls the switch when it fires. Tier 3–4 needs one |
+| Mailbox | How an agent without an A2A endpoint of its own takes part: the gateway holds its tasks until it collects them |
 | Policy effect | What a matching policy does: `deny`, `require_approval` or `warn` |
 | Qualified tool name | `<server-slug>__<tool>`: a tool's name in the MCP Gateway's single namespace |
 | Reporting mode | Integration where engines call upstreams directly and report runs as telemetry |
@@ -2659,6 +2969,7 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 | Risk tier | IRGF Tier 1–4, resolved from the D1–D5 scores of a system's S2 classification; it scopes policies, approval rules and identity rules |
 | Routing decision | The record of how the gateway ranked candidate models for one request |
 | Service account | A non-human identity for an application or engine, with a role in one organization |
+| Skill review | The governance step that enables a newly advertised or changed A2A skill |
 | Stage and gate | IRGF's lifecycle steps (S0–S10) and the decision points between them (G1–G5) |
 | Tool review | The governance step that enables a newly discovered or changed MCP tool |
 | Trace | A group of executions sharing a `trace_id` |
@@ -2685,7 +2996,12 @@ PostgreSQL, and your secret store. Redis holds nothing durable ([8.5](#85-backup
 | Policy types and engine | [`apps/policies/models.py`](../apps/policies/models.py), [`apps/policies/services.py`](../apps/policies/services.py) |
 | Default policies and approval rules | [`apps/core/demo_governance.py`](../apps/core/demo_governance.py) |
 | AI Gateway pipeline and endpoints | [`apps/gateway/services.py`](../apps/gateway/services.py), [`apps/api/gateway_views.py`](../apps/api/gateway_views.py) |
-| Agent-to-agent messaging | [`apps/gateway/messaging.py`](../apps/gateway/messaging.py) |
+| The original agent mailbox, now through the A2A Gateway | [`apps/gateway/messaging.py`](../apps/gateway/messaging.py) |
+| A2A Gateway pipeline: registry, contracts, content, chains, delivery | [`apps/a2a/services.py`](../apps/a2a/services.py), [`apps/a2a/content.py`](../apps/a2a/content.py) |
+| A2A cards, skill discovery and review, the published card | [`apps/a2a/registry.py`](../apps/a2a/registry.py) |
+| A2A protocol handling, wire shapes and endpoints | [`apps/a2a/protocol.py`](../apps/a2a/protocol.py), [`apps/a2a/wire.py`](../apps/a2a/wire.py), [`apps/api/a2a_views.py`](../apps/api/a2a_views.py) |
+| A2A adapters | [`integrations/base/a2a.py`](../integrations/base/a2a.py), [`integrations/a2a/`](../integrations/a2a/) |
+| A2A demo estate | [`apps/a2a/demo.py`](../apps/a2a/demo.py) |
 | Routing strategies and policies | [`apps/routing/models.py`](../apps/routing/models.py), [`apps/routing/services.py`](../apps/routing/services.py) |
 | MCP Gateway pipeline | [`apps/mcp_gateway/services.py`](../apps/mcp_gateway/services.py) |
 | MCP protocol handling and endpoints | [`apps/mcp_gateway/protocol.py`](../apps/mcp_gateway/protocol.py), [`apps/api/mcp_views.py`](../apps/api/mcp_views.py) |

@@ -1,0 +1,18 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">After publishing</div>
+  <div class="ct-card-body small">
+    <ol class="ps-3 mb-0 ct-guide-steps">
+      <li><strong>An external agent:</strong> set its credential in the platform's environment, then <strong>Sync card</strong> on its page to read the skills it offers.</li>
+      <li><strong>Approve</strong> it (<code>a2a.approve</code>). An unapproved agent does not exist for other agents.</li>
+      <li><strong>Review each skill.</strong> A skill is asked for only once it is enabled, and goes back to review if its description changes.</li>
+      <li><strong>Grant contracts</strong> to the agents that may send it work, if it is restricted.</li>
+    </ol>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Mailbox or endpoint</div>
+  <div class="ct-card-body small">
+    <p class="mb-2">An agent with no A2A endpoint of its own takes its work from the gateway's mailbox: it collects tasks from <code>/api/v1/a2a-gateway/inbox/&lt;agent&gt;/</code> and answers each one. The gateway never calls into it.</p>
+    <p class="mb-0">An agent that serves A2A is reached at its endpoint. The gateway sends there, not to whatever URL the agent's card names.</p>
+  </div>
+</div>

@@ -19,6 +19,7 @@ urlpatterns = [
     path("routing/", include("apps.routing.urls")),
     path("gateway/", include("apps.gateway.urls")),
     path("mcp-gateway/", include("apps.mcp_gateway.urls")),
+    path("a2a-gateway/", include("apps.a2a.urls")),
     path("evaluations/", include("apps.evaluations.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("audit/", include("apps.audit.urls")),

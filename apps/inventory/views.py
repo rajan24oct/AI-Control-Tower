@@ -210,9 +210,11 @@ class AgentDetailView(ScopedDetailMixin, DetailView):
             }
         )
 
+        from apps.a2a.services import A2AGateway
         from apps.controlplane.services import ControlPlane
 
         context["control_plane"] = ControlPlane.agent_summary(agent)
+        context["a2a"] = A2AGateway.agent_summary(agent)
         return context
 
 

@@ -18,6 +18,7 @@ class NotificationCategory(models.TextChoices):
     APPROVAL_REQUESTED = "approval_requested", "Approval Requested"
     APPROVAL_DECIDED = "approval_decided", "Approval Decided"
     BUDGET_ALERT = "budget_alert", "Budget Alert"
+    COST_ALERT = "cost_alert", "Cost Alert"
     POLICY_VIOLATION = "policy_violation", "Policy Violation"
     PROVIDER_HEALTH = "provider_health", "Provider Health"
     EXECUTION_FAILURE = "execution_failure", "Execution Failure"
@@ -46,6 +47,7 @@ CATEGORY_PERMISSIONS = {
     NotificationCategory.APPROVAL_REQUESTED: Perm.APPROVAL_DECIDE,
     NotificationCategory.APPROVAL_DECIDED: Perm.APPROVAL_VIEW,
     NotificationCategory.BUDGET_ALERT: Perm.COST_MANAGE,
+    NotificationCategory.COST_ALERT: Perm.COST_MANAGE,
     NotificationCategory.POLICY_VIOLATION: Perm.POLICY_MANAGE,
     NotificationCategory.PROVIDER_HEALTH: Perm.PROVIDER_MANAGE,
     NotificationCategory.EXECUTION_FAILURE: Perm.AGENT_MANAGE,
@@ -63,6 +65,7 @@ DEFAULT_CHANNELS = {
     NotificationCategory.APPROVAL_REQUESTED: {"in_app": True, "email": True},
     NotificationCategory.APPROVAL_DECIDED: {"in_app": True, "email": False},
     NotificationCategory.BUDGET_ALERT: {"in_app": True, "email": True},
+    NotificationCategory.COST_ALERT: {"in_app": True, "email": True},
     NotificationCategory.POLICY_VIOLATION: {"in_app": True, "email": True},
     NotificationCategory.PROVIDER_HEALTH: {"in_app": True, "email": False},
     NotificationCategory.EXECUTION_FAILURE: {"in_app": True, "email": False},

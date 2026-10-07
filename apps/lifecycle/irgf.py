@@ -123,6 +123,9 @@ CHANGE_TYPES = {
     "agent_removed": "Agent removed from the system",
     "delegation_added": "Delegation added between agents",
     "delegation_removed": "Delegation removed",
+    # Agent-to-agent communication through the A2A Gateway.
+    "peer_added": "Agent-to-agent contract added or widened",
+    "peer_removed": "Agent-to-agent contract removed or narrowed",
 }
 
 #: Types whose automatic class a person may lower, with a reason. At Tier 3-4
@@ -167,6 +170,14 @@ def classify(change_type: str, tier: int) -> ChangeClass:
         if high:
             return ChangeClass(MAJOR, f"{what} widens the composite boundary at Tier 3-4: major (S2, G2 and G4).", True)
         return ChangeClass(MATERIAL, f"{what} widens the composite boundary: material at Tier 1-2 (G4).")
+    if change_type == "peer_added":
+        # Another agent the system can hand work to is authority it can reach,
+        # as a tool is -- with a data path of its own out of the system.
+        if high:
+            return ChangeClass(
+                MAJOR, "A new agent-to-agent contract at Tier 3-4 is a new permission: major (S2, G2 and G4).", True
+            )
+        return ChangeClass(MATERIAL, "A new agent-to-agent contract at Tier 1-2 is a new permission: material (G4).")
     if change_type == "grounding_added":
         return ChangeClass(MATERIAL, "A new grounding source, or more sensitive data, is material (G4).")
     if change_type == "prompt":

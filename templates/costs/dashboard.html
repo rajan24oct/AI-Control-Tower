@@ -11,6 +11,10 @@
 {% else %}
 
   <div id="results" data-ajax-region>
+  {# Alerts sit in a rail on the right that stays in view while the page scrolls. #}
+  <div class="ct-alert-layout">
+  <div class="ct-alert-main">
+
   <div class="d-flex justify-content-end mb-3">
     <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#results">
       <label class="small fw-semibold text-muted mb-0">Period</label>
@@ -57,28 +61,45 @@
     </div>
   </div>
 
-  {% if open_alerts %}
-    <div class="ct-card mb-3">
-      <div class="ct-card-header">
-        <span><i class="bi bi-exclamation-triangle me-1"></i> Budget Alerts</span>
-        <a href="{% url 'costs:budgets' %}" class="small text-decoration-none">Manage budgets</a>
-      </div>
-      <div class="ct-card-body py-0">
-        {% for alert in open_alerts %}
-          <div class="ct-attention-item">
-            <i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
-            <div class="flex-grow-1">
-              <p class="ct-attention-title">{{ alert.budget.name }} reached {{ alert.threshold }}%</p>
-              <p class="ct-attention-detail">
-                ${{ alert.spend|floatformat:2 }} of ${{ alert.budget_amount|floatformat:2 }}
-                for the period starting {{ alert.period_start }}
-              </p>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-6 col-xl-3">
+      <a class="text-decoration-none" href="{% url 'costs:explorer' %}">
+        <div class="ct-metric h-100"><span class="ct-metric-label"><i class="bi bi-diagram-3"></i> Cost Explorer</span>
+          <div class="small text-body mt-1">Drill from department to team, agent, model and provider.</div>
+          <div class="ct-metric-hint">Open the explorer <i class="bi bi-arrow-right"></i></div></div>
+      </a>
     </div>
-  {% endif %}
+    <div class="col-12 col-md-6 col-xl-3">
+      <a class="text-decoration-none" href="{% url 'costs:developer_tools' %}">
+        <div class="ct-metric h-100"><span class="ct-metric-label"><i class="bi bi-github"></i> GitHub Copilot, this month</span>
+          {% if has_devtools %}
+            <div class="ct-metric-value">${{ devtools_month|floatformat:2 }}</div>
+            <div class="ct-metric-hint">By team and individual <i class="bi bi-arrow-right"></i></div>
+          {% else %}
+            <div class="small text-body mt-1">Not connected yet.</div>
+            <div class="ct-metric-hint">Connect GitHub Copilot <i class="bi bi-arrow-right"></i></div>
+          {% endif %}
+        </div>
+      </a>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+      <a class="text-decoration-none" href="{% url 'costs:governance' %}">
+        <div class="ct-metric h-100"><span class="ct-metric-label"><i class="bi bi-shield-check"></i> Budget health</span>
+          <div class="ct-metric-value">
+            <span class="{% if health.over %}text-danger{% endif %}">{{ health.over }}</span> over
+            &middot; <span class="{% if health.at_risk %}text-warning{% endif %}">{{ health.at_risk }}</span> at risk
+          </div>
+          <div class="ct-metric-hint">{{ health.on_track }} on track &middot; governance <i class="bi bi-arrow-right"></i></div></div>
+      </a>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+      <a class="text-decoration-none" href="{% url 'costs:optimization' %}">
+        <div class="ct-metric h-100"><span class="ct-metric-label"><i class="bi bi-lightbulb"></i> Potential savings</span>
+          <div class="ct-metric-value text-success">${{ savings.open_savings|floatformat:0 }}<span class="fs-6 text-muted"> /mo</span></div>
+          <div class="ct-metric-hint">{{ savings.open_count }} recommendation{{ savings.open_count|pluralize }} <i class="bi bi-arrow-right"></i></div></div>
+      </a>
+    </div>
+  </div>
 
   <div class="row g-3 mb-3">
     <div class="col-12 col-xl-8">
@@ -96,10 +117,10 @@
   </div>
 
   <div class="row g-3">
-    {% include "costs/partials/_breakdown.html" with title="By Application" rows=by_application icon="bi-window-stack" %}
-    {% include "costs/partials/_breakdown.html" with title="By Agent" rows=by_agent icon="bi-robot" %}
-    {% include "costs/partials/_breakdown.html" with title="By Model" rows=by_model icon="bi-cpu" %}
-    {% include "costs/partials/_breakdown.html" with title="By Team" rows=by_team icon="bi-people" %}
+    {% include "costs/partials/_breakdown.html" with title="By Application" rows=by_application icon="bi-window-stack" dim="application" %}
+    {% include "costs/partials/_breakdown.html" with title="By Agent" rows=by_agent icon="bi-robot" dim="agent" %}
+    {% include "costs/partials/_breakdown.html" with title="By Model" rows=by_model icon="bi-cpu" dim="model" %}
+    {% include "costs/partials/_breakdown.html" with title="By Team" rows=by_team icon="bi-people" dim="team" %}
   </div>
 
   <div class="ct-card mt-3">
@@ -121,6 +142,36 @@
   {# Inside the region so the data swaps together with the markup. #}
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
   <script id="provider-data" type="application/json">{{ provider_chart_json|safe }}</script>
+
+  </div>
+  <aside class="ct-alert-rail" aria-label="Alerts">
+    {% if open_alerts %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">
+          <span><i class="bi bi-exclamation-triangle me-1"></i> Budget Alerts</span>
+          <a href="{% url 'costs:budgets' %}" class="small text-decoration-none">Manage budgets</a>
+        </div>
+        <div class="ct-card-body py-0">
+          {% for alert in open_alerts %}
+            <div class="ct-attention-item">
+              <i class="bi {{ alert.severity|severity_icon }} text-{{ alert.severity|severity_style }}"></i>
+              <div class="flex-grow-1">
+                <p class="ct-attention-title"><a href="{% url 'costs:budget_detail' alert.budget_id %}" class="text-reset">{% if alert.is_forecast %}{{ alert.budget.name }} is forecast to exceed its budget{% else %}{{ alert.budget.name }} reached {{ alert.threshold }}%{% endif %}</a></p>
+                <p class="ct-attention-detail">
+                  {% if alert.is_forecast %}Projected {% endif %}${{ alert.spend|floatformat:2 }} of ${{ alert.budget_amount|floatformat:2 }}
+                  for the period starting {{ alert.period_start }}
+                </p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+    {% if not open_alerts %}
+      {% include "partials/_alerts_empty.html" with detail="No unacknowledged budget alerts." %}
+    {% endif %}
+  </aside>
+  </div>
   </div>
 {% endif %}
 {% endblock %}

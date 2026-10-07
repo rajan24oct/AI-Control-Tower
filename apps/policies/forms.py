@@ -23,6 +23,8 @@ SETTING_KINDS: dict[str, str] = {
     "require_countersignature": "bool", "block_when_rescore_due": "bool", "block_pending_changes": "bool",
     "evaluation_max_age_days": "int", "max_autonomy_level": "int",
     "max_cost_per_execution": "number",
+    "blocked_recipients": "list", "block_external": "bool", "external_max_data_classification": "classification",
+    "max_hops": "int",
 }
 
 #: Settings whose values come from a fixed vocabulary.
@@ -48,6 +50,10 @@ STARTERS: dict[str, dict] = {
         "environments": ["production"], "require_countersignature": True, "block_when_rescore_due": False,
     },
     PolicyType.DEPLOYMENT_AUTHORIZATION: {"environments": ["production"], "block_pending_changes": False},
+    PolicyType.AGENT_COMMUNICATION: {
+        "blocked_recipients": [], "block_external": False, "external_max_data_classification": "internal",
+        "max_hops": 3,
+    },
 }
 
 
@@ -65,6 +71,8 @@ def _kind_error(key: str, kind: str, value) -> str | None:
             return f"{key} is an amount, e.g. \"5.00\"."
         if isinstance(value, bool):
             return f"{key} is an amount, e.g. \"5.00\"."
+    if kind == "classification" and value not in DataClassification.values:
+        return f"{key} is one of {', '.join(DataClassification.values)}."
     return None
 
 
@@ -125,6 +133,8 @@ class PolicyForm(OrganizationModelForm):
                     problem = f"{key}: unknown value(s) {', '.join(unknown)}. Allowed: {', '.join(SETTING_VALUES[key])}."
             if problem is None and key == "max_autonomy_level" and not 0 <= value <= 4:
                 problem = "max_autonomy_level is between 0 and 4."
+            if problem is None and key == "max_hops" and value < 1:
+                problem = "max_hops is at least 1: one hand-off from the first agent to the next."
             if problem:
                 self.add_error("configuration", problem)
         if cleaned.get("tiers"):

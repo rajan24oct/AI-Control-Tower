@@ -18,9 +18,18 @@
      same system. Ordered so the first few colours are the most distinct --
      most charts show three or four series, not eight. */
   window.ctPalette = {
-    series: ["#003f2d", "#14607a", "#80bbad", "#5b4b8a", "#a86a12", "#a32b26", "#7f8480", "#032842"],
-    green: "#003f2d",
-    greenFill: "rgba(0, 63, 45, .10)",
+    // Gold leads, as the brand colour. Validated as an ordered set (dataviz
+    // validate_palette, light surface): lightness band, chroma floor and
+    // normal-vision separation pass; adjacent CVD separation passes for the
+    // first six, and slots 7-8 sit in the 6-8 floor band, so charts fold
+    // anything past five series into a grey "Other" and ship a table view.
+    series: ["#d29000", "#2a78d6", "#eb6834", "#1baf7a", "#4a3aa7", "#e87ba4", "#008300", "#e34948"],
+    // Single-series lines: the darker gold clears 3:1 on white.
+    brand: "#a87400",
+    brandFill: "rgba(255, 204, 0, .18)",
+    // Older names for the brand colour, kept so existing charts need no edit.
+    green: "#a87400",
+    greenFill: "rgba(255, 204, 0, .18)",
     teal: "#14607a",
     tealFill: "rgba(20, 96, 122, .10)",
     danger: "#a32b26",
@@ -307,7 +316,25 @@
     });
   }
 
+  /* The alert rail sticks just below the header, whose height changes with the
+     window width (the nav wraps) and the page title. Publish it as a CSS
+     variable rather than guessing a number in the stylesheet. */
+  function trackHeaderHeight() {
+    var header = document.querySelector(".ct-header");
+    if (!header) return;
+    function publish() {
+      document.documentElement.style.setProperty("--ct-header-h", header.offsetHeight + "px");
+    }
+    publish();
+    if (window.ResizeObserver) {
+      new ResizeObserver(publish).observe(header);
+    } else {
+      $(window).on("resize", publish);
+    }
+  }
+
   $(function () {
+    trackHeaderHeight();
     bindFilters();
     bindActions();
     bindPolling();

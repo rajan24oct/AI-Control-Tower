@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% load static humanize %}
+
+{% block title %}Developer Tools{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty">
+    <i class="bi bi-building"></i><p class="mb-0">No organization selected.</p>
+  </div></div>
+{% else %}
+<div id="devtools" data-ajax-region>
+
+  <div class="ct-card mb-3">
+    <div class="ct-card-header">
+      <span><i class="bi bi-github me-1"></i> GitHub Copilot subscriptions</span>
+      {% if can_manage %}
+        <a class="btn btn-sm btn-primary" href="{% url 'costs:subscription_create' %}"><i class="bi bi-plus-lg"></i> Connect GitHub Copilot</a>
+      {% endif %}
+    </div>
+    {% if subscriptions %}
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Subscription</th><th>GitHub organization</th><th>Integration</th><th class="text-end">Seats</th><th>Rates</th><th>Last sync</th><th></th></tr></thead>
+          <tbody>
+            {% for sub in subscriptions %}
+              <tr>
+                <td class="small fw-semibold">{{ sub.name }}
+                  {% if sub.status != "active" %}<span class="badge badge-soft text-bg-secondary ms-1">{{ sub.get_status_display }}</span>{% endif %}
+                </td>
+                <td class="small"><i class="bi bi-github"></i> {{ sub.account }}</td>
+                <td class="small"><code>{{ sub.adapter_key }}</code></td>
+                <td class="small text-end">{{ sub.seat_count }}</td>
+                <td class="small text-muted">
+                  ${{ sub.business_seat_price }} / ${{ sub.enterprise_seat_price }} a seat ·
+                  ${{ sub.premium_request_price|floatformat:2 }} per extra request
+                </td>
+                <td class="small">
+                  {% if sub.last_synced_at %}{{ sub.last_synced_at|naturaltime }}{% else %}<span class="text-muted">Never</span>{% endif %}
+                  {% if sub.last_sync_message %}<div class="text-muted text-truncate" style="max-width:280px" title="{{ sub.last_sync_message }}">{{ sub.last_sync_message }}</div>{% endif %}
+                </td>
+                <td class="text-end text-nowrap">
+                  {% if can_manage %}
+                    <form method="post" action="{% url 'costs:subscription_sync' sub.pk %}" class="d-inline"
+                          data-ajax-action data-ajax-refresh="#devtools">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Sync</button>
+                    </form>
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'costs:subscription_edit' sub.pk %}" title="Edit"><i class="bi bi-pencil"></i></a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="ct-card-body ct-empty">
+        <i class="bi bi-github"></i>
+        <p class="mb-0">No developer-tool subscription connected.</p>
+        <p class="small mb-0">Connect GitHub Copilot to see licence and premium-request spend by team and by individual.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if subscriptions %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <form method="get" class="d-flex align-items-center gap-2" data-ajax-filter="#devtools">
+      <label class="small fw-semibold text-muted mb-0" for="period">Period</label>
+      <select name="period" id="period" class="form-select form-select-sm" style="width:auto">
+        {% for key, label in periods.items %}<option value="{{ key }}" {% if key == period %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <span class="small text-muted">{{ start|date:"j M Y" }} to {{ end|date:"j M Y" }}</span>
+      <noscript><button type="submit" class="btn btn-sm btn-primary">Apply</button></noscript>
+    </form>
+    <a class="small text-decoration-none" href="{% url 'costs:optimization' %}?category=developer_tools"><i class="bi bi-lightbulb"></i> Seat recommendations</a>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Total spend</span>
+      <div class="ct-metric-value">${{ kpis.total|floatformat:2|intcomma }}</div><div class="ct-metric-hint">Licences plus overage</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Seat licences</span>
+      <div class="ct-metric-value">${{ kpis.license|floatformat:2|intcomma }}</div><div class="ct-metric-hint">Prorated by day</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Premium overage</span>
+      <div class="ct-metric-value">${{ kpis.premium|floatformat:2|intcomma }}</div>
+      <div class="ct-metric-hint">{{ kpis.overage|floatformat:0|intcomma }} requests past allowance</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Premium requests</span>
+      <div class="ct-metric-value">{{ kpis.requests|floatformat:0|intcomma }}</div><div class="ct-metric-hint">All seats</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Active seats</span>
+      <div class="ct-metric-value">{{ kpis.seats }}</div><div class="ct-metric-hint">Assigned now</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="ct-metric"><span class="ct-metric-label">Idle seats</span>
+      <div class="ct-metric-value {% if kpis.idle %}text-danger{% endif %}">{{ kpis.idle }}</div>
+      <div class="ct-metric-hint">Unused 30+ days · ${{ kpis.idle_cost|floatformat:2 }}</div></div></div>
+  </div>
+
+  <div data-finops-devtools data-can-manage="{{ can_manage|yesno:'true,false' }}">
+    <script type="application/json" data-devtools>{{ data_json|safe }}</script>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-xl-6">
+        <div class="ct-card h-100">
+          <div class="ct-card-header"><span><i class="bi bi-people me-1"></i> Spend by team</span></div>
+          <div class="ct-card-body">
+            <p class="ct-chart-summary small text-muted mb-2">Click a team to see its individuals.</p>
+            <div style="height:240px"><canvas data-chart="teams" role="img" aria-label="Licence and overage spend by team; the table below lists every seat"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-6">
+        <div class="ct-card h-100">
+          <div class="ct-card-header"><span><i class="bi bi-calendar3 me-1"></i> Monthly spend by team</span></div>
+          <div class="ct-card-body">
+            <p class="ct-chart-summary small text-muted mb-2">Last six months, licences and overage together.</p>
+            <div style="height:240px"><canvas data-chart="trend" role="img" aria-label="Monthly developer-tool spend per team"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span><i class="bi bi-person me-1"></i> <span data-drill-title>Individuals</span></span>
+        <span class="d-flex align-items-center gap-2">
+          <select class="form-select form-select-sm" style="width:auto" data-team-filter aria-label="Team"></select>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-team-clear style="display:none">All teams</button>
+        </span>
+      </div>
+      <div class="ct-card-body">
+        <div style="height:220px"><canvas data-chart="people" role="img" aria-label="Spend for the 15 most expensive seats in the selection"></canvas></div>
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span><i class="bi bi-person-lines-fill me-1"></i> Seats <span class="badge text-bg-secondary ms-1" data-people-count></span></span>
+        <input type="search" class="form-control form-control-sm" style="max-width:240px" placeholder="Search name, login, team" data-search aria-label="Search seats">
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0" data-people>
+          <thead>
+            <tr>
+              <th><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="name">Person <i></i></button></th>
+              <th><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="team">Team <i></i></button></th>
+              <th>Plan</th>
+              <th><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="idle_days">Last active <i></i></button></th>
+              <th class="text-end"><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="premium_requests">Premium req. <i></i></button></th>
+              <th><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="allowance_use">Allowance used <i></i></button></th>
+              <th class="text-end"><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="license">Licence <i></i></button></th>
+              <th class="text-end"><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="premium_cost">Overage <i></i></button></th>
+              <th class="text-end"><button type="button" class="ct-sort btn btn-link p-0 text-reset" data-sort="total">Total <i></i></button></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="ct-card-body small text-muted border-top">
+        Click a row for premium requests by model. Premium requests are charged only past each seat's monthly allowance;
+        "allowance used" is the busiest month in the period. A login with no person or team can be attributed with
+        <i class="bi bi-person-gear"></i>, and that mapping is kept across syncs.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/finops.js' %}"></script>
+{% endblock %}

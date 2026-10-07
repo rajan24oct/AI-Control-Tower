@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% load control_tower humanize mcp_tags a2a_tags %}
+
+{% block title %}{{ card.name }}{% endblock %}
+
+{% block content %}
+<div id="card-detail" data-ajax-region>
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <a href="{% url 'a2a:agents' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Agent Registry</a>
+    <h2 class="h4 mt-1 mb-1">{{ card.name }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-light text-dark">{% if card.is_external %}External agent{% else %}Internal agent{% endif %}</span>
+      <span class="badge badge-soft text-bg-light text-dark">{{ card.get_transport_display }}</span>
+      <span class="badge badge-soft text-bg-{{ card.health_status|health_style }}">{{ card.get_health_status_display }}</span>
+      {% if card.is_approved %}
+        <span class="badge badge-soft text-bg-success">Approved</span>
+      {% else %}
+        <span class="badge badge-soft text-bg-warning">Not approved</span>
+      {% endif %}
+      <span class="badge badge-soft text-bg-light text-dark">{{ card.get_access_mode_display }}</span>
+      <span class="badge badge-soft text-bg-{{ card.data_classification|classification_style }}">Cleared for {{ card.data_classification }}</span>
+      {% if card.circuit_state == "open" %}<span class="badge badge-soft text-bg-danger">Out of rotation</span>{% endif %}
+      <span class="badge badge-soft text-bg-{{ card.status|status_style }}">{{ card.get_status_display }}</span>
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if can_manage and card.is_gateway_reachable %}
+      <form method="post" action="{% url 'a2a:card_sync' card.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#card-detail">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-arrow-repeat"></i> {% if card.uses_mailbox %}Refresh skills{% else %}Sync card{% endif %}</button>
+      </form>
+      <form method="post" action="{% url 'a2a:card_health' card.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#card-detail">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-heart-pulse"></i> Health check</button>
+      </form>
+    {% endif %}
+    {% if can_approve %}
+      <form method="post" action="{% url 'a2a:card_approval' card.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#card-detail">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        {% if card.is_approved %}
+          <input type="hidden" name="decision" value="revoke">
+          <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-shield-x"></i> Revoke approval</button>
+        {% else %}
+          <input type="hidden" name="decision" value="approve">
+          <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-shield-check"></i> Approve</button>
+        {% endif %}
+      </form>
+    {% endif %}
+    {% if can_manage %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'a2a:card_edit' card.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if card.description %}<p class="small text-muted">{{ card.description }}</p>{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Address and Delivery</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-12"><dt>Address</dt><dd><code class="text-break">{{ address_url }}</code></dd></div>
+          <div class="col-6"><dt>Delivery</dt><dd>{{ card.get_transport_display }}</dd></div>
+          <div class="col-6"><dt>Protocol</dt><dd>{{ card.protocol_version|default:"—" }}</dd></div>
+          {% if card.agent %}
+            <div class="col-12"><dt>Registry agent</dt>
+              <dd><a href="{% url 'inventory:agent_detail' card.agent.pk %}" class="text-decoration-none">{{ card.agent.name }}</a> <code class="small">{{ card.agent.agent_id }}</code></dd></div>
+          {% endif %}
+          {% if card.uses_mailbox %}
+            <div class="col-12"><dt>How it takes work</dt>
+              <dd class="small">It collects its tasks from <code>/api/v1/a2a-gateway/inbox/{{ card.address }}/</code> and answers each at <code>/api/v1/a2a-gateway/tasks/&lt;id&gt;/status/</code>. The gateway never calls into it.</dd></div>
+          {% endif %}
+          {% if card.endpoint %}
+            <div class="col-12"><dt>Endpoint</dt><dd class="text-break">{{ card.endpoint }}</dd></div>
+          {% endif %}
+          {% if card.card_url %}
+            <div class="col-12"><dt>Agent Card URL</dt><dd class="text-break">{{ card.card_url }}</dd></div>
+          {% endif %}
+          {% if not card.uses_mailbox %}
+            <div class="col-6"><dt>Auth</dt><dd>{{ card.get_auth_method_display }}</dd></div>
+            <div class="col-6"><dt>Agent reports</dt><dd>{{ card.card.name|default:"Never synced" }} {{ card.agent_version }}</dd></div>
+          {% endif %}
+          {% if card.needs_credential %}
+            <div class="col-12">
+              <dt>Credential reference</dt>
+              <dd>
+                <code>{{ card.credential_ref }}</code>
+                {% if card.has_resolvable_credential %}
+                  <span class="badge badge-soft text-bg-success ms-1">Resolved</span>
+                {% else %}
+                  <span class="badge badge-soft text-bg-danger ms-1">Not resolvable</span>
+                {% endif %}
+                <div class="small text-muted mt-1">Only this variable name is stored. The gateway injects the secret on each delivery, so the agents sending work never hold it.</div>
+              </dd>
+            </div>
+          {% endif %}
+          <div class="col-12"><dt>Card read</dt><dd class="mb-0">{{ card.last_synced_at|naturaltime|default:"Never" }}</dd></div>
+          {% if card.last_sync_error %}
+            <div class="col-12"><dt>Last error reading the card</dt><dd class="mb-0 small text-danger">{{ card.last_sync_error }}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">Governance</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>Approval</dt>
+            <dd>
+              {% if card.is_approved %}
+                Approved {{ card.approved_at|naturaltime }}{% if card.approved_by %} by {{ card.approved_by.get_full_name|default:card.approved_by.email }}{% endif %}
+              {% else %}<span class="text-warning">Not approved</span>{% endif %}
+            </dd>
+          </div>
+          <div class="col-6"><dt>Who may send it work</dt><dd>{{ card.get_access_mode_display }}</dd></div>
+          <div class="col-6"><dt>Clearance</dt><dd>{{ card.get_data_classification_display }} data at most</dd></div>
+          <div class="col-6"><dt>Risk</dt>
+            <dd><span class="badge badge-soft text-bg-{{ card.risk_level|risk_style }}">{{ card.get_risk_level_display }}</span></dd></div>
+          <div class="col-6"><dt>Owner</dt><dd>{{ card.owner.get_full_name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Team</dt><dd>{{ card.team.name|default:"—" }}</dd></div>
+          {% if card.publisher %}<div class="col-6"><dt>Publisher</dt><dd class="mb-0">{{ card.publisher }}</dd></div>{% endif %}
+          {% if card.documentation_url %}
+            <div class="col-12 mt-2"><dt>Documentation</dt>
+              <dd class="mb-0"><a href="{{ card.documentation_url }}" target="_blank" rel="noopener" class="text-break">{{ card.documentation_url }}</a></dd></div>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if not card.uses_mailbox %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">Health and Breaker</div>
+        <div class="ct-card-body">
+          <dl class="ct-kv row mb-0">
+            <div class="col-6"><dt>Last probe</dt>
+              <dd><span class="badge badge-soft text-bg-{{ card.health_status|health_style }}">{{ card.get_health_status_display }}</span>
+                {% if card.last_health_latency_ms %}<span class="small text-muted">{{ card.last_health_latency_ms }} ms</span>{% endif %}</dd></div>
+            <div class="col-6"><dt>Checked</dt><dd>{{ card.last_health_check|naturaltime|default:"Never" }}</dd></div>
+            <div class="col-6"><dt>Breaker</dt>
+              <dd><span class="badge badge-soft text-bg-{{ card.circuit_state|circuit_style }}">{{ card.get_circuit_state_display }}</span></dd></div>
+            <div class="col-6"><dt>Failures in a row</dt><dd>{{ card.consecutive_failures }} <span class="small text-muted">({{ card.circuit_trips }} trip{{ card.circuit_trips|pluralize }} ever)</span></dd></div>
+            {% if card.last_error %}
+              <div class="col-12"><dt>Last error</dt><dd class="mb-0 small text-danger">{{ card.last_error }}</dd></div>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Published Agent Card</span>
+        <span class="small text-muted">What other agents are shown</span>
+      </div>
+      <div class="ct-card-body">
+        <p class="small text-muted">
+          Only the reviewed skills, and the gateway's address rather than the agent's own. {% if not card.is_serving %}<strong>Not served yet:</strong> an agent that is not approved does not exist for other agents.{% endif %}
+        </p>
+        <details class="small">
+          <summary class="text-muted">agent-card.json</summary>
+<pre class="small bg-body-tertiary border rounded p-2 mt-2 mb-0" style="white-space:pre-wrap;max-height:24rem;overflow:auto">{{ published }}</pre>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span>Skills <span class="badge text-bg-secondary">{{ skills|length }}</span></span>
+        <span class="small text-muted">
+          {{ skill_counts.enabled|default:0 }} enabled
+          {% if skill_counts.pending_review %}&middot; <span class="text-warning">{{ skill_counts.pending_review }} to review</span>{% endif %}
+        </span>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Skill</th><th>Risk</th><th>Status</th><th class="text-end">Review</th></tr></thead>
+          <tbody>
+            {% for skill in skills %}
+              <tr>
+                <td>
+                  <code class="small">{{ skill.skill_id }}</code> <span class="small">{{ skill.name }}</span>
+                  <div class="small text-muted">{{ skill.description|truncatechars:160 }}</div>
+                  {% if skill.tags %}<div class="small">{% for tag in skill.tags %}<span class="badge badge-soft text-bg-light text-dark me-1">{{ tag }}</span>{% endfor %}</div>{% endif %}
+                </td>
+                <td><span class="badge badge-soft text-bg-{{ skill.risk_level|risk_style }}">{{ skill.get_risk_level_display }}</span></td>
+                <td class="text-nowrap">
+                  <span class="badge badge-soft text-bg-{{ skill.status|skill_status_style }}">{{ skill.get_status_display }}</span>
+                  {% if skill.changed_since_review %}<div><span class="badge badge-soft text-bg-danger">Changed since review</span></div>{% endif %}
+                </td>
+                <td class="text-end">
+                  {% if can_approve and skill.status != "removed" %}
+                    <div class="d-flex gap-1 justify-content-end">
+                      {% if skill.status != "enabled" %}
+                        <form method="post" action="{% url 'a2a:skill_review' skill.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#card-detail">
+                          {% csrf_token %}
+                          <input type="hidden" name="decision" value="enable">
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                          <button type="submit" class="btn btn-sm btn-outline-success">Enable</button>
+                        </form>
+                      {% endif %}
+                      {% if skill.status != "disabled" %}
+                        <form method="post" action="{% url 'a2a:skill_review' skill.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#card-detail">
+                          {% csrf_token %}
+                          <input type="hidden" name="decision" value="disable">
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                          <button type="submit" class="btn btn-sm btn-outline-secondary">Disable</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% elif skill.reviewed_by %}
+                    <span class="small text-muted">{{ skill.reviewed_by.get_full_name|default:skill.reviewed_by.email }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4">
+                <div class="ct-empty py-4"><i class="bi bi-list-stars"></i>
+                  <p class="mb-0">{% if card.uses_mailbox %}No skills declared. Edit the card to say what other agents may ask it for.{% else %}No skills read yet. Sync its card to ask the agent what it offers.{% endif %}</p></div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">
+        <span>Who May Send It Work <span class="badge text-bg-secondary">{{ contracts|length }}</span></span>
+        {% if can_approve %}
+          <a href="{% url 'a2a:contract_create' card.pk %}" class="small text-decoration-none"><i class="bi bi-plus-lg"></i> Grant a contract</a>
+        {% endif %}
+      </div>
+      <div class="ct-card-body">
+        {% if card.access_mode == "open" %}
+          <p class="small text-muted mb-2">
+            Open: every active agent in the organization may send it work for its enabled skills, up to its clearance.
+            A contract still applies to the sender who holds one.
+          </p>
+        {% endif %}
+        {% for contract in contracts %}
+          <div class="d-flex justify-content-between align-items-start border-bottom py-2 small">
+            <div>
+              <a href="{% url 'inventory:agent_detail' contract.sender.pk %}" class="fw-semibold text-decoration-none">{{ contract.sender.name }}</a>
+              <div class="text-muted">
+                {% if contract.allowed_skills %}{{ contract.allowed_skills|join:", " }}{% else %}All enabled skills{% endif %}
+                &middot; up to {{ contract.ceiling }} data
+                {% if contract.max_messages_per_hour %}&middot; {{ contract.max_messages_per_hour }}/hour{% endif %}
+              </div>
+              {% if contract.purpose %}<div class="text-muted fst-italic">{{ contract.purpose }}</div>{% endif %}
+            </div>
+            <div class="text-end text-nowrap">
+              {% if contract.is_expired %}
+                <span class="badge badge-soft text-bg-danger">Expired</span>
+              {% elif contract.expires_at %}
+                <span class="text-muted">Until {{ contract.expires_at|date:"j M Y" }}</span>
+              {% else %}
+                <span class="text-muted">No expiry</span>
+              {% endif %}
+              {% if can_approve %}
+                <div class="d-flex gap-2 justify-content-end mt-1">
+                  <a href="{% url 'a2a:contract_edit' contract.pk %}" class="text-decoration-none">Edit</a>
+                  <form method="post" action="{% url 'a2a:contract_revoke' contract.pk %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link p-0 small text-danger text-decoration-none align-baseline">Revoke</button>
+                  </form>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          {% if card.access_mode != "open" %}
+            <p class="small text-muted mb-0">No agent holds a contract, so no agent can send it work.</p>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if card.agent %}
+      <div class="ct-card mb-3">
+        <div class="ct-card-header">
+          <span>It May Send Work To <span class="badge text-bg-secondary">{{ outbound|length }}</span></span>
+          <span class="small text-muted">Part of its authorized configuration (G3)</span>
+        </div>
+        <div class="ct-card-body">
+          {% for contract in outbound %}
+            <div class="d-flex justify-content-between border-bottom py-2 small">
+              <div>
+                <a href="{% url 'a2a:card_detail' contract.recipient.pk %}" class="fw-semibold text-decoration-none">{{ contract.recipient.name }}</a>
+                <div class="text-muted">{% if contract.allowed_skills %}{{ contract.allowed_skills|join:", " }}{% else %}All enabled skills{% endif %} &middot; up to {{ contract.ceiling }} data</div>
+              </div>
+              {% if contract.is_expired %}<span class="badge badge-soft text-bg-danger align-self-start">Expired</span>{% endif %}
+            </div>
+          {% empty %}
+            <p class="small text-muted mb-0">No contracts: it can reach only agents open to every agent.</p>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="ct-card">
+      <div class="ct-card-header">
+        <span>Recent Hand-offs to It</span>
+        <a href="{% url 'a2a:tasks' %}?agent={{ card.pk }}" class="small text-decoration-none">All</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table ct-table mb-0">
+          <thead><tr><th>When</th><th>From</th><th>Skill</th><th>Delivery</th><th>State</th></tr></thead>
+          <tbody>
+            {% for task in recent_tasks %}
+              <tr>
+                <td class="small text-nowrap"><a href="{% url 'a2a:task_detail' task.pk %}" class="text-decoration-none">{{ task.created_at|naturaltime }}</a></td>
+                <td class="small">
+                  {{ task.sender.name|default:"—" }}
+                  {% if task.reason %}<div class="ct-attention-detail {% if task.status != 'delivered' %}text-danger{% endif %}">{{ task.reason|truncatechars:110 }}</div>{% endif %}
+                </td>
+                <td>{% if task.skill_name %}<code class="small">{{ task.skill_name }}</code>{% else %}<span class="small text-muted">—</span>{% endif %}</td>
+                <td><span class="badge badge-soft text-bg-{{ task.status|delivery_style }}">{{ task.get_status_display }}</span></td>
+                <td><span class="badge badge-soft text-bg-{{ task.state|task_state_style }}">{{ task.get_state_display }}</span></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5">
+                <div class="ct-empty py-4"><i class="bi bi-diagram-2"></i>
+                  <p class="mb-0">No agent has sent it work yet.</p></div>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

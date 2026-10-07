@@ -87,7 +87,7 @@ def validate_action_limits(value) -> None:
 #: kill-switch when one fires -- the only correction it automates.
 KILL_SWITCH_TRIGGERS = {
     "action_limit_breach": "An attempt beyond a value, rate or counterparty limit (link 06)",
-    "boundary_divergence": "Reaching a tool outside the authorized boundary (links 04 and 06)",
+    "boundary_divergence": "Reaching a tool or an agent outside the authorized boundary (links 04 and 06)",
     "unbound_identity": "Acting under an identity not bound to the agent (link 02)",
 }
 

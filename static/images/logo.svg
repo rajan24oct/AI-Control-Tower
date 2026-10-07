@@ -2,8 +2,8 @@
   <title id="title">AI Control Tower - Enterprise AI Mission Control</title>
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#17775a"/>
-      <stop offset="1" stop-color="#0a4c38"/>
+      <stop offset="0" stop-color="#8a6600"/>
+      <stop offset="1" stop-color="#5c4400"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity=".14"/>
@@ -16,13 +16,13 @@
     <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#tile)"/>
     <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#sheen)"/>
     <rect x="2.5" y="2.5" width="59" height="59" rx="13.5" fill="none" stroke="#ffffff" stroke-opacity=".18"/>
-    <g fill="none" stroke="#17e88f" stroke-width="3" stroke-linecap="round">
+    <g fill="none" stroke="#ffcc00" stroke-width="3" stroke-linecap="round">
       <path d="M37.36 10.5 A7 7 0 0 1 37.36 19.5"/>
       <path d="M26.64 10.5 A7 7 0 0 0 26.64 19.5"/>
       <path d="M42.65 7.54 A13 13 0 0 1 42.65 22.46" stroke-opacity=".55"/>
       <path d="M21.35 7.54 A13 13 0 0 0 21.35 22.46" stroke-opacity=".55"/>
     </g>
-    <circle cx="32" cy="15" r="3.2" fill="#17e88f"/>
+    <circle cx="32" cy="15" r="3.2" fill="#ffcc00"/>
     <g fill="#ffffff">
       <rect x="30.9" y="18.6" width="2.2" height="6.4" rx="1.1"/>
       <rect x="22" y="24.2" width="20" height="3" rx="1.5"/>
@@ -30,12 +30,12 @@
       <path d="M27 37H37L38.5 52H25.5Z"/>
       <rect x="17" y="52" width="30" height="4" rx="2"/>
     </g>
-    <path d="M21.9 31H42.1L40.4 35H23.6Z" fill="#17e88f" fill-opacity=".9"/>
+    <path d="M21.9 31H42.1L40.4 35H23.6Z" fill="#ffcc00" fill-opacity=".9"/>
   </g>
 
   <!-- Wordmark, for light backgrounds. The header sets its wordmark as live text instead. -->
   <text x="84" y="39" font-family="'Source Serif 4', Georgia, 'Times New Roman', serif"
-        font-size="27" font-weight="600" fill="#003f2d">AI Control Tower</text>
+        font-size="27" font-weight="600" fill="#1a1a1a">AI Control Tower</text>
   <text x="85" y="58" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif"
         font-size="10" font-weight="600" letter-spacing="2.4" fill="#6b7472">ENTERPRISE AI MISSION CONTROL</text>
 </svg>

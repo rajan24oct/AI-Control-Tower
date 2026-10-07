@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% load control_tower humanize a2a_tags %}
+
+{% block title %}A2A Task{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <a href="{% url 'a2a:tasks' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Communications</a>
+    <h2 class="h4 mt-1 mb-1">
+      {{ task.sender.name|default:"No agent named" }} &rarr;
+      {% if task.recipient %}{{ task.recipient.name }}{% else %}<code>{{ task.recipient_name }}</code>{% endif %}
+    </h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft text-bg-{{ task.status|delivery_style }}">{{ task.get_status_display }}</span>
+      <span class="badge badge-soft text-bg-{{ task.state|task_state_style }}">{{ task.get_state_display }}</span>
+      {% if task.skill_name %}<span class="badge badge-soft text-bg-light text-dark">{{ task.skill_name }}</span>{% endif %}
+      {% if task.data_classification %}<span class="badge badge-soft text-bg-{{ task.data_classification|classification_style }}">{{ task.get_data_classification_display }} data</span>{% endif %}
+      <span class="badge badge-soft text-bg-light text-dark">{{ task.get_channel_display }}</span>
+    </div>
+  </div>
+  <span class="small text-muted font-monospace">{{ task.pk }}</span>
+</div>
+
+{% if task.reason %}
+  <div class="alert {% if task.status == 'delivered' %}alert-secondary{% else %}alert-danger{% endif %} small py-2">
+    <strong>{% if task.status == "blocked" %}Refused by the A2A Gateway{% elif task.status == "delivered" %}Gateway note{% else %}Not delivered{% endif %}:</strong>
+    {{ task.reason }}
+    {% if task.policies %}<div class="mt-1">Policies: {{ task.policies|join:", " }}</div>{% endif %}
+    {% if task.limit_breached %}<div class="mt-1">Limit: {{ task.limit_breached|limit_label }}</div>{% endif %}
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">The Hand-off</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv row mb-0">
+          <div class="col-6"><dt>From</dt>
+            <dd>{% if task.sender %}<a href="{% url 'inventory:agent_detail' task.sender.pk %}" class="text-decoration-none">{{ task.sender.name }}</a>{% else %}—{% endif %}</dd></div>
+          <div class="col-6"><dt>To</dt>
+            <dd>{% if task.recipient %}<a href="{% url 'a2a:card_detail' task.recipient.pk %}" class="text-decoration-none">{{ task.recipient.name }}</a>{% else %}<code>{{ task.recipient_name }}</code>{% endif %}</dd></div>
+          <div class="col-6"><dt>Skill</dt><dd>{% if task.skill_name %}<code>{{ task.skill_name }}</code>{% else %}—{% endif %}</dd></div>
+          <div class="col-6"><dt>Under contract</dt>
+            <dd>{% if task.contract %}Up to {{ task.contract.ceiling }} data{% if task.contract.max_messages_per_hour %}, {{ task.contract.max_messages_per_hour }}/hour{% endif %}{% elif task.recipient and task.recipient.access_mode == "open" %}None needed: open agent{% else %}—{% endif %}</dd></div>
+          <div class="col-6"><dt>Data it carried</dt>
+            <dd>{{ task.get_data_classification_display|default:"—" }}
+              {% if task.personal_data %}<div class="small text-warning"><i class="bi bi-person-badge"></i> Personal data found: {{ task.personal_data|join:", " }}</div>{% endif %}</dd></div>
+          <div class="col-6"><dt>Turns</dt><dd>{{ task.turns }}</dd></div>
+          <div class="col-12"><dt>Chain</dt>
+            <dd><span class="small">Hand-off {{ task.hops }}: {{ task.trail|join:" → " }} → {{ task.recipient_name }}</span></dd></div>
+          <div class="col-12"><dt>Conversation</dt><dd><code class="small text-break">{{ task.context_id|default:"—" }}</code></dd></div>
+          <div class="col-6"><dt>Identity</dt><dd>{{ task.service_account.name|default:"—" }}</dd></div>
+          <div class="col-6"><dt>Run</dt>
+            <dd>{% if task.execution %}<a href="{% url 'executions:detail' task.execution.pk %}" class="font-monospace small">{{ task.execution.external_id|truncatechars:24 }}</a>{% else %}—{% endif %}</dd></div>
+          <div class="col-6"><dt>Sent</dt><dd>{{ task.created_at|date:"j M Y H:i:s" }}</dd></div>
+          <div class="col-6"><dt>Latency</dt><dd>{% if task.latency_ms is not None %}{{ task.latency_ms }} ms{% else %}—{% endif %}</dd></div>
+          {% if task.collected_at %}<div class="col-6"><dt>Collected</dt><dd>{{ task.collected_at|naturaltime }}</dd></div>{% endif %}
+          {% if task.completed_at %}<div class="col-6"><dt>Finished</dt><dd>{{ task.completed_at|naturaltime }}</dd></div>{% endif %}
+          {% if task.remote_task_id %}<div class="col-12"><dt>The agent's own task id</dt><dd class="mb-0"><code class="small">{{ task.remote_task_id }}</code></dd></div>{% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Verification</span><span class="small text-muted">IRGF link 07</span></div>
+      <div class="ct-card-body">
+        {% if verification %}
+          <p class="small mb-2">
+            <span class="badge badge-soft text-bg-{{ verification.outcome|verification_style }}">{{ verification.get_outcome_display }}</span>
+            {{ verification.latency_ms|duration_ms }} after it was recorded{% if verification.late %}, <span class="text-danger">late</span>{% endif %}.
+          </p>
+          {% for finding in verification.findings %}<div class="small">&bull; {{ finding.title }}</div>{% empty %}
+            <p class="small text-muted mb-0">{% if verification.outcome == "conforms" %}Inside the sender's authorized boundary, along a path its applications declare.{% else %}No authorized state to compare it with.{% endif %}</p>
+          {% endfor %}
+          {% if verification.findings %}<a href="{% url 'controlplane:drift' %}" class="small text-decoration-none">Drift records</a>{% endif %}
+        {% elif task.status == "delivered" %}
+          <p class="small text-muted mb-0">Not verified yet: the Control Plane checks each hand-off as it is recorded, and its sweep catches any it missed.</p>
+        {% else %}
+          <p class="small text-muted mb-0">Nothing reached the recipient, so there is nothing to verify.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">History</div>
+      <div class="ct-card-body">
+        {% for step in task.history %}
+          <div class="d-flex justify-content-between small border-bottom py-1">
+            <span><span class="badge badge-soft text-bg-{{ step.state|task_state_style }}">{{ step.state }}</span> <span class="text-muted">by {{ step.by }}</span></span>
+            <span class="text-muted">{{ step.at|isodate|date:"j M H:i:s" }}</span>
+          </div>
+        {% empty %}<p class="small text-muted mb-0">No history.</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span>Message</span>{% if task.subject %}<span class="small text-muted">{{ task.subject }}</span>{% endif %}</div>
+      <div class="ct-card-body">
+        {% if not can_view_content %}
+          <p class="small text-muted mb-0"><i class="bi bi-eye-slash"></i> Reading what agents sent one another needs <code>prompt.view</code>.</p>
+        {% elif task.text_preview %}
+          <div class="small" style="white-space:pre-wrap">{{ task.text_preview }}</div>
+          {% if message_json %}
+            <details class="small mt-2"><summary class="text-muted">As sent (A2A message)</summary>
+<pre class="small bg-body-tertiary border rounded p-2 mt-2 mb-0" style="white-space:pre-wrap;max-height:20rem;overflow:auto">{{ message_json }}</pre></details>
+          {% endif %}
+        {% else %}
+          <p class="small text-muted mb-0">Not kept: the log does not record content for exchanges with agents reached over HTTP.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header">The Answer</div>
+      <div class="ct-card-body">
+        {% if not can_view_content %}
+          <p class="small text-muted mb-0"><i class="bi bi-eye-slash"></i> Hidden without <code>prompt.view</code>.</p>
+        {% elif task.status_message or task.artifacts %}
+          {% if task.status_message %}<div class="small mb-2"><span class="text-muted">Status message:</span> {{ task.status_message|message_text }}</div>{% endif %}
+          {% for artifact in task.artifacts %}
+            <div class="small border rounded p-2 mb-2">
+              <div class="text-muted">{{ artifact.name|default:artifact.artifactId }}</div>
+              <div style="white-space:pre-wrap">{{ artifact|message_text }}</div>
+            </div>
+          {% endfor %}
+        {% elif task.status == "delivered" %}
+          <p class="small text-muted mb-0">No answer yet: the task is {{ task.get_state_display|lower }}.</p>
+        {% else %}
+          <p class="small text-muted mb-0">None: the message never reached the recipient.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-card-header">Where the Work Came From and Went</div>
+      <div class="ct-card-body">
+        {% if task.parent %}
+          <p class="small mb-2">Handed on from
+            <a href="{% url 'a2a:task_detail' task.parent.pk %}" class="text-decoration-none">{{ task.parent.sender.name|default:task.parent.sender_label }} &rarr; {{ task.parent.recipient_name }}</a>.</p>
+        {% else %}
+          <p class="small text-muted mb-2">The start of its chain.</p>
+        {% endif %}
+        {% for child in handoffs %}
+          <div class="small">&rarr; <a href="{% url 'a2a:task_detail' child.pk %}" class="text-decoration-none">handed on to {{ child.recipient_name }}</a>
+            <span class="badge badge-soft text-bg-{{ child.status|delivery_style }}">{{ child.get_status_display }}</span></div>
+        {% empty %}
+          <p class="small text-muted mb-0">Not handed on to another agent.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

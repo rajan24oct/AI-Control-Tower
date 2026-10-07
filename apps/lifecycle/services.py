@@ -110,6 +110,7 @@ SNAPSHOT_FIELDS = (
     "allowed_tools",
     "restricted_tools",
     "mcp_grants",
+    "a2a_contracts",
     "knowledge_sources",
     "data_classification",
     "environment",
@@ -130,6 +131,7 @@ FIELD_LABELS = {
     "allowed_tools": "Allowed tools",
     "restricted_tools": "Restricted tools",
     "mcp_grants": "MCP access grants",
+    "a2a_contracts": "A2A communication contracts",
     "knowledge_sources": "Knowledge sources",
     "data_classification": "Data classification",
     "environment": "Environment",
@@ -150,6 +152,18 @@ FIELD_LABELS = {
 
 _REFERENCES = ("primary_model", "fallback_model", "provider")
 _SENSITIVITY = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
+
+#: Fields the snapshot gained after authorizations were already being made. An
+#: authorization from before a field existed never recorded it -- which means
+#: "not recorded", not "empty" -- so the field is not compared until the system
+#: is authorized again. Before the A2A Gateway, any agent could message any
+#: other: an authorization from then never constrained who an agent talks to.
+LATER_FIELDS = frozenset({"a2a_contracts"})
+
+
+def recorded(configuration: dict, field: str) -> bool:
+    """Whether an authorized configuration says anything about this field."""
+    return field not in LATER_FIELDS or field in (configuration or {})
 
 
 def _model_ref(model) -> dict | None:
@@ -178,6 +192,14 @@ def _agent_snapshot(agent) -> dict:
         ),
         key=lambda grant: grant["server"],
     )
+    # The agents it may hand work to through the A2A Gateway, and for what.
+    contracts = sorted(
+        (
+            {"to": contract.recipient.address, "skills": sorted(contract.allowed_skills or [])}
+            for contract in agent.a2a_contracts.select_related("recipient", "recipient__agent")
+        ),
+        key=lambda contract: contract["to"],
+    )
     return {
         "primary_model": _model_ref(agent.primary_model),
         "fallback_model": _model_ref(agent.fallback_model),
@@ -189,6 +211,7 @@ def _agent_snapshot(agent) -> dict:
         "allowed_tools": sorted(agent.allowed_tools or []),
         "restricted_tools": sorted(agent.restricted_tools or []),
         "mcp_grants": grants,
+        "a2a_contracts": contracts,
         "knowledge_sources": sorted(agent.knowledge_sources or []),
         "data_classification": agent.data_classification,
         "environment": agent.environment,
@@ -268,6 +291,8 @@ def comparable(field: str, value):
     if field == "kill_switch_triggers":
         # Authorized before Phase 3 recorded triggers: none is the same as empty.
         return sorted(value or [])
+    if field == "a2a_contracts":
+        return sorted((item["to"], tuple(sorted(item.get("skills") or []))) for item in value or [])
     if field in ("models", "providers", "agents"):
         return sorted(item.get("id") for item in value or [])
     if field == "delegations":
@@ -308,6 +333,10 @@ def display(field: str, value) -> str:
         return "; ".join(
             f"{grant['server']} ({', '.join(grant['tools']) or 'all tools'})" for grant in value
         )
+    if field == "a2a_contracts":
+        return "; ".join(
+            f"{contract['to']} ({', '.join(contract['skills']) or 'all skills'})" for contract in value
+        )
     if isinstance(value, bool):
         return "yes" if value else "no"
     if isinstance(value, list):
@@ -330,7 +359,8 @@ def differences(subject, configuration: dict) -> list[str]:
     current = snapshot(subject)
     return [
         field for field in fields_of(current)
-        if comparable(field, configuration.get(field)) != comparable(field, current.get(field))
+        if recorded(configuration, field)
+        and comparable(field, configuration.get(field)) != comparable(field, current.get(field))
     ]
 
 
@@ -488,6 +518,33 @@ def _agent_readiness(agent, *, assurance_summary="", oversight_point="", monitor
     return checks
 
 
+def _external_agents(organization) -> set[str]:
+    """The addresses of agents other organizations run, published to the A2A Gateway."""
+    from apps.a2a.models import A2AAgentCard, CardOrigin
+
+    return set(
+        A2AAgentCard.objects.for_organization(organization).filter(origin=CardOrigin.EXTERNAL)
+        .values_list("slug", flat=True)
+    )
+
+
+def _unprovisioned(organization, edges) -> list[str]:
+    """Declared delegations the A2A Gateway would refuse: no card, or no contract for a restricted one."""
+    from apps.a2a.models import A2AAccessMode, A2AAgentCard, A2AContract
+
+    cards = {card.address: card for card in A2AAgentCard.objects.for_organization(organization).select_related("agent")}
+    missing = []
+    for edge in edges:
+        card = cards.get(edge.get("to"))
+        if card is None:
+            missing.append(f"{edge['from']} → {edge['to']} (not published)")
+        elif card.access_mode != A2AAccessMode.OPEN and not A2AContract.objects.filter(
+            recipient=card, sender__organization=organization, sender__agent_id=edge["from"]
+        ).exists():
+            missing.append(f"{edge['from']} → {edge['to']}")
+    return missing
+
+
 def _system_evaluation_run(application, agents, *, passing=False, max_age_days=None):
     """The latest evaluation of any of the application's agents or models."""
     from apps.evaluations.models import EvaluationRun, RunStatus
@@ -545,12 +602,15 @@ def _application_readiness(application, *, assurance_summary="", oversight_point
     ))
 
     members = {agent.agent_id for agent in agents}
+    # Work may also be handed to an agent another organization runs, once it is
+    # published to the A2A Gateway: its address is how the graph names it.
+    targets = members | _external_agents(application.organization)
     edges = application.delegations or []
     strays = [f"{edge.get('from')} → {edge.get('to')}" for edge in edges
-              if edge.get("from") not in members or edge.get("to") not in members]
+              if edge.get("from") not in members or edge.get("to") not in targets]
     several = len(acting) > 1
     if strays:
-        ok, detail = False, "Name only member agents: " + ", ".join(strays) + "."
+        ok, detail = False, "Name only member agents, or external agents published for A2A: " + ", ".join(strays) + "."
     elif edges:
         ok, detail = True, f"{len(edges)} delegation{'s' if len(edges) != 1 else ''} declared."
     elif several:
@@ -560,6 +620,13 @@ def _application_readiness(application, *, assurance_summary="", oversight_point
     checks.append(Check(
         "delegations", "Delegation graph declared", "IRGF ch. 16", bool(strays) or (several and tier >= 3), ok, detail,
     ))
+    if edges and not strays:
+        missing = _unprovisioned(application.organization, edges)
+        checks.append(Check(
+            "provisioned", "Delegations provisioned at the A2A Gateway", "IRGF ch. 16 · A2A", False, not missing,
+            "Each declared delegation has a contract, or reaches an agent open to every agent." if not missing
+            else "The gateway will refuse: " + ", ".join(missing) + ". Grant each a contract on the recipient's A2A page.",
+        ))
 
     unapproved = [model.model_name for model in application.ai_models.all() if not model.approved_for_use]
     unapproved += [provider.name for provider in application.providers.all() if not provider.is_approved]
@@ -853,6 +920,15 @@ def _grants_widened(before, after) -> bool:
     return False
 
 
+def _contracts_widened(before, after) -> bool:
+    """Another agent to reach, or more of one: an empty skill list means every skill."""
+
+    def as_grants(contracts):
+        return [{"server": item["to"], "tools": item.get("skills") or []} for item in contracts or []]
+
+    return _grants_widened(as_grants(before), as_grants(after))
+
+
 def _limits_widened(before, after) -> bool:
     before, after = before or {}, after or {}
     for key, value in before.items():
@@ -890,6 +966,8 @@ def change_type(field, before, after) -> str:
         return "tool_added" if set(before or []) - set(after or []) else "tool_removed"
     if field == "mcp_grants":
         return "tool_added" if _grants_widened(before, after) else "tool_removed"
+    if field == "a2a_contracts":
+        return "peer_added" if _contracts_widened(before, after) else "peer_removed"
     if field == "knowledge_sources":
         return "grounding_added" if set(after or []) - set(before or []) else "grounding_removed"
     if field == "data_classification":
@@ -951,6 +1029,8 @@ class ChangeService:
         created = []
         with transaction.atomic():
             for field in fields_of(current):
+                if not recorded(baseline, field):
+                    continue
                 before, after = baseline.get(field), current.get(field)
                 differs = comparable(field, before) != comparable(field, after)
                 record = open_records.get(field)

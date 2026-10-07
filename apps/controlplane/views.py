@@ -71,10 +71,12 @@ EVIDENCE_LINKS = {
     "policy": ("policies:detail", True),
     "budget_alert": ("costs:budgets", False),
     "tool": ("mcp_gateway:tools", False),
+    "a2a_task": ("a2a:task_detail", True),
 }
 EVIDENCE_LABELS = {
     "execution": "Run", "tool_call": "Tool call", "evaluation": "Evaluation", "policy": "Policy",
-    "budget_alert": "Budget alert", "tool": "Tool", "message": "Delegation",
+    "budget_alert": "Budget alert", "tool": "Tool", "message": "Delegation (mailbox)",
+    "a2a_task": "Agent-to-agent hand-off",
 }
 
 
@@ -331,7 +333,8 @@ class VerificationListView(OrganizationScopedMixin, ListView):
 
     def get_base_queryset(self):
         return super().get_base_queryset().select_related(
-            "agent", "execution", "tool_call", "message__sender", "message__recipient"
+            "agent", "execution", "tool_call", "message__sender", "message__recipient",
+            "a2a_task__sender", "a2a_task__recipient",
         )
 
     def get_queryset(self):
@@ -344,6 +347,8 @@ class VerificationListView(OrganizationScopedMixin, ListView):
             queryset = queryset.filter(tool_call__isnull=False)
         elif kind == "execution":
             queryset = queryset.filter(execution__isnull=False)
+        elif kind == "a2a_task":
+            queryset = queryset.filter(a2a_task__isnull=False)
         elif kind == "message":
             queryset = queryset.filter(message__isnull=False)
         return queryset

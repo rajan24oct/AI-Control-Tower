@@ -16,6 +16,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.a2a.models import A2AAccessMode, A2AAgentCard, A2ATask, DeliveryStatus, TaskState
 from apps.accounts.roles import Perm, Role, role_has_permission
 from apps.agents.models import AIAgent
 from apps.api.models import APIKey, ServiceAccount
@@ -23,7 +24,7 @@ from apps.core.constants import Environment, HealthStatus, LifecycleStatus
 from apps.costs.models import Budget, BudgetEnforcement, BudgetPeriod, BudgetScope
 from apps.executions.models import Execution, ExecutionStatusChoices
 from apps.gateway.messaging import MessageBlocked, MessageRequest, MessagingService
-from apps.gateway.models import CircuitState, GatewayMessage, ProviderCircuit
+from apps.gateway.models import CircuitState, ProviderCircuit
 from apps.gateway.services import (
     AllAttemptsFailed,
     BudgetExceeded,
@@ -753,12 +754,19 @@ class GatewayPermissionTests(GatewayFixtureMixin, TestCase):
 
 
 class MessagingTests(GatewayFixtureMixin, TestCase):
+    """The original mailbox, now one door into the A2A Gateway."""
+
     def setUp(self):
         self.build_estate()
         self.other_agent = AIAgent.objects.create(
             organization=self.organization, name="Pricing Agent", agent_id="pricing-agent",
             provider=self.primary_provider, primary_model=self.primary_model,
             status=LifecycleStatus.ACTIVE,
+        )
+        # Published and open to every agent, so the mailbox works as it always did.
+        A2AAgentCard.objects.create(
+            organization=self.organization, agent=self.other_agent, is_approved=True,
+            access_mode=A2AAccessMode.OPEN,
         )
 
     def _send(self, **kwargs):
@@ -771,9 +779,10 @@ class MessagingTests(GatewayFixtureMixin, TestCase):
         return MessagingService.send(self.organization, MessageRequest(**defaults))
 
     def test_a_message_is_queued_for_the_recipient(self):
-        message = self._send()
-        self.assertEqual(message.status, GatewayMessage.Status.QUEUED)
-        self.assertEqual(message.recipient, self.other_agent)
+        task = self._send()
+        self.assertEqual(task.status, DeliveryStatus.DELIVERED)
+        self.assertEqual(task.state, TaskState.SUBMITTED)
+        self.assertEqual(task.recipient_agent, self.other_agent)
 
     def test_collecting_marks_messages_read_and_returns_them_once(self):
         self._send()
@@ -782,6 +791,8 @@ class MessagingTests(GatewayFixtureMixin, TestCase):
 
         self.assertEqual(len(first), 1)
         self.assertEqual(second, [])
+        # A message through the old mailbox has no answer to wait for.
+        self.assertEqual(first[0].state, TaskState.COMPLETED)
 
     def test_a_blocked_message_is_kept_with_its_reason(self):
         with patch("apps.policies.services.PolicyEngine.check_agent") as check:
@@ -793,9 +804,9 @@ class MessagingTests(GatewayFixtureMixin, TestCase):
             with self.assertRaises(MessageBlocked):
                 self._send()
 
-        message = GatewayMessage.objects.get()
-        self.assertEqual(message.status, GatewayMessage.Status.BLOCKED)
-        self.assertIn("pricing", message.blocked_reason.lower())
+        task = A2ATask.objects.get()
+        self.assertEqual(task.status, DeliveryStatus.BLOCKED)
+        self.assertIn("pricing", task.reason.lower())
 
     def test_a_blocked_message_is_never_delivered(self):
         with patch("apps.policies.services.PolicyEngine.check_agent") as check:
@@ -816,3 +827,20 @@ class MessagingTests(GatewayFixtureMixin, TestCase):
         )
         with self.assertRaises(MessageBlocked):
             self._send(recipient=foreign)
+        self.assertFalse(A2ATask.objects.exists())
+
+    def test_an_unpublished_recipient_is_refused_and_kept(self):
+        stranger = AIAgent.objects.create(
+            organization=self.organization, name="Ledger Agent", agent_id="ledger-agent",
+            status=LifecycleStatus.ACTIVE,
+        )
+        with self.assertRaises(MessageBlocked) as caught:
+            self._send(recipient=stranger)
+        self.assertIn("not published", caught.exception.message)
+        self.assertTrue(A2ATask.objects.filter(recipient_agent=stranger, status=DeliveryStatus.BLOCKED).exists())
+
+    def test_a_restricted_recipient_needs_a_contract(self):
+        A2AAgentCard.objects.filter(agent=self.other_agent).update(access_mode=A2AAccessMode.RESTRICTED)
+        with self.assertRaises(MessageBlocked) as caught:
+            self._send()
+        self.assertIn("holds no contract", caught.exception.message)

@@ -33,6 +33,7 @@ class PolicyType(models.TextChoices):
     HUMAN_APPROVAL = "human_approval", "Human Approval Policy"
     RISK_CLASSIFICATION = "risk_classification", "Risk Classification Policy"
     DEPLOYMENT_AUTHORIZATION = "deployment_authorization", "Deployment Authorization Policy"
+    AGENT_COMMUNICATION = "agent_communication", "Agent Communication Policy"
 
 
 class PolicyEffect(models.TextChoices):
@@ -83,6 +84,14 @@ POLICY_SCHEMA: dict[str, set[str]] = {
     },
     # IRGF S7 · Gate G3: the agent must hold an authorization in force.
     PolicyType.DEPLOYMENT_AUTHORIZATION: {"environments", "block_pending_changes"},
+    # The A2A Gateway: which agents may be sent work, and what may leave with it.
+    PolicyType.AGENT_COMMUNICATION: {
+        "blocked_recipients",
+        "block_external",
+        "external_max_data_classification",
+        "max_hops",
+        "environments",
+    },
 }
 
 #: Keys every policy type accepts. `tiers` scopes a policy to IRGF risk tiers
@@ -103,6 +112,7 @@ INHERENT_CHECKS = {
     PolicyType.HUMAN_APPROVAL: "delegates to the configured approval rules",
     PolicyType.RISK_CLASSIFICATION: "a countersigned S2 risk classification is required",
     PolicyType.DEPLOYMENT_AUTHORIZATION: "the agent needs a deployment authorization in force (S7 · G3)",
+    PolicyType.AGENT_COMMUNICATION: "no restrictions configured",
 }
 
 

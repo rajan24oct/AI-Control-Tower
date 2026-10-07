@@ -1,0 +1,18 @@
+<div class="ct-card mb-3">
+  <div class="ct-card-header">Rules and budgets</div>
+  <div class="ct-card-body small">
+    <ul class="mb-0 ps-3 ct-guide-steps">
+      <li>A budget watches a period's total. A rule watches a rolling window &mdash; the last hour, day or week &mdash; so a runaway agent is caught within the hour.</li>
+      <li><strong>Spend increase</strong> compares the window with the average of the four windows before it: 100 means "twice the usual".</li>
+      <li><strong>Average cost per run</strong> catches a prompt or model change that made every call dearer.</li>
+      <li><strong>Spend on failed runs</strong> is money with nothing to show for it.</li>
+    </ul>
+  </div>
+</div>
+<div class="ct-card">
+  <div class="ct-card-header">Noise control</div>
+  <div class="ct-card-body small">
+    <p class="mb-2">A minimum spend keeps quiet hours from tripping percentage rules; the quiet period stops one incident sending an alert every 15 minutes.</p>
+    <p class="mb-0">Rules count AI runtime spend. Copilot seats are watched by budgets with <em>Developer tools</em> as the cost source.</p>
+  </div>
+</div>

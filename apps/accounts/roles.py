@@ -60,6 +60,14 @@ class Perm:
     MCP_APPROVE = "mcp.approve"
     MCP_INVOKE = "mcp.invoke"
 
+    # A2A Gateway: the same three acts for agent-to-agent communication.
+    # Publishing an agent's card, or registering an external agent, reaches
+    # nothing until governance approves the card, reviews its skills and grants
+    # a sender a contract; invoking hands another agent work on an agent's behalf.
+    A2A_MANAGE = "a2a.manage"
+    A2A_APPROVE = "a2a.approve"
+    A2A_INVOKE = "a2a.invoke"
+
     COST_VIEW = "cost.view"
     COST_MANAGE = "cost.manage"
 
@@ -116,6 +124,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.GATEWAY_INVOKE,
         Perm.MCP_MANAGE,
         Perm.MCP_INVOKE,
+        Perm.A2A_MANAGE,
+        Perm.A2A_INVOKE,
     },
     Role.AI_DEVELOPER: _READ_ONLY
     | {
@@ -127,11 +137,14 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.PROMPT_VIEW,
         Perm.GATEWAY_INVOKE,
         Perm.MCP_INVOKE,
+        Perm.A2A_MANAGE,
+        Perm.A2A_INVOKE,
     },
     Role.GOVERNANCE_MANAGER: _READ_ONLY
     | {
         Perm.MODEL_APPROVE,
         Perm.MCP_APPROVE,
+        Perm.A2A_APPROVE,
         Perm.POLICY_MANAGE,
         Perm.RISK_MANAGE,
         Perm.APPROVAL_DECIDE,
