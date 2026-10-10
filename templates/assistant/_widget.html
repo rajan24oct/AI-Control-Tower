@@ -1,0 +1,71 @@
+{% load static assistant_tags %}
+{% agent_name as name %}{% framework_url as framework %}{% guided_questions as guided %}
+{% comment %}
+  The IRGF Agent: a chat icon at the bottom right of every page, opening a chat
+  window. Outside the AJAX content region, so it survives in-page swaps.
+{% endcomment %}
+<div class="ct-assistant" data-assistant data-ask-url="{% url 'assistant:ask' %}">
+  <button type="button" class="ct-assistant-fab" aria-expanded="false" aria-controls="ct-assistant-panel"
+          data-assistant-toggle title="Chat with the {{ name }}" aria-label="Open the {{ name }} chat">
+    <i class="bi bi-chat-dots-fill" aria-hidden="true"></i>
+  </button>
+
+  <section id="ct-assistant-panel" class="ct-assistant-panel" role="dialog" aria-modal="false"
+           aria-labelledby="ct-assistant-title" hidden>
+    <header class="ct-assistant-head">
+      <span class="ct-assistant-avatar" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
+      <div class="flex-grow-1 min-w-0">
+        <h2 id="ct-assistant-title">{{ name }}</h2>
+        <p><span class="ct-assistant-online"></span> The IRGF framework and the Control Tower</p>
+      </div>
+      <div class="d-flex gap-1">
+        <button type="button" class="ct-assistant-icon" data-assistant-guide title="Guided questions">
+          <i class="bi bi-list-ul" aria-hidden="true"></i><span class="visually-hidden">Guided questions</span>
+        </button>
+        <button type="button" class="ct-assistant-icon" data-assistant-clear title="New conversation">
+          <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span class="visually-hidden">New conversation</span>
+        </button>
+        <button type="button" class="ct-assistant-icon" data-assistant-toggle title="Close">
+          <i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Close</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="ct-assistant-log" data-assistant-log aria-live="polite">
+      <div class="ct-assistant-msg is-bot" data-assistant-welcome>
+        <p class="ct-assistant-who">{{ name }}</p>
+        <p>Hi, I'm the <strong>{{ name }}</strong>. I can explain the
+          <a href="{{ framework }}" target="_blank" rel="noopener">IRGF framework</a> &mdash; its stages, gates,
+          tiers, modules and the agent governance chain &mdash; and how the AI Control Tower applies it to your
+          estate. Pick a guided question, or ask your own below.</p>
+        <div data-assistant-guide-slot></div>
+      </div>
+    </div>
+
+    <form class="ct-assistant-form" data-assistant-form>
+      <label for="ct-assistant-input" class="visually-hidden">Ask a new question</label>
+      <textarea id="ct-assistant-input" rows="1" maxlength="600" placeholder="Ask a new question&hellip;"
+                data-assistant-input></textarea>
+      <button type="submit" class="btn btn-primary btn-sm" title="Send">
+        <i class="bi bi-send-fill" aria-hidden="true"></i><span class="visually-hidden">Send</span>
+      </button>
+    </form>
+  </section>
+
+  {# The guided questions, cloned into the welcome and whenever the list button is pressed. #}
+  <template data-assistant-guide-template>
+    <div class="ct-assistant-guide">
+      {% for topic, questions in guided %}
+        <details{% if forloop.first %} open{% endif %}>
+          <summary>{{ topic }} <span>{{ questions|length }}</span></summary>
+          <ul>
+            {% for question in questions %}
+              <li><button type="button" data-assistant-suggest>{{ question }}</button></li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endfor %}
+    </div>
+  </template>
+</div>
+<script src="{% static 'js/assistant.js' %}" defer></script>

@@ -123,6 +123,13 @@ class AgentInactive(GatewayError):
     code = "agent_inactive"
 
 
+class GuardrailBlocked(GatewayError):
+    """A runtime guardrail (IRGF M14) stopped the prompt or the completion."""
+
+    status_code = 403
+    code = "guardrail_blocked"
+
+
 @dataclass
 class GatewayRequest:
     """What an agent asked the gateway to do."""
@@ -279,6 +286,7 @@ class GatewayService:
         cls._enforce_agent_state(request)
         cls._enforce_policy(organization, request)
         cls._enforce_budget(organization, request)
+        cls._guard_input(organization, request)
 
         plan, decision = RoutingService.decide(
             organization,
@@ -300,7 +308,12 @@ class GatewayService:
         response = cls._attempt_chain(organization, request, candidates, deadline, decision)
         response.latency_ms = int((time.monotonic() - started) * 1000)
 
+        verdict = cls._guard_output(organization, request, response)
         cls._record(organization, request, response, service_account)
+        if verdict is not None and verdict.blocked:
+            # The call happened and is paid for, so it is recorded; the
+            # completion itself never reaches the caller.
+            raise GuardrailBlocked(verdict.reason, detail=verdict.as_detail())
         return response
 
     # -- Streaming ----------------------------------------------------------
@@ -318,7 +331,9 @@ class GatewayService:
 
         Enforcement therefore happens before a single byte is sent, which is
         also why policy and budget refusals are ordinary HTTP errors rather
-        than a 200 carrying bad news.
+        than a 200 carrying bad news. For the same reason only the *input*
+        guardrails apply to a stream: an output guardrail would have to hold
+        back the whole completion, which is what `complete()` is for.
 
         Yields `(event_name, payload)` rather than wire format, so the pipeline
         can be tested without parsing SSE.
@@ -329,6 +344,7 @@ class GatewayService:
         cls._enforce_agent_state(request)
         cls._enforce_policy(organization, request)
         cls._enforce_budget(organization, request)
+        cls._guard_input(organization, request)
 
         plan, decision = RoutingService.decide(
             organization,
@@ -624,6 +640,46 @@ class GatewayService:
                 decision.reason or "This request needs human approval before it can run.",
                 detail={"policies": decision.policy_names},
             )
+
+    @staticmethod
+    def _guard_input(organization, request: GatewayRequest) -> None:
+        """Runtime guardrails on the prompt: block it, or redact it in place."""
+        from apps.guardrails.models import Source, Stage
+        from apps.guardrails.services import GuardrailService
+
+        facts = {"stage": Stage.INPUT, "source": Source.AI_GATEWAY, "agent": request.agent,
+                 "environment": request.environment, "reference": request.trace_id or request.external_id}
+        verdicts = []
+        if request.prompt:
+            verdict = GuardrailService.check(organization, request.prompt, **facts)
+            if verdict.redacted:
+                request.prompt = verdict.text
+            verdicts.append(verdict)
+        if request.messages:
+            request.messages, verdict = GuardrailService.check_messages(organization, request.messages, **facts)
+            if verdict is not None:
+                verdicts.append(verdict)
+        blocked = next((v for v in verdicts if v.blocked), None)
+        if blocked is not None:
+            raise GuardrailBlocked(blocked.reason, detail=blocked.as_detail())
+        if any(v.redacted for v in verdicts):
+            request.metadata = {**(request.metadata or {}), "guardrail_redacted": True}
+
+    @staticmethod
+    def _guard_output(organization, request: GatewayRequest, response):
+        """Runtime guardrails on the completion. Returns the verdict, or None."""
+        from apps.guardrails.models import Source, Stage
+        from apps.guardrails.services import GuardrailService
+
+        verdict = GuardrailService.check(
+            organization, response.output_text, stage=Stage.OUTPUT, source=Source.AI_GATEWAY, agent=request.agent,
+            environment=request.environment, reference=request.trace_id or request.external_id,
+        )
+        if verdict.blocked:
+            response.output_text = "[Withheld by a guardrail]"
+        elif verdict.redacted:
+            response.output_text = verdict.text
+        return verdict if verdict.action else None
 
     @staticmethod
     def _enforce_budget(organization, request: GatewayRequest) -> None:

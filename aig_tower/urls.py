@@ -23,6 +23,10 @@ urlpatterns = [
     path("evaluations/", include("apps.evaluations.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("audit/", include("apps.audit.urls")),
+    path("intake/", include("apps.intake.urls")),
+    path("compliance/", include("apps.compliance.urls")),
+    path("guardrails/", include("apps.guardrails.urls")),
+    path("assistant/", include("apps.assistant.urls")),
     path("api/v1/", include("apps.api.urls")),
 ]
 

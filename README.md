@@ -42,6 +42,9 @@ access on live model and tool calls, while holding the upstream credentials so a
 | **MCP Gateway** | One registry for every MCP server, tool review and re-review, per-agent access grants, and a single governed MCP endpoint for all of them | `/mcp-gateway/` |
 | **A2A Gateway** | Agent-to-agent communication, governed: a registry of the agents that take work from others, inside the organization or out, skills reviewed before any agent may ask for them, contracts saying which agent may hand work to which and with how sensitive a payload, hop limits, and one Agent2Agent (A2A) endpoint per agent | `/a2a-gateway/` |
 | **AI FinOps** | A drill-down cost explorer (department → team → agent → model → provider, or by individual); GitHub Copilot licence and premium-request spend by team and by individual; budgets by department, team, individual or asset with threshold and forecast alerts, chosen recipients and optional hard stops; cost alert rules for spikes and runaway spend; costed optimization recommendations | `/costs/` |
+| **Use-Case Intake · G1** | AI ideas recorded as use cases (IRGF S0–S1) with provisional D1–D5, decided at Gate G1 by tier with IRGF's five outcomes, then registered as draft applications | `/intake/` |
+| **Compliance & Evidence** | EU AI Act, ISO/IEC 42001 and NIST AI RMF requirements per system, answered from live platform evidence, with scope decisions, attestations and exportable evidence packs (print to PDF, or a ZIP with JSON and the audit trail) | `/compliance/` |
+| **IRGF Agent** | A chat icon on every page. Guided questions by topic, or your own: the IRGF framework ([irgframework.org](https://irgframework.org/)) — stages, gates, tiers, modules, the agent chain — and how the Control Tower applies it, answered from the framework reference, this documentation and the rules the platform enforces, with links to the sources and to the right page | every page |
 | **AI Governance** | IRGF risk classification (Tier 1–4, independently countersigned), deployment authorization of agents and applications with their composite authority (Gate G3), change control (Gate G4) and time-boxed exceptions (M17), the Control Plane comparing what runs with what was authorized (M12), drift records with response windows by tier (M13), action limits enforced before each tool call and every action verified after it (links 06–07), risk register and heat map, human approvals, typed control policies, evaluation suites and red-team runs | `/classification/`, `/lifecycle/`, `/control-plane/`, `/risks/`, `/approvals/`, `/policies/`, `/evaluations/` |
 | **Control & Settings** | Tamper-evident audit trail, users, teams, service accounts and API keys | Profile menu |
 | **Integration Handbook** | The developer guide: onboarding, API reference, both gateways, sample code | `/docs/integration/` |
@@ -299,6 +302,16 @@ automatically).
 | Variable | Default | Purpose |
 |---|---|---|
 | `PROMPT_REDACT_CLASSIFICATIONS` | `confidential,restricted` | Prompt and completion text for agents with these classifications is redacted on screen. |
+
+### IRGF Agent
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ASSISTANT_PROVIDER` | `openai` | `openai`: the IRGF Agent answers with ChatGPT and its skills. `documentation`: passages quoted from the documentation, no model. |
+| `OPENAI_API_KEY` | *(empty)* | The key ChatGPT uses. Without it, the agent answers from the documentation. |
+| `ASSISTANT_OPENAI_MODEL` | `gpt-4o-mini` | The ChatGPT model. |
+| `ASSISTANT_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. |
+| `ASSISTANT_AGENT` | *(empty)* | Instead of calling ChatGPT directly, the `agent_id` of an agent whose model phrases answers through the AI Gateway, under its policy, budget and audit. |
 
 ### Provider and MCP server credentials
 

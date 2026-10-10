@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}{{ subject.name }} · Compliance{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <span class="small"><a href="{% url 'compliance:overview' %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Compliance &amp; Evidence</a>
+    &middot; <a href="{{ subject.url }}" class="text-decoration-none">{{ subject.kind|title }} record</a></span>
+  {% if can_export %}
+    <span class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'compliance:pack' subject.kind subject.obj.pk %}" target="_blank" rel="noopener"><i class="bi bi-printer"></i> Evidence pack</a>
+      <a class="btn btn-sm btn-primary" href="{% url 'compliance:pack_zip' subject.kind subject.obj.pk %}"><i class="bi bi-file-earmark-zip"></i> Download pack (ZIP)</a>
+    </span>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+  {% for a in assessments %}
+    <div class="col-12 col-md-4">
+      <div class="ct-metric h-100">
+        <span class="ct-metric-label">{{ a.regime.short }}</span>
+        {% if a.applies %}
+          <div class="ct-metric-value">{{ a.coverage }}%</div>
+          <div class="ct-metric-hint">{{ a.counts.met|default:0 }} met · {{ a.counts.partial|default:0 }} partly · {{ a.counts.missing|default:0 }} missing</div>
+        {% else %}
+          <div class="ct-metric-value fs-5 text-muted">Not in scope</div>
+          <div class="ct-metric-hint">{{ a.scope.rationale|default:"" }}</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+{% for a in assessments %}
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span><i class="bi bi-journal-check me-1"></i> {{ a.regime.name }}</span>
+    <a class="small text-decoration-none" href="{{ a.regime.url }}" target="_blank" rel="noopener">Source <i class="bi bi-box-arrow-up-right"></i></a>
+  </div>
+  <div class="ct-card-body small border-bottom">
+    <div class="d-flex flex-wrap gap-3 align-items-start justify-content-between">
+      <div style="max-width:640px">
+        <p class="mb-1 text-muted">{{ a.regime.description }}</p>
+        <p class="mb-1"><strong>Scope:</strong>
+          {% if a.regime.key == "eu_ai_act" %}{{ a.scope.get_eu_category_display }}{% else %}{{ a.scope.get_applicability_display }}{% endif %}
+          {% if a.scope.pk %}<span class="text-muted">· recorded by {{ a.scope.assessed_by.get_full_name|default:"—" }}, {{ a.scope.assessed_at|date:"j M Y" }}{% if a.scope.rationale %}: “{{ a.scope.rationale }}”{% endif %}</span>
+          {% else %}<span class="text-muted">· not recorded yet{% if a.regime.key == "eu_ai_act" %}: worked through as if it may be high-risk{% endif %}</span>{% endif %}</p>
+        {% if a.suggestion and not a.scope.pk %}<p class="mb-0 text-muted"><i class="bi bi-lightbulb"></i> {{ a.suggestion }}</p>{% endif %}
+      </div>
+      {% if can_decide %}
+        <form method="post" action="{% url 'compliance:scope' subject.kind subject.obj.pk %}" class="d-flex flex-wrap gap-2 align-items-start" style="max-width:520px">
+          {% csrf_token %}<input type="hidden" name="regime" value="{{ a.regime.key }}">
+          {% if a.regime.key == "eu_ai_act" %}
+            <select name="eu_category" class="form-select form-select-sm" style="width:auto" aria-label="EU AI Act category">
+              {% for value, label in eu_categories %}<option value="{{ value }}" {% if a.scope.eu_category == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          {% else %}
+            <select name="applicability" class="form-select form-select-sm" style="width:auto" aria-label="Applies">
+              <option value="applies" {% if a.applies %}selected{% endif %}>Applies</option>
+              <option value="does_not_apply" {% if not a.applies %}selected{% endif %}>Does not apply</option>
+            </select>
+          {% endif %}
+          <input name="rationale" class="form-control form-control-sm" style="min-width:220px;flex:1" placeholder="Rationale (required)" required>
+          <button class="btn btn-sm btn-outline-secondary">Record scope</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr><th style="width:34%">Requirement</th><th>Status</th><th>Evidence</th></tr></thead>
+      <tbody>
+        {% for r in a.results %}
+          <tr>
+            <td class="small"><span class="text-muted">{{ r.requirement.reference }}</span> <strong>{{ r.requirement.title }}</strong>
+              <div class="text-muted">{{ r.requirement.summary }}</div></td>
+            <td><span class="badge badge-soft text-bg-{{ r.style }}">{{ r.label }}</span></td>
+            <td class="small">
+              {% if r.attestation %}
+                <div><i class="bi bi-person-check"></i> {{ r.attestation.statement }}
+                  <span class="text-muted">· {{ r.attestation.attested_by.get_full_name|default:"—" }}, {{ r.attestation.attested_at|date:"j M Y" }}{% if r.attestation.valid_until %}, valid to {{ r.attestation.valid_until|date:"j M Y" }}{% endif %}{% if r.attestation.evidence_reference %} · {{ r.attestation.evidence_reference }}{% endif %}</span></div>
+              {% elif r.checks %}
+                {% for c in r.checks %}
+                  <div class="mb-1"><span class="badge badge-soft text-bg-{{ c.style }} me-1">{{ c.label }}</span><strong>{{ c.title }}:</strong> {{ c.finding }}
+                    {% if c.items %}<details class="ct-chart-table mt-0"><summary>{{ c.items|length }} item{{ c.items|length|pluralize }}</summary>
+                      <ul class="mb-0 ps-3">{% for i in c.items %}<li>{% if i.url %}<a href="{{ i.url }}">{{ i.label }}</a>{% else %}{{ i.label }}{% endif %}{% if i.when %} <span class="text-muted">· {{ i.when|date:"j M Y" }}</span>{% endif %}</li>{% endfor %}</ul>
+                    </details>{% endif %}</div>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">{{ r.note|default:"" }}{% if r.requirement.attestation %} {{ r.requirement.attestation }}{% endif %}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+
+<div class="ct-card mb-3">
+  <div class="ct-card-header"><span><i class="bi bi-person-check me-1"></i> Attestations</span></div>
+  <div class="ct-card-body small">
+    <p class="text-muted">For what the platform cannot see, such as training records or an impact assessment, the system's owner or a
+      risk or governance role attests, with where the evidence is and how long it holds.</p>
+    <form method="post" action="{% url 'compliance:attest' subject.kind subject.obj.pk %}" class="row g-2">
+      {% csrf_token %}
+      <div class="col-12 col-md-5"><select name="requirement" class="form-select form-select-sm" required aria-label="Requirement">
+        {% for a in assessments %}<optgroup label="{{ a.regime.short }}">{% for r in a.results %}<option value="{{ r.requirement.code }}">{{ r.requirement.reference }} · {{ r.requirement.title }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select></div>
+      <div class="col-6 col-md-2"><select name="status" class="form-select form-select-sm" aria-label="Status"><option value="met">Met</option><option value="not_applicable">Not applicable</option></select></div>
+      <div class="col-6 col-md-2"><input type="date" name="valid_until" class="form-control form-control-sm" aria-label="Valid until"></div>
+      <div class="col-12 col-md-3"><input name="evidence_reference" class="form-control form-control-sm" placeholder="Evidence reference"></div>
+      <div class="col-12"><textarea name="statement" class="form-control form-control-sm" rows="2" required placeholder="What was done, or why it does not apply"></textarea></div>
+      <div class="col-12"><button class="btn btn-sm btn-outline-secondary">Record attestation</button></div>
+    </form>
+    {% if attestations %}
+      <table class="table table-sm mt-3 mb-0"><thead><tr><th>Requirement</th><th>Statement</th><th>By</th><th>Valid to</th></tr></thead><tbody>
+        {% for att in attestations %}<tr class="{% if not att.is_valid %}text-muted{% endif %}"><td>{{ att.requirement }}</td><td>{{ att.statement }}</td>
+          <td>{{ att.attested_by.get_full_name|default:"—" }}, {{ att.attested_at|date:"j M Y" }}</td><td>{{ att.valid_until|date:"j M Y"|default:"—" }}{% if not att.is_valid %} (expired){% endif %}</td></tr>{% endfor %}
+      </tbody></table>
+    {% endif %}
+  </div>
+</div>
+<p class="small text-muted"><i class="bi bi-info-circle"></i> {{ disclaimer }}</p>
+{% endblock %}

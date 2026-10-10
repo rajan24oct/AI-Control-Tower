@@ -911,6 +911,46 @@ Message previews in the log are capped at 2,000 characters (`MAX_RECORDED_CHARS`
 
 Displayed prompt text is capped at 1,200 characters (`PROMPT_DISPLAY["MAX_CHARS"]`, set in code).
 
+#### IRGF Agent
+
+The **IRGF Agent** — the chat icon at the bottom right of every page — answers questions about the
+IRGF framework and the platform. It opens with guided questions by topic (the framework, gates and
+decisions, risk and tiers, agents, the Control Tower) and takes questions of its own. It reads the
+*IRGF framework reference* (`docs/irgf-framework-reference.md`, a summary of
+<https://irgframework.org/> with links to each source chapter), *AI Control Tower and the IRGF*, this
+guide and the README, split at their headings and ranked by relevance, and re-indexes them whenever a
+file changes. Every IRGF code (S0–S10, G1–G5, D1–D5, M1–M20, chain links 01–08) is defined from the
+framework reference's tables, followed by where the Control Tower implements it, or that it does not
+yet. Who must sign a G3, G4 or M17 decision comes from the
+decision rights in code (`apps/lifecycle/irgf.py`), and "where do my gates stand" from the active
+organization's records. Every answer links to the sections it came from, served at
+`/assistant/docs/<section>/`.
+
+**ChatGPT and skills.** With an OpenAI key, the agent answers with ChatGPT (Chat Completions API, called
+with the standard library; no SDK). Its instructions are two **skills**, Markdown files in
+`apps/assistant/skills/`: *IRGF framework* and *AI Control Tower*. Each declares the tools the model may
+call: `search_irgf_framework`, `define_irgf_code`, `search_control_tower_docs`, `get_decision_rights`,
+`get_governance_status` and `get_finops_summary`. The model looks things up with them (at most five
+rounds per question) and answers from what they return; the sources shown are the sections the tools
+actually returned. The browser sends the last eight turns as plain text, so follow-up questions keep
+their context. A skill is a file, and a tool is one entry in `apps/assistant/skills.py`.
+
+What leaves the platform: the question, the conversation so far, the documentation passages the tools
+return, and, for questions about the user's own estate, the organization's name with aggregate counts
+and spend figures. Nothing else is sent.
+
+If ChatGPT is not configured, refuses (a bad key, quota) or cannot be reached, the agent answers from
+the documentation as above and says why.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ASSISTANT_PROVIDER` | `openai` | `openai`: ChatGPT with the skills. `documentation`: no model. |
+| `OPENAI_API_KEY` | *(empty)* | The API key; the variable's name can be changed with `ASSISTANT_OPENAI_KEY_ENV`. |
+| `ASSISTANT_OPENAI_MODEL` | `gpt-4o-mini` | The model. |
+| `ASSISTANT_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. |
+| `ASSISTANT_OPENAI_TIMEOUT` | `45` | Seconds before a call is abandoned. |
+| `ASSISTANT_AGENT` | *(empty)* | Instead of ChatGPT directly: the `agent_id` of an agent whose model phrases answers from the retrieved passages, through the AI Gateway, so policy, budgets, routing, audit and cost apply as for any agent. Any refusal or failure falls back to the documentation answer. |
+
 ### 4.9 Settings that live in code
 
 These have no environment variable. Change them in `aig_tower/settings.py` or `aig_tower/celery.py`.
@@ -2363,6 +2403,30 @@ records each divergence as drift (M13).
 ![Control Plane](screenshots/40-control-plane.png)
 
 ---
+
+### 6.11 Compliance and evidence
+
+*AI Governance → Compliance & Evidence* answers three regimes from what the platform already records:
+the **EU AI Act** (Regulation (EU) 2024/1689), **ISO/IEC 42001:2023** and the **NIST AI RMF 1.0**.
+The mapping is indicative and for gathering evidence; it is not legal advice.
+
+**Scope, per system.** For the EU AI Act a person records the system's category (prohibited, high-risk,
+limited, minimal or not in scope) with a rationale; until then its obligations are worked through as if
+it may be high-risk, so nothing is overlooked. ISO/IEC 42001 and the NIST AI RMF apply by default and can
+be set aside per system. Scope decisions need `risk.manage` or `gate.decide`, and are audited.
+
+**Evidence, read live.** Each requirement names the platform checks that speak to it: S2 classification,
+the G3 authorization, the risk register, evaluations, human oversight, kill-switch conditions, the Agent
+Card, logs, Control Plane monitoring, G4 change control, incidents, data classification and grounding
+sources, active policies, and approved providers and models. Each check reports met, partly met or
+missing, with links to the records behind it. Requirements only a person can vouch for (AI literacy, a
+fundamental rights impact assessment) take an **attestation** from the system's owner or a risk or
+governance role, with an evidence reference and an expiry.
+
+**Evidence packs.** Each system's page exports a printable **evidence pack** (print it to PDF) with the
+AI System Card, the status and evidence for every requirement, the attestations and the system's audit
+trail, or a **ZIP** with the pack, `evidence.json` and `audit-trail.csv`. Packs include the audit trail,
+so exporting needs `audit.view`, `risk.manage` or `gate.decide`; every export is itself audited.
 
 ## 7. Security
 

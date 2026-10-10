@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Compliance & Evidence{% endblock %}
+
+{% block content %}
+{% if not active_organization %}
+  <div class="ct-card"><div class="ct-card-body ct-empty"><i class="bi bi-building"></i><p class="mb-0">No organization selected.</p></div></div>
+{% else %}
+<div class="row g-3 mb-3">
+  {% for key, total in totals.items %}
+    <div class="col-12 col-md-4">
+      <div class="ct-metric h-100">
+        <span class="ct-metric-label">{{ total.regime.short }}</span>
+        <div class="ct-metric-value">{% if total.coverage is not None %}{{ total.coverage }}%{% else %}&mdash;{% endif %}</div>
+        <div class="ct-metric-hint">{% if total.systems %}average coverage across {{ total.systems }} system{{ total.systems|pluralize }} in scope{% else %}no systems in scope yet{% endif %}</div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-xl-7">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-exclamation-diamond me-1"></i> Most common gaps</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th>Requirement</th><th>Regime</th><th>Status</th><th class="text-end">Systems</th></tr></thead>
+          <tbody>
+            {% for gap in gaps %}
+              <tr><td class="small"><span class="text-muted">{{ gap.reference }}</span> {{ gap.title }}</td><td class="small">{{ gap.regime }}</td>
+                <td><span class="badge badge-soft text-bg-{% if gap.status == 'missing' %}danger{% else %}warning{% endif %}">{% if gap.status == 'missing' %}Missing{% else %}Partly met{% endif %}</span></td>
+                <td class="small text-end">{{ gap.systems }}</td></tr>
+            {% empty %}
+              <tr><td colspan="4" class="text-center text-muted small py-4">No gaps across the systems in scope.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-diagram-2 me-1"></i> EU AI Act categories</span></div>
+      <div class="ct-card-body small">
+        <ul class="list-unstyled mb-3">
+          {% for label, count in eu_categories.items %}<li class="d-flex justify-content-between py-1 border-bottom"><span>{{ label }}</span><strong>{{ count }}</strong></li>{% endfor %}
+        </ul>
+        <p class="text-muted mb-0">Until a person records a system's category, its EU AI Act obligations are worked through
+          as if it may be high-risk, so nothing is overlooked. Set the category on each system's page.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card">
+  <div class="ct-card-header"><span><i class="bi bi-shield-check me-1"></i> Systems</span><span class="badge text-bg-secondary">{{ rows|length }}</span></div>
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr><th>System</th><th>Tier</th><th>EU AI Act</th>{% for regime in regimes %}<th style="min-width:130px">{{ regime.short }}</th>{% endfor %}<th></th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="small"><a class="fw-semibold text-decoration-none" href="{% url 'compliance:system' row.subject.kind row.subject.obj.pk %}">{{ row.subject.name }}</a>
+              <div class="text-muted">{{ row.subject.kind|title }}</div></td>
+            <td>{% if row.subject.tier %}<span class="badge badge-soft text-bg-{{ row.subject.tier|tier_style }}">Tier {{ row.subject.tier }}</span>{% else %}<span class="small text-muted">—</span>{% endif %}</td>
+            <td class="small">{% for a in row.assessments %}{% if a.regime.key == "eu_ai_act" %}{{ a.scope.get_eu_category_display }}{% endif %}{% endfor %}</td>
+            {% for a in row.assessments %}
+              <td>{% if a.applies %}
+                <div class="ct-share {% if a.coverage < 50 %}is-over{% endif %}"><span style="width:{{ a.coverage }}%"></span></div>
+                <span class="small text-muted">{{ a.coverage }}% · {{ a.counts.missing|default:0 }} missing</span>
+              {% else %}<span class="small text-muted">Not in scope</span>{% endif %}</td>
+            {% endfor %}
+            <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'compliance:system' row.subject.kind row.subject.obj.pk %}">Open</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-shield-check"></i><p class="mb-0">No systems registered.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="ct-card-body small text-muted border-top"><i class="bi bi-info-circle"></i> {{ disclaimer }}</div>
+</div>
+{% endif %}
+{% endblock %}

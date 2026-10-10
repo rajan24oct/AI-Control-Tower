@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence pack · {{ subject.name }}</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#5f6662; --rule:#d9dcd9; --brand:#ffcc00; --met:#1c7a52; --partial:#8a5610; --missing:#a32b26; }
+  * { box-sizing: border-box; }
+  body { font: 13px/1.5 "Inter", -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); margin: 0; background: #fff; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 28px 48px; }
+  html, body { overflow-x: hidden; }
+  table { table-layout: fixed; }
+  header.cover { border-top: 6px solid var(--brand); padding-top: 18px; margin-bottom: 22px; }
+  h1 { font: 600 24px/1.2 Georgia, "Source Serif 4", serif; margin: 6px 0 4px; }
+  h2 { font: 600 17px/1.3 Georgia, "Source Serif 4", serif; margin: 28px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); }
+  h3 { font-size: 13px; margin: 18px 0 6px; }
+  .kicker { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .meta { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+  th, td { text-align: left; vertical-align: top; padding: 5px 6px; border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  dl { display: grid; grid-template-columns: 210px 1fr; gap: 3px 14px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  @media (max-width: 640px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } main { padding: 20px 16px; } }
+  .s { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid currentColor; }
+  .s-met { color: var(--met); } .s-partial { color: var(--partial); } .s-missing { color: var(--missing); } .s-not_applicable { color: var(--muted); }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 12px 0; }
+  .summary div { border: 1px solid var(--rule); padding: 10px; }
+  .summary strong { display: block; font-size: 20px; }
+  .finding { margin: 0 0 4px; }
+  .items { margin: 0 0 6px 16px; padding: 0; color: var(--muted); }
+  .note { color: var(--muted); font-size: 12px; border-left: 3px solid var(--brand); padding: 6px 10px; background: #fffbea; }
+  .actions { margin: 12px 0 0; }
+  .actions button { font: inherit; padding: 5px 12px; border: 1px solid var(--ink); background: var(--brand); cursor: pointer; }
+  footer { margin-top: 30px; color: var(--muted); font-size: 11px; border-top: 1px solid var(--rule); padding-top: 8px; }
+  @media print {
+    .actions { display: none; }
+    main { padding: 0; max-width: none; }
+    h2 { break-after: avoid; }
+    tr, .summary div { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="cover">
+    <div class="kicker">AI Control Tower · Evidence pack</div>
+    <h1>{{ subject.name }}</h1>
+    <div class="meta">{{ subject.kind|title }}{% if subject.tier %} · IRGF Tier {{ subject.tier }}{% endif %} ·
+      {{ subject.organization.name }} · generated {{ generated_at|date:"j F Y, H:i" }} by {{ generated_by }}</div>
+    <div class="actions"><button type="button" onclick="window.print()">Print or save as PDF</button></div>
+  </header>
+
+  <div class="summary">
+    {% for a in assessments %}
+      <div><span class="kicker">{{ a.regime.short }}</span>
+        {% if a.applies %}<strong>{{ a.coverage }}%</strong>{{ a.counts.met|default:0 }} met · {{ a.counts.partial|default:0 }} partly met · {{ a.counts.missing|default:0 }} missing
+        {% else %}<strong>—</strong>Not in scope{% endif %}</div>
+    {% endfor %}
+  </div>
+  <p class="note">{{ disclaimer }}</p>
+
+  <h2>1. AI System Card</h2>
+  <dl>
+    <dt>Purpose</dt><dd>{{ subject.obj.business_purpose|default:"Not documented" }}</dd>
+    <dt>Accountable</dt><dd>{% for p in subject.owners %}{{ p.get_full_name|default:p.email }}{% if not forloop.last %}, {% endif %}{% empty %}No named owner{% endfor %}</dd>
+    <dt>Data classification</dt><dd>{{ subject.obj.get_data_classification_display|default:"Not set" }}</dd>
+    <dt>Risk classification (S2)</dt>
+    <dd>{% if classification %}Tier {{ classification.tier }}, {{ classification.get_status_display|lower }}{% if classification.countersigned_at %}, countersigned {{ classification.countersigned_at|date:"j M Y" }}{% endif %}{% else %}Not classified{% endif %}</dd>
+    <dt>Deployment authorization (G3)</dt>
+    <dd>{% if authorization %}{{ authorization.get_status_display }} · {{ authorization.get_environment_display }} · Tier {{ authorization.tier }}{% if authorization.decided_at %}, decided {{ authorization.decided_at|date:"j M Y" }}{% endif %}{% else %}Never authorized{% endif %}</dd>
+    {% if authorization.oversight_point %}<dt>Human oversight</dt><dd>{{ authorization.oversight_point }}</dd>{% endif %}
+    {% if authorization.monitoring_commitments %}<dt>Monitoring commitments</dt><dd>{{ authorization.monitoring_commitments }}</dd>{% endif %}
+    <dt>Agents</dt>
+    <dd>{% for agent in subject.agents %}{{ agent.name }}{% if agent.primary_model %} ({{ agent.primary_model.model_name }}{% if agent.provider %}, {{ agent.provider.name }}{% endif %}){% endif %}{% if not forloop.last %}; {% endif %}{% empty %}None{% endfor %}</dd>
+  </dl>
+
+  {% for a in assessments %}
+    <h2>{{ forloop.counter|add:1 }}. {{ a.regime.name }}</h2>
+    <p class="meta">Scope: {% if a.regime.key == "eu_ai_act" %}{{ a.scope.get_eu_category_display }}{% else %}{{ a.scope.get_applicability_display }}{% endif %}{% if a.scope.pk %} · recorded by {{ a.scope.assessed_by.get_full_name|default:"—" }} on {{ a.scope.assessed_at|date:"j M Y" }}{% if a.scope.rationale %}: “{{ a.scope.rationale }}”{% endif %}{% else %} · not yet recorded{% endif %}</p>
+    {% if a.applies %}
+      <table>
+        <thead><tr><th style="width:30%">Requirement</th><th style="width:12%">Status</th><th>Evidence</th></tr></thead>
+        <tbody>
+          {% for r in a.results %}
+            <tr>
+              <td><strong>{{ r.requirement.reference }}</strong> {{ r.requirement.title }}</td>
+              <td><span class="s s-{{ r.status }}">{{ r.label }}</span></td>
+              <td>
+                {% if r.attestation %}<p class="finding">Attested: {{ r.attestation.statement }} ({{ r.attestation.attested_by.get_full_name|default:"—" }}, {{ r.attestation.attested_at|date:"j M Y" }}{% if r.attestation.evidence_reference %}; evidence: {{ r.attestation.evidence_reference }}{% endif %})</p>
+                {% elif r.checks %}{% for c in r.checks %}<p class="finding"><strong>{{ c.title }}</strong> — {{ c.finding }}</p>
+                  {% if c.items %}<ul class="items">{% for i in c.items|slice:":5" %}<li>{{ i.label }}{% if i.when %} · {{ i.when|date:"j M Y" }}{% endif %}</li>{% endfor %}</ul>{% endif %}{% endfor %}
+                {% else %}<span class="meta">{{ r.note }}</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endfor %}
+
+  <h2>Attestations</h2>
+  {% if attestations %}
+    <table><thead><tr><th>Requirement</th><th>Statement</th><th>By</th><th>Valid to</th></tr></thead><tbody>
+      {% for att in attestations %}<tr><td>{{ att.requirement }}</td><td>{{ att.statement }}{% if att.evidence_reference %}<br><span class="meta">{{ att.evidence_reference }}</span>{% endif %}</td>
+        <td>{{ att.attested_by.get_full_name|default:"—" }}, {{ att.attested_at|date:"j M Y" }}</td><td>{{ att.valid_until|date:"j M Y"|default:"—" }}</td></tr>{% endfor %}
+    </tbody></table>
+  {% else %}<p class="meta">None recorded.</p>{% endif %}
+
+  <h2>Audit trail</h2>
+  <p class="meta">The latest {{ audit|length }} entries recorded against this system. The full, tamper-evident trail is in the platform's audit log.</p>
+  <table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Record</th></tr></thead><tbody>
+    {% for entry in audit %}<tr><td>{{ entry.created_at|date:"j M Y H:i" }}</td><td>{{ entry.actor_label|default:entry.actor|default:"System" }}</td><td>{{ entry.action }}</td><td>{{ entry.resource_label }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="meta">No entries.</td></tr>{% endfor %}
+  </tbody></table>
+
+  <footer>Generated by AI Control Tower from the platform's live records on {{ generated_at|date:"j F Y \a\t H:i" }}. Evidence links are in the accompanying evidence.json.</footer>
+</main>
+</body>
+</html>

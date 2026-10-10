@@ -81,6 +81,10 @@ LOCAL_APPS = [
     "apps.dashboard",
     "apps.api",
     "apps.integrations",
+    "apps.assistant",
+    "apps.intake",
+    "apps.compliance",
+    "apps.guardrails",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -341,3 +345,16 @@ CONTROL_TOWER = {
         ),
     },
 }
+
+# The in-app assistant answers from the documentation. Name an agent here (its
+# agent_id) to have that agent's model phrase answers through the AI Gateway,
+# under the same policy, budget and audit as any other agent.
+ASSISTANT_AGENT = os.environ.get("ASSISTANT_AGENT", "")
+# ChatGPT for the IRGF Agent: "openai" answers with OpenAI's Chat Completions API and the agent's
+# skills (apps/assistant/skills/); "documentation" answers from the docs alone. With no API key in
+# the named environment variable, the agent falls back to the documentation automatically.
+ASSISTANT_PROVIDER = os.environ.get("ASSISTANT_PROVIDER", "openai")
+ASSISTANT_OPENAI_MODEL = os.environ.get("ASSISTANT_OPENAI_MODEL", "gpt-4o-mini")
+ASSISTANT_OPENAI_BASE_URL = os.environ.get("ASSISTANT_OPENAI_BASE_URL", "https://api.openai.com/v1")
+ASSISTANT_OPENAI_KEY_ENV = os.environ.get("ASSISTANT_OPENAI_KEY_ENV", "OPENAI_API_KEY")
+ASSISTANT_OPENAI_TIMEOUT = float(os.environ.get("ASSISTANT_OPENAI_TIMEOUT", "45"))

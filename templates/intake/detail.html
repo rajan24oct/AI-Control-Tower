@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% load control_tower humanize %}
+
+{% block title %}{{ use_case.reference }} {{ use_case.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <a href="{% url 'intake:list' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Use-Case Intake</a>
+  <div class="d-flex flex-wrap gap-2">
+    {% if can_edit %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'intake:edit' use_case.pk %}"><i class="bi bi-pencil"></i> Edit</a>{% endif %}
+    {% if use_case.is_editable and can_propose %}
+      <form method="post" action="{% url 'intake:submit' use_case.pk %}">{% csrf_token %}
+        <button class="btn btn-sm btn-primary" {% if not ready %}disabled title="Complete the G1 checklist first"{% endif %}>
+          <i class="bi bi-send"></i> Submit for Gate G1</button></form>
+    {% endif %}
+    {% if use_case.is_approved and can_propose %}
+      <form method="post" action="{% url 'intake:register' use_case.pk %}">{% csrf_token %}
+        <button class="btn btn-sm btn-primary"><i class="bi bi-box-arrow-in-right"></i> Register as an application</button></form>
+    {% endif %}
+    {% if use_case.status != "registered" and use_case.status != "withdrawn" and use_case.status != "rejected" %}
+      {% if request.user.pk == use_case.created_by_id or request.user.pk == use_case.sponsor_id %}
+        <form method="post" action="{% url 'intake:withdraw' use_case.pk %}">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-secondary">Withdraw</button></form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-xl-8">
+    <div class="ct-card h-100">
+      <div class="ct-card-header"><span><i class="bi bi-lightbulb me-1"></i> The use case</span>
+        <span class="badge badge-soft text-bg-secondary">{{ use_case.get_stage_display }}</span></div>
+      <div class="ct-card-body small">
+        {% if use_case.summary %}<p class="mb-3">{{ use_case.summary }}</p>{% endif %}
+        <dl class="row mb-0">
+          <dt class="col-sm-4 text-muted fw-normal">Need</dt><dd class="col-sm-8">{{ use_case.need|linebreaksbr }}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Measured today → target</dt>
+          <dd class="col-sm-8">{{ use_case.current_measure|default:"—" }} → <strong>{{ use_case.target_measure|default:"—" }}</strong></dd>
+          <dt class="col-sm-4 text-muted fw-normal">Non-AI alternative</dt><dd class="col-sm-8">{{ use_case.non_ai_alternative|default:"—"|linebreaksbr }}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Decision supported</dt><dd class="col-sm-8">{{ use_case.decision_supported|default:"—" }}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Affected</dt><dd class="col-sm-8">{{ use_case.affected_parties|default:"—"|linebreaksbr }}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Launch autonomy</dt><dd class="col-sm-8">{{ use_case.get_intended_autonomy_display|default:"—" }}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Data path</dt>
+          <dd class="col-sm-8">{{ use_case.data_path|default:"—"|linebreaksbr }}{% if use_case.data_classification %} <span class="badge badge-soft text-bg-secondary">{{ use_case.get_data_classification_display }}</span>{% endif %}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Sector constraints</dt><dd class="col-sm-8">{{ use_case.sector_constraints|default:"None noted" }}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Sponsor</dt><dd class="col-sm-8">{{ use_case.sponsor.get_full_name|default:"—" }}{% if use_case.team %} · {{ use_case.team.name }}{% endif %}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Proposed by</dt><dd class="col-sm-8">{{ use_case.created_by.get_full_name|default:"—" }}, {{ use_case.created_at|date:"j M Y" }}</dd>
+          {% if use_case.expected_annual_value %}<dt class="col-sm-4 text-muted fw-normal">Expected value</dt><dd class="col-sm-8">${{ use_case.expected_annual_value|floatformat:0|intcomma }} a year</dd>{% endif %}
+          {% if use_case.application %}<dt class="col-sm-4 text-muted fw-normal">Registered as</dt>
+            <dd class="col-sm-8"><a href="{% url 'inventory:application_detail' use_case.application.pk %}">{{ use_case.application.name }}</a> · {{ use_case.registered_at|date:"j M Y" }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-bar-chart-steps me-1"></i> Provisional tier</span></div>
+      <div class="ct-card-body small">
+        {% if result %}
+          <p class="mb-2"><span class="badge badge-soft text-bg-{{ result.tier|tier_style }} fs-6">Tier {{ result.tier }}</span>
+            <span class="text-muted ms-1">impact {{ result.impact }} · control deficit {{ result.control_deficit }}</span></p>
+          {% if result.floor_applied %}<p class="text-danger mb-2"><i class="bi bi-shield-exclamation"></i> The safety-override floor raised this from Tier {{ result.matrix_tier }}.</p>{% endif %}
+          <p class="text-muted mb-2">{{ tier_summary }}</p>
+          <table class="table table-sm mb-0">
+            {% for s in scores %}<tr><td class="text-nowrap">{{ s.code }} <span class="text-muted">{{ s.name }}</span></td><td class="fw-semibold">{{ s.score|default:"—" }}</td></tr>{% endfor %}
+          </table>
+          <p class="text-muted mt-2 mb-0">Provisional until the system is classified and countersigned at S2.</p>
+        {% else %}
+          <p class="text-muted mb-0">Not scored yet. Add provisional D1–D5 scores to see the tier and who decides G1.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="ct-card">
+      <div class="ct-card-header"><span><i class="bi bi-list-check me-1"></i> Gate G1 checklist</span></div>
+      <div class="ct-card-body small">
+        <ul class="list-unstyled mb-0">
+          {% for c in criteria %}
+            <li class="mb-1"><i class="bi {% if c.met %}bi-check-circle-fill text-success{% else %}bi-circle text-muted{% endif %} me-1"></i>{{ c.label }}{% if c.detail %} <span class="text-muted">· {{ c.detail }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ct-card mb-3">
+  <div class="ct-card-header"><span><i class="bi bi-signpost-split me-1"></i> Gate G1 · Qualification and provisional risk</span></div>
+  <div class="ct-card-body small">
+    <p class="mb-2"><strong>Who decides:</strong> {{ who_decides }}.</p>
+    {% if use_case.outcome %}
+      <p class="mb-2"><span class="badge badge-soft text-bg-{% if use_case.outcome == 'reject' %}danger{% elif use_case.outcome == 'remediate' or use_case.outcome == 'escalate' %}warning{% else %}success{% endif %}">{{ use_case.get_outcome_display }}</span>
+        {% if use_case.decided_by %}by {{ use_case.decided_by.get_full_name|default:use_case.decided_by.email }}{% else %}{{ use_case.decided_by_rule }}{% endif %},
+        {{ use_case.decided_at|date:"j M Y H:i" }}</p>
+      {% if use_case.decision_note %}<p class="mb-2">“{{ use_case.decision_note }}”</p>{% endif %}
+    {% endif %}
+
+    {% if indexed_conditions %}
+      <h3 class="h6 mt-3">Conditions</h3>
+      <table class="table table-sm align-middle">
+        <thead><tr><th>Condition</th><th>Owner</th><th>Due</th><th></th></tr></thead>
+        <tbody>
+          {% for index, c in indexed_conditions %}
+            <tr>
+              <td>{{ c.text }}</td><td>{{ c.owner|default:"—" }}</td>
+              <td class="{% if c in overdue %}text-danger{% endif %}">{{ c.due }}</td>
+              <td class="text-end">{% if c.done %}<span class="badge badge-soft text-bg-success">Met</span>{% else %}
+                <form method="post" action="{% url 'intake:condition_met' use_case.pk index %}">{% csrf_token %}
+                  <button class="btn btn-sm btn-outline-secondary">Mark met</button></form>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if is_open %}
+      {% if can_decide %}
+        <form method="post" action="{% url 'intake:decide' use_case.pk %}" class="mt-3 ct-g1-form">
+          {% csrf_token %}
+          <div class="d-flex flex-wrap gap-3 mb-2">
+            {% for value, label in outcomes %}
+              <label class="form-check"><input class="form-check-input" type="radio" name="outcome" value="{{ value }}" {% if forloop.first %}checked{% endif %} required>
+                <span class="form-check-label">{{ label }}</span></label>
+            {% endfor %}
+          </div>
+          <textarea name="note" class="form-control form-control-sm mb-2" rows="2"
+                    placeholder="Required to remediate (what would satisfy the gate), escalate (where, and what must be answered) or reject (the reason)"></textarea>
+          <details class="mb-2"><summary class="small">Conditions (for approve with conditions)</summary>
+            {% for i in "123" %}
+              <div class="row g-2 mt-1">
+                <div class="col-12 col-md-6"><input name="condition_text" class="form-control form-control-sm" placeholder="Condition {{ i }}"></div>
+                <div class="col-6 col-md-3"><select name="condition_owner" class="form-select form-select-sm" aria-label="Owner">
+                  <option value="">Owner</option>{% for pk, label in people %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
+                <div class="col-6 col-md-3"><input type="date" name="condition_due" class="form-control form-control-sm" aria-label="Due"></div>
+              </div>
+            {% endfor %}
+          </details>
+          <button class="btn btn-sm btn-primary"><i class="bi bi-check2-square"></i> Record the G1 decision</button>
+        </form>
+      {% else %}
+        <p class="text-muted mb-0"><i class="bi bi-hourglass-split"></i> Awaiting the decision. {{ decide_reason }}</p>
+      {% endif %}
+    {% elif use_case.is_editable %}
+      <p class="text-muted mb-0">Complete the checklist, then submit for Gate G1.</p>
+    {% elif use_case.is_approved %}
+      <p class="text-muted mb-0">Next: register it as an application, then classify it at S2 and authorize it at Gate G3.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

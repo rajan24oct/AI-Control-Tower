@@ -500,6 +500,9 @@ class A2AGateway:
         refusal = cls._content_denial(card, outcome.contract, outcome.content)
         if refusal is not None:
             return refusal
+        refusal = cls._guardrails(organization, request, outcome)
+        if refusal is not None:
+            return refusal
 
         cls._chain(organization, request, outcome)
         decision = cls._policy(organization, request, card, outcome)
@@ -526,6 +529,35 @@ class A2AGateway:
                 f"'{card.name}' was taken out of rotation after repeated failures; "
                 "a probe is let through after the cool-off.",
             )
+        return None
+
+    @staticmethod
+    def _guardrails(organization, request, outcome) -> Refusal | None:
+        """Runtime guardrails (IRGF M14) on the message: block it, or redact its text parts."""
+        from apps.guardrails.models import Source, Stage
+        from apps.guardrails.services import GuardrailService
+
+        facts = {"stage": Stage.INPUT, "source": Source.A2A, "agent": request.sender,
+                 "environment": request.environment, "reference": request.parent_task_id or request.execution_id}
+        verdict = GuardrailService.check(organization, outcome.content.text, record=False, **facts)
+        if not verdict.action:
+            return None
+        if verdict.blocked:
+            GuardrailService.check(organization, outcome.content.text, **facts)
+            return Refusal(DeliveryStatus.BLOCKED, verdict.reason, sorted({m.policy.name for m in verdict.matches}))
+        # Redact or warn: each text part is checked and recorded on its own, so
+        # the redaction lands in the part that carried it.
+        parts = []
+        for part in request.message.get("parts") or []:
+            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                checked = GuardrailService.check(organization, part["text"], **facts)
+                if checked.redacted:
+                    part = {**part, "text": checked.text}
+            parts.append(part)
+        request.message = {**request.message, "parts": parts}
+        outcome.content = inspect(
+            request.message, declared=request.data_classification, fallback=request.sender.data_classification
+        )
         return None
 
     @staticmethod

@@ -22,6 +22,7 @@ For installation, configuration and the full API, see the [Technical Guide](tech
 12. [Phase 4: applications and composite authority](#12-phase-4-applications-and-composite-authority)
 13. [Phase 5: agent-to-agent communication](#13-phase-5-agent-to-agent-communication)
 14. [Mapping and roadmap](#14-mapping-and-roadmap)
+15. [Use-case intake: S0, S1 and Gate G1](#15-use-case-intake-s0-s1-and-gate-g1)
 
 ---
 
@@ -805,4 +806,43 @@ the rules above. On upgrade, a migration keeps the traffic that already worked w
 | Caller-authority delegations widening an invoked agent's boundary at runtime | Next |
 | M17 exceptions for applications | Next |
 | Streaming and push notifications for A2A tasks; classifying what agents answer | Next |
-| Design-time records (Use-Case Canvas, ADRs, pattern library, benefit and capability records) | Kept in architecture tooling; applications link to them |
+| S0 · S1 use-case intake, provisional D1–D5, Gate G1 with IRGF's five outcomes and conditions | **Intake** ([section 15](#15-use-case-intake-s0-s1-and-gate-g1)) |
+| Design-time records (ADRs, pattern library, benefit and capability records) | Kept in architecture tooling; applications link to them |
+
+## 15. Use-case intake: S0, S1 and Gate G1
+
+IRGF starts before a system exists. *AI Governance → Use-Case Intake · G1* records an AI idea as a
+**use case** and decides at **Gate G1** whether it goes ahead, before anyone commits to a build or a
+vendor.
+
+**What a use case records (S0 · S1).** The need, how it is measured today and the target; the non-AI
+alternative and why it is not enough; the one decision the output will support; who is affected; the
+intended launch autonomy in D2 terms; the data path and its sensitivity; sector constraints; and a
+confirmation that no architecture or vendor commitment has been made. It also carries **provisional
+D1–D5 scores**, scored with the same anchors and tier matrix as S2, so its provisional tier is known at
+intake.
+
+**The G1 checklist.** A use case can be submitted only when every entry criterion is met: the need with
+its measures, the non-AI alternative, the decision, the people affected, the launch autonomy, all six
+provisional scores, a data path with its sensitivity, and no premature commitment.
+
+**Who decides G1.**
+
+| Provisional tier | Decided by |
+|---|---|
+| Tier 1, internal data at most, no sector constraints | Approved by rule on submission (self-service) |
+| Tier 1–2 otherwise | The Risk and Compliance Lead (`risk.manage`) or the AI Governance Body (`gate.decide`) |
+| Tier 3–4 | The AI Governance Body, and not the use case's sponsor |
+
+Nobody decides a use case they proposed, at any tier.
+
+**Outcomes.** IRGF's five: **approve**; **approve with conditions**, each condition with an owner and a
+due date, tracked to closure on the use case; **remediate**, saying what would satisfy the gate, after
+which the use case can be edited and resubmitted; **escalate**, saying where and what must be answered;
+and **reject**, with the reason recorded. Every submission and decision is in the audit trail, and the
+people concerned are notified.
+
+**Registering.** An approved use case becomes a **draft application** in the registry with one click:
+its sponsor as business owner, its team and department, its data classification, and the provisional
+scores in its business purpose, ready for S2 classification and Gate G3.
+
