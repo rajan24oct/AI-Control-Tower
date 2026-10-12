@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}Solution Advisor{% endblock %}
+
+{% block content %}
+{% include "studio/_llm_notice.html" %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Blueprints ready</span>
+    <div class="ct-metric-value">{{ count_ready }}</div><div class="ct-metric-hint">{{ count_blueprints }} version{{ count_blueprints|pluralize }} in all</div></div></div>
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Proposed at Gate G1</span>
+    <div class="ct-metric-value">{{ count_linked }}</div><div class="ct-metric-hint">Linked to Use-Case Intake</div></div></div>
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Sandbox sessions</span>
+    <div class="ct-metric-value">{{ sessions }}</div><div class="ct-metric-hint"><a href="{% url 'studio:sandbox' %}" class="text-decoration-none">Open the AI Sandbox</a></div></div></div>
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Most common patterns</span>
+    <div class="small mt-2">{% for p in patterns %}<div class="text-truncate">{{ p.label }} <span class="text-muted">· {{ p.n }}</span></div>{% empty %}<span class="text-muted">None yet</span>{% endfor %}</div></div></div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span><i class="bi bi-stars me-1"></i> AI use cases</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+      <a class="btn btn-sm btn-primary" href="{% url 'studio:create' %}"><i class="bi bi-plus-lg"></i> Describe a use case</a>
+    </span>
+  </div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2 align-items-end" data-ajax-filter="#results">
+      <div class="col-12 col-md-6"><input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm" placeholder="Search title, reference or problem"></div>
+      <div class="col-6 col-md-3">
+        <select name="status" class="form-select form-select-sm" aria-label="Status">
+          <option value="">All statuses</option>
+          {% for value, label in statuses %}<option value="{{ value }}" {% if active_filters.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <noscript><div class="col-auto"><button class="btn btn-sm btn-primary">Apply</button></div></noscript>
+    </form>
+  </div>
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr>{% sort_th "Use case" "title" %}<th>Recommended approach</th><th>Tier</th><th class="text-end">Est. / month</th>{% sort_th "Status" "status" %}<th>Intake</th>{% sort_th "Created" "created" first="desc" %}</tr></thead>
+      <tbody>
+        {% for r in requests %}{% with b=r.blueprint %}
+          <tr>
+            <td class="small"><a class="fw-semibold text-decoration-none" href="{% url 'studio:detail' r.pk %}">{{ r.title }}</a>
+              <div class="text-muted">{{ r.reference }} · {{ r.created_by.get_full_name|default:"—" }}</div></td>
+            <td class="small" style="max-width:340px">{% if b %}{{ b.content.approach.pattern|truncatechars:90 }}<div class="text-muted">{{ b.generator_label }} · v{{ b.version }}</div>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>{% if b %}<span class="badge badge-soft text-bg-{{ b.content.governance.tier|tier_style }}">Tier {{ b.content.governance.tier }}</span>{% else %}—{% endif %}</td>
+            <td class="small text-end text-nowrap">{% if b and b.content.cost.monthly_usd %}${{ b.content.cost.monthly_usd|floatformat:0 }}{% else %}—{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{% if r.status == 'ready' %}success{% elif r.status == 'failed' %}danger{% else %}secondary{% endif %}">{{ r.get_status_display }}</span></td>
+            <td class="small">{% if r.use_case %}<a class="text-decoration-none" href="{% url 'intake:detail' r.use_case.pk %}">{{ r.use_case.reference }}</a> <span class="text-muted">· {{ r.use_case.get_status_display }}</span>{% else %}<span class="text-muted">Not proposed</span>{% endif %}</td>
+            <td class="small text-nowrap">{{ r.created_at|date:"j M Y" }}</td>
+          </tr>
+        {% endwith %}{% empty %}
+          <tr><td colspan="7"><div class="ct-empty"><i class="bi bi-stars"></i>
+            <p class="mb-0">No use cases described yet.</p>
+            <p class="small mb-0">Describe one and the advisor recommends how to build it.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

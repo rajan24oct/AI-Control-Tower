@@ -1900,3 +1900,29 @@ mark.ct-pii {
 .ct-doc-section { max-width: 920px; font-size: .88rem; line-height: 1.6; }
 .ct-doc-section table { font-size: .8rem; }
 .ct-doc-section pre { background: var(--ct-page); padding: .6rem .75rem; border-radius: 4px; font-size: .78rem; }
+
+/* -- AI Solution Studio ------------------------------------------------------------------- */
+.ct-kicker { font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ct-brand-900); font-weight: 600; }
+.ct-blueprint-hero { border-left: 4px solid var(--ct-brand); }
+.ct-flow { counter-reset: flow; list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+.ct-flow li { counter-increment: flow; position: relative; padding: .45rem .75rem .45rem 2.6rem; font-size: .84rem;
+  background: var(--ct-page); border-radius: 4px; }
+.ct-flow li::before { content: counter(flow); position: absolute; left: .6rem; top: .45rem; width: 1.4rem; height: 1.4rem;
+  border-radius: 50%; background: var(--ct-brand); color: var(--ct-on-brand); font-size: .72rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.ct-phase { padding: .6rem 0; border-bottom: 1px solid var(--bs-border-color); }
+.ct-phase:last-child { border-bottom: 0; padding-bottom: 0; }
+.ct-phase:first-child { padding-top: 0; }
+.ct-phase-bar { height: 6px; background: var(--ct-page); border-radius: 3px; margin: .35rem 0; overflow: hidden; }
+.ct-phase-bar span { display: block; height: 100%; background: var(--ct-brand); border-radius: 3px; }
+.ct-code { background: #1e1e1e; color: #e6e6e6; font-size: .76rem; padding: .9rem 1rem; border-radius: 0 0 6px 6px;
+  overflow-x: auto; white-space: pre; }
+.ct-run { padding: .85rem 1rem; min-width: 0; }
+.ct-run-output { font-size: .84rem; line-height: 1.55; white-space: normal; overflow-wrap: anywhere;
+  background: var(--ct-page); border-radius: 4px; padding: .6rem .75rem; max-height: 420px; overflow-y: auto; }
+@media (max-width: 991.98px) { .ct-run.border-end { border-right: 0 !important; border-bottom: 1px solid var(--bs-border-color); } }
+.ct-sample { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media print {
+  .ct-noprint, .ct-navbar, .ct-assistant-fab, .ct-assistant-panel { display: none !important; }
+  .ct-card { break-inside: avoid; }
+}

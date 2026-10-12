@@ -9,7 +9,7 @@ tools: search_control_tower_docs, get_decision_rights, get_governance_status, ge
 
 Use this skill for questions about the platform the user is working in: how it applies IRGF (Phases
 1 to 5: classification and tiers, Gates G3 and G4 with M17 exceptions, the Control Plane and drift,
-applications and composite authority, agent-to-agent communication), use-case intake at Gate G1, compliance evidence (EU AI Act, ISO/IEC 42001, NIST AI RMF) and evidence packs, the AI, MCP and A2A gateways,
+applications and composite authority, agent-to-agent communication), use-case intake at Gate G1, compliance evidence (EU AI Act, ISO/IEC 42001, NIST AI RMF) and evidence packs, the Solution Advisor (blueprints for AI use cases) and the AI Sandbox, runtime guardrails, the AI, MCP and A2A gateways,
 registries, policies, approvals, evaluations, audit, and AI FinOps (costs, budgets, GitHub Copilot,
 alert rules, optimization).
 

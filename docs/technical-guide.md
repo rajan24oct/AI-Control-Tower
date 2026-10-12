@@ -2428,6 +2428,50 @@ AI System Card, the status and evidence for every requirement, the attestations 
 trail, or a **ZIP** with the pack, `evidence.json` and `audit-trail.csv`. Packs include the audit trail,
 so exporting needs `audit.view`, `risk.manage` or `gate.decide`; every export is itself audited.
 
+### 6.12 Runtime guardrails
+
+Guardrail policies check the content that passes through the gateways (IRGF M14 at the point of use). Each policy
+names one detector: **prompt injection** (weighted patterns combined into a score, blocking above a threshold),
+**personal data** (the platform's own scanner: emails, cards, IBANs, NI and SSNs, postcodes, phones, IPs),
+**secrets** (cloud and API keys, tokens, private keys, JWTs, passwords) or **restricted topics** (configured terms).
+It says where it runs (the prompt, the completion or both), what happens on a hit (block, redact or warn), and which
+IRGF tiers, environments and gateways it covers; an agent that is not yet classified is held to every tier's
+guardrails. When several policies hit, the strictest action wins; redaction replaces exactly the matched spans with
+`[REDACTED:KIND]`.
+
+In the **AI Gateway**, prompts are checked before routing and completions before they are returned; a block is a
+`403` with the code `guardrail_blocked`. A blocked completion is still recorded and costed, because the call
+happened. Streaming calls apply the input guardrails only. In the **A2A Gateway**, messages are checked after the
+contract's content rules: a block refuses the message, a redaction rewrites its text parts. Every hit is a
+guardrail event, with what matched masked so the record of a leaked secret does not leak it again. Guardrail
+policies are managed in the admin for now.
+
+### 6.13 Solution Studio and AI Sandbox
+
+*AI Studio → Solution Advisor* takes an AI use case in plain terms (the problem, users, data, integrations,
+constraints, data classification, volume, hosting preference and whether a person reviews outputs) and returns a
+**blueprint**: the approach and the alternatives considered, the request flow, a technology stack layer by layer,
+a build plan mapped to IRGF stages and gates, the team, the risks, an evaluation plan, a monthly cost estimate,
+the controls its provisional IRGF tier calls for, starter code that calls the AI Gateway, and a starter system
+prompt with sample inputs.
+
+With `OPENAI_API_KEY` set, ChatGPT writes the blueprint (`STUDIO_OPENAI_MODEL`, else `ASSISTANT_OPENAI_MODEL`),
+given the organization's chat models with any policy that would refuse them, and the provisional tier. The
+platform's own facts (the D1–D5 scores, the starter code, the sandbox models) are kept from the built-in advisor
+rather than taken from the model. Without a key, or if the call fails, the **built-in advisor** recognises the
+pattern (retrieval-augmented assistant, document extraction, triage, summarisation, agentic workflow, content
+generation, coding assistant, predictive ML) and assembles the blueprint from it. Either way the result is checked
+against one schema. Regenerating with a note keeps every version. A blueprint is advice: **Propose at Gate G1**
+creates a draft use case in Use-Case Intake carrying the provisional scores, and an intake use case can ask for a
+blueprint from its own page.
+
+*AI Studio → AI Sandbox* tries prompts against up to three models side by side. Every input goes through the AI
+Gateway in the **sandbox** environment as the person running it (they need `gateway.invoke`), optionally as a
+registered agent, so policies, guardrails and budgets apply, and each call appears in Executions and AI FinOps. A
+blueprint opens a ready session with its starter prompt and samples. Results can be rated. Models served by the
+mock adapter return placeholder text; point the provider at a live endpoint (for OpenAI, the `generic_rest`
+adapter with the `OPENAI_API_KEY` credential reference) for real answers.
+
 ## 7. Security
 
 ### 7.1 Controls

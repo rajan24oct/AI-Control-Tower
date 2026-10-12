@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load control_tower static %}
+
+{% block title %}{{ solution.title }} · Solution Advisor{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 ct-noprint">
+  <span class="small"><a href="{% url 'studio:list' %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Solution Advisor</a></span>
+  <span class="d-flex flex-wrap gap-2">
+    {% if versions|length > 1 %}
+      <form method="get" class="d-flex"><select name="v" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Blueprint version">
+        {% for b in versions %}<option value="{{ b.version }}" {% if b.pk == blueprint.pk %}selected{% endif %}>Version {{ b.version }} · {{ b.created_at|date:"j M H:i" }}</option>{% endfor %}
+      </select></form>
+    {% endif %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'studio:edit' solution.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#regenerate"><i class="bi bi-arrow-repeat"></i> Regenerate</button>
+    {% if blueprint %}<button class="btn btn-sm btn-outline-secondary" type="button" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>{% endif %}
+    {% if solution.use_case %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'intake:detail' solution.use_case.pk %}"><i class="bi bi-lightbulb"></i> {{ solution.use_case.reference }} · {{ solution.use_case.get_status_display }}</a>
+    {% else %}
+      <form method="post" action="{% url 'studio:propose' solution.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary"><i class="bi bi-lightbulb"></i> Propose at Gate G1</button></form>
+    {% endif %}
+    {% if blueprint and can_sandbox %}
+      <form method="post" action="{% url 'studio:open_sandbox' blueprint.pk %}">{% csrf_token %}<button class="btn btn-sm btn-primary"><i class="bi bi-play-circle"></i> Try it in the sandbox</button></form>
+    {% endif %}
+  </span>
+</div>
+
+<div class="collapse mb-3 ct-noprint {% if not blueprint %}show{% endif %}" id="regenerate">
+  <form method="post" action="{% url 'studio:generate' solution.pk %}" class="ct-card ct-card-body" data-studio-generate>
+    {% csrf_token %}
+    <label class="form-label small fw-semibold" for="guidance">Anything the advisor should take into account?</label>
+    <div class="d-flex flex-wrap gap-2">
+      <input id="guidance" name="guidance" class="form-control form-control-sm" style="flex:1;min-width:260px" maxlength="1000"
+             placeholder="e.g. Must run on AWS; keep phase one internal-only; budget under $2,000 a month">
+      <button class="btn btn-sm btn-primary"><span class="ct-idle"><i class="bi bi-stars"></i> Generate a new version</span><span class="ct-busy d-none"><span class="spinner-border spinner-border-sm"></span> The advisor is writing…</span></button>
+    </div>
+    <div class="form-text">{% if llm.configured %}ChatGPT · {{ llm.model }} writes the new version; it can take up to a minute.{% else %}The built-in advisor is in use; set <code>OPENAI_API_KEY</code> for ChatGPT.{% endif %}</div>
+  </form>
+</div>
+
+{% if solution.last_error %}
+  <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i>
+    {% if solution.status == "failed" %}The advisor failed: {{ solution.last_error }}{% else %}ChatGPT could not be used ({{ solution.last_error|truncatechars:160 }}), so the built-in advisor wrote this version.{% endif %}</div>
+{% endif %}
+
+{% if not blueprint %}
+  <div class="ct-card"><div class="ct-empty"><i class="bi bi-stars"></i><p class="mb-0">No blueprint yet.</p><p class="small mb-0">Generate one above.</p></div></div>
+{% else %}
+
+<div class="ct-card mb-3 ct-blueprint-hero">
+  <div class="ct-card-body">
+    <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+      <span class="ct-kicker">{{ pattern_label|default:"Blueprint" }} · version {{ blueprint.version }}</span>
+      <span class="small text-muted"><i class="bi bi-{% if blueprint.by_llm %}cpu{% else %}diagram-3{% endif %}"></i> {{ blueprint.generator_label }} · {{ blueprint.created_at|date:"j M Y, H:i" }}{% if blueprint.created_by %} · for {{ blueprint.created_by.get_full_name }}{% endif %}</span>
+    </div>
+    <p class="fs-6 mb-0">{{ c.summary }}</p>
+    {% if blueprint.guidance %}<p class="small text-muted mt-2 mb-0"><i class="bi bi-chat-left-quote"></i> Asked to take into account: “{{ blueprint.guidance }}”</p>{% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="ct-metric h-100"><span class="ct-metric-label">Approach</span>
+    <div class="ct-metric-value fs-6">{{ c.approach.pattern|default:"—" }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="ct-metric h-100"><span class="ct-metric-label">Provisional IRGF tier</span>
+    <div class="ct-metric-value"><span class="badge badge-soft text-bg-{{ c.governance.tier|tier_style }}">Tier {{ c.governance.tier }}</span></div>
+    <div class="ct-metric-hint">{% if c.governance.floor_applied %}Safety floor applied · {% endif %}confirmed at S2</div></div></div>
+  <div class="col-6 col-lg-3"><div class="ct-metric h-100"><span class="ct-metric-label">To a governed pilot</span>
+    <div class="ct-metric-value">{{ total_weeks }} weeks</div><div class="ct-metric-hint">{{ c.build_plan|length }} phases</div></div></div>
+  <div class="col-6 col-lg-3"><div class="ct-metric h-100"><span class="ct-metric-label">Estimated run cost</span>
+    <div class="ct-metric-value">{% if c.cost.monthly_usd %}${{ c.cost.monthly_usd|floatformat:0 }}<span class="fs-6 text-muted">/mo</span>{% else %}—{% endif %}</div>
+    <div class="ct-metric-hint">Excludes the build team</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-8">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-signpost-2 me-1"></i> Approach</span></div>
+      <div class="ct-card-body small">
+        <p class="fw-semibold mb-1">{{ c.approach.pattern }}</p>
+        <p>{{ c.approach.rationale }}</p>
+        {% if c.approach.alternatives %}
+          <p class="fw-semibold mb-1">Alternatives considered</p>
+          <ul class="mb-0 ps-3">{% for a in c.approach.alternatives %}<li><strong>{{ a.option }}</strong> — {{ a.why_not }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-diagram-3 me-1"></i> How it works</span></div>
+      <div class="ct-card-body">
+        <ol class="ct-flow">{% for step in c.architecture %}<li>{{ step }}</li>{% endfor %}</ol>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-stack me-1"></i> Technology stack</span></div>
+      <div class="table-responsive">
+        <table class="table ct-table align-middle mb-0">
+          <thead><tr><th style="width:22%">Layer</th><th style="width:30%">Recommendation</th><th>Why</th></tr></thead>
+          <tbody>{% for s in c.stack %}
+            <tr><td class="small fw-semibold">{{ s.layer }}</td>
+              <td class="small">{{ s.choice }}{% if s.alternatives %}<div class="text-muted">or {{ s.alternatives|join:", " }}</div>{% endif %}</td>
+              <td class="small text-muted">{{ s.why }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-calendar3-range me-1"></i> How to build it</span><span class="small text-muted">{{ total_weeks }} weeks to pilot</span></div>
+      <div class="ct-card-body">
+        {% for p in c.build_plan %}
+          <div class="ct-phase">
+            <div class="d-flex flex-wrap justify-content-between gap-2">
+              <span class="fw-semibold small">{{ forloop.counter }}. {{ p.phase }} {% if p.stages %}<span class="badge text-bg-light border ms-1">{{ p.stages }}</span>{% endif %}</span>
+              <span class="small text-muted">{% if p.weeks %}{{ p.weeks }} week{{ p.weeks|pluralize }}{% else %}Ongoing{% endif %}</span>
+            </div>
+            {% if p.weeks and total_weeks %}<div class="ct-phase-bar"><span style="width:{% widthratio p.weeks total_weeks 100 %}%"></span></div>{% endif %}
+            <div class="row small mt-1">
+              <div class="col-md-8"><ul class="mb-1 ps-3">{% for a in p.activities %}<li>{{ a }}</li>{% endfor %}</ul></div>
+              <div class="col-md-4 text-muted">{% if p.deliverables %}<i class="bi bi-box-seam"></i> {{ p.deliverables|join:"; " }}{% endif %}</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-clipboard-check me-1"></i> How to know it works</span></div>
+      <div class="ct-card-body small">
+        <div class="row g-3">
+          <div class="col-md-6"><p class="fw-semibold mb-1">Metrics and targets</p>
+            <table class="table table-sm mb-0">{% for m in c.evaluation.metrics %}<tr><td>{{ m.name }}</td><td class="text-nowrap fw-semibold">{{ m.target }}</td></tr>{% endfor %}</table></div>
+          <div class="col-md-6"><p class="fw-semibold mb-1">Test cases</p>
+            <ul class="mb-0 ps-3">{% for t in c.evaluation.test_cases %}<li>{{ t }}</li>{% endfor %}</ul></div>
+        </div>
+      </div>
+    </div>
+
+    {% if c.starter_code %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-code-slash me-1"></i> Starter code · through the AI Gateway</span>
+        <button class="btn btn-sm btn-outline-secondary ct-noprint" type="button" data-copy="#starter-code"><i class="bi bi-clipboard"></i> Copy</button></div>
+      <pre class="ct-code mb-0" id="starter-code"><code>{{ c.starter_code }}</code></pre>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-shield-check me-1"></i> Governance · Tier {{ c.governance.tier }}</span></div>
+      <div class="ct-card-body small">
+        {% if c.governance.rationale %}<p class="text-muted">{{ c.governance.rationale }}</p>{% endif %}
+        <p class="fw-semibold mb-1">Controls this tier calls for</p>
+        <ul class="ps-3">{% for ctl in c.governance.controls %}<li>{{ ctl }}</li>{% endfor %}</ul>
+        {% if c.governance.gates %}<p class="fw-semibold mb-1">Gates</p><div class="d-flex flex-wrap gap-1">{% for g in c.governance.gates %}<span class="badge text-bg-light border">{{ g }}</span>{% endfor %}</div>{% endif %}
+        <p class="text-muted mt-2 mb-0">A provisional tier from your answers; the S2 classification confirms it.</p>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-exclamation-diamond me-1"></i> Risks</span></div>
+      <ul class="list-group list-group-flush small">{% for r in c.risks %}
+        <li class="list-group-item"><strong>{{ r.risk }}</strong><div class="text-muted">{{ r.mitigation }}</div></li>{% endfor %}</ul>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-currency-dollar me-1"></i> Cost estimate</span><span class="fw-semibold">{% if c.cost.monthly_usd %}${{ c.cost.monthly_usd|floatformat:0 }}/mo{% endif %}</span></div>
+      <div class="ct-card-body small">
+        {% if c.cost.breakdown %}<table class="table table-sm">{% for b in c.cost.breakdown %}<tr><td>{{ b.item }}</td><td class="text-end">${{ b.monthly_usd|default:"0" }}</td></tr>{% endfor %}</table>{% endif %}
+        <ul class="ps-3 mb-0 text-muted">{% for a in c.cost.assumptions %}<li>{{ a }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-people me-1"></i> Team</span></div>
+      <table class="table table-sm mb-0 small">{% for t in c.team %}<tr><td class="ps-3">{{ t.role }}</td><td class="text-end pe-3 text-nowrap">{{ t.allocation }}</td></tr>{% endfor %}</table>
+    </div>
+
+    {% if c.next_steps %}
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-arrow-right-circle me-1"></i> Next steps</span></div>
+      <div class="ct-card-body small"><ol class="ps-3 mb-0">{% for n in c.next_steps %}<li>{{ n }}</li>{% endfor %}</ol></div>
+    </div>
+    {% endif %}
+
+    <div class="ct-card mb-3">
+      <div class="ct-card-header"><span><i class="bi bi-card-text me-1"></i> The use case as described</span></div>
+      <div class="ct-card-body small">
+        <p>{{ solution.problem|linebreaksbr }}</p>
+        <dl class="mb-0">
+          {% if solution.users %}<dt>Users</dt><dd>{{ solution.users }}</dd>{% endif %}
+          {% if solution.data_sources %}<dt>Data</dt><dd>{{ solution.data_sources }}</dd>{% endif %}
+          {% if solution.integrations %}<dt>Integrations</dt><dd>{{ solution.integrations }}</dd>{% endif %}
+          {% if solution.constraints %}<dt>Constraints</dt><dd>{{ solution.constraints }}</dd>{% endif %}
+          <dt>Profile</dt><dd>{{ solution.get_data_classification_display }} data · {{ solution.get_volume_display }} · {{ solution.get_hosting_display }} · {% if solution.human_in_loop %}human review{% else %}no human review{% endif %}</dd>
+        </dl>
+      </div>
+    </div>
+
+    {% if sessions %}
+    <div class="ct-card mb-3 ct-noprint">
+      <div class="ct-card-header"><span><i class="bi bi-play-circle me-1"></i> Sandbox sessions</span></div>
+      <ul class="list-group list-group-flush small">{% for s in sessions %}<li class="list-group-item"><a class="text-decoration-none" href="{% url 'studio:session' s.pk %}">{{ s.name }}</a> <span class="text-muted">· {{ s.updated_at|date:"j M H:i" }}</span></li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}<script src="{% static 'js/studio.js' %}"></script>{% endblock %}

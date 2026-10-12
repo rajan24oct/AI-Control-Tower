@@ -1,0 +1,35 @@
+{% load control_tower %}
+{% with first=runs.0 %}
+<div class="ct-card mb-3 ct-batch">
+  <div class="ct-card-header">
+    <span class="small"><i class="bi bi-person me-1"></i> {{ first.input_text|truncatechars:400 }}</span>
+    <span class="small text-muted text-nowrap">{{ first.created_at|date:"j M H:i:s" }}{% if first.created_by %} · {{ first.created_by.get_full_name }}{% endif %}</span>
+  </div>
+  <div class="row g-0">
+    {% for run in runs %}
+      <div class="col-12 col-lg ct-run {% if not forloop.last %}border-end{% endif %}">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+          <span class="small fw-semibold text-truncate">{{ run.requested_model.model_name|default:"Model removed" }}</span>
+          <span class="badge badge-soft text-bg-{{ run.style }}">{{ run.get_status_display }}</span>
+        </div>
+        {% if run.status == "completed" %}
+          <div class="ct-run-output">{{ run.output_text|linebreaksbr }}</div>
+        {% else %}
+          <div class="ct-run-output text-{{ run.style }}"><i class="bi bi-{% if run.status == 'blocked' %}shield-exclamation{% else %}x-octagon{% endif %}"></i> {{ run.error }}
+            {% if run.guardrails.policies %}<div class="small text-muted mt-1">Guardrail: {{ run.guardrails.policies|join:", " }}</div>{% endif %}</div>
+        {% endif %}
+        {% if run.guardrails.action == "redact" %}<div class="small text-warning mt-1"><i class="bi bi-eraser"></i> {{ run.guardrails.note }}</div>{% endif %}
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 small text-muted">
+          <span>{% if run.served_by %}{{ run.served_by }} · {% endif %}{{ run.latency_ms }} ms{% if run.status == "completed" %} · {{ run.input_tokens }}→{{ run.output_tokens }} tokens · ${{ run.cost|floatformat:5 }}{% endif %}</span>
+          {% if run.status == "completed" %}
+          <span class="btn-group btn-group-sm" role="group" aria-label="Rate this answer" data-rate-url="{% url 'studio:rate' run.pk %}">
+            <button type="button" class="btn btn-outline-secondary {% if run.rating == 1 %}active{% endif %}" data-rating="1" title="Good answer"><i class="bi bi-hand-thumbs-up"></i></button>
+            <button type="button" class="btn btn-outline-secondary {% if run.rating == -1 %}active{% endif %}" data-rating="-1" title="Poor answer"><i class="bi bi-hand-thumbs-down"></i></button>
+          </span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endwith %}

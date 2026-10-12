@@ -97,8 +97,9 @@ IMPLEMENTED = {
                           "11. Phase 3: the Control Plane", ("Control Plane", "controlplane:overview")),
     "M13": Implementation("drift records, routed and timed by category and tier.",
                           "Drift records (M13)", ("Drift", "controlplane:drift")),
-    "M14": Implementation("policies enforced in the AI, MCP and A2A gateways, with evidence captured automatically.",
-                          "6.1 Control policies", ("Policies", "policies:list")),
+    "M14": Implementation("policies enforced in the AI, MCP and A2A gateways, and runtime guardrails that block or "
+                          "redact prompt injection, personal data, secrets and restricted topics.",
+                          "6.12 Runtime guardrails", ("Policies", "policies:list")),
     "M15": Implementation("decision rights by tier on every G3, G4 and M17 decision.",
                           "Decision rights (M15, M16)", ("Deployment Authorizations", "lifecycle:authorizations")),
     "M16": Implementation("decision rights by tier on every G3, G4 and M17 decision.",
@@ -169,6 +170,7 @@ GUIDED = [
     ("In the Control Tower", [
         "How do I propose a new AI use case?",
         "How do I get an evidence pack for an auditor?",
+        "How do I get a technical blueprint for an AI idea?",
         "What are the IRGF phases in the Control Tower?",
         "Where do my governance gates stand?",
         "What does the Control Plane compare?",
@@ -183,6 +185,8 @@ SUGGESTIONS = [question for _, questions in GUIDED for question in questions[:1]
 #: Search alone finds the words; this finds the intent.
 TOPICS = [
     (r"evidence pack|auditor|compliance|eu ai act|iso.?42001|nist|attest", "6.11 Compliance and evidence"),
+    (r"guardrail|prompt injection|redact|secret", "6.12 Runtime guardrails"),
+    (r"blueprint|solution advisor|tech(nology)? stack|sandbox|playground|try a prompt", "6.13 Solution Studio and AI Sandbox"),
     (r"use.?cases?|propos|intake|new ai idea|g1.*(control tower|platform|here|work)",
      "15. Use-case intake: S0, S1 and Gate G1"),
     (r"what is (the )?irgf|irgf (is|stand)|about the (irgf|framework)|^(the )?irgf\??$", "What IRGF governs"),

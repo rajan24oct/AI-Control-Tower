@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load control_tower %}
+
+{% block title %}AI Sandbox{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Sessions</span><div class="ct-metric-value">{{ total_count }}</div><div class="ct-metric-hint">Across the organization</div></div></div>
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Runs</span><div class="ct-metric-value">{{ run_total }}</div><div class="ct-metric-hint">Each input × each model</div></div></div>
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Blocked</span><div class="ct-metric-value {% if run_blocked %}text-warning{% endif %}">{{ run_blocked }}</div><div class="ct-metric-hint">By policy, guardrail or budget</div></div></div>
+  <div class="col-6 col-md-3"><div class="ct-metric"><span class="ct-metric-label">Sandbox spend</span><div class="ct-metric-value">${{ run_cost|floatformat:2 }}</div><div class="ct-metric-hint">Through the AI Gateway</div></div></div>
+</div>
+
+<div class="ct-card" id="results" data-ajax-region>
+  <div class="ct-card-header">
+    <span><i class="bi bi-play-circle me-1"></i> Sandbox sessions</span>
+    <span class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'studio:list' %}"><i class="bi bi-stars"></i> Start from a use case</a>
+      {% if can_sandbox %}<form method="post" action="{% url 'studio:session_create' %}">{% csrf_token %}<button class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> New session</button></form>{% endif %}
+    </span>
+  </div>
+  <div class="ct-card-body border-bottom">
+    <form method="get" class="row g-2" data-ajax-filter="#results">
+      <div class="col-12 col-md-6"><input type="search" name="q" value="{{ search_query }}" class="form-control form-control-sm" placeholder="Search sessions or prompts"></div>
+      <noscript><div class="col-auto"><button class="btn btn-sm btn-primary">Apply</button></div></noscript>
+    </form>
+  </div>
+  {% include "partials/_pagination.html" with position="top" %}
+  <div class="table-responsive">
+    <table class="table ct-table align-middle mb-0">
+      <thead><tr>{% sort_th "Session" "name" %}<th>From blueprint</th><th>Runs as</th><th class="text-end">Runs</th><th class="text-end">Spend</th>{% sort_th "Last used" "updated" first="desc" %}</tr></thead>
+      <tbody>
+        {% for s in sessions %}
+          <tr>
+            <td class="small"><a class="fw-semibold text-decoration-none" href="{% url 'studio:session' s.pk %}">{{ s.name }}</a><div class="text-muted">{{ s.owner.get_full_name|default:"—" }} · {{ s.model_ids|length }} model{{ s.model_ids|length|pluralize }}</div></td>
+            <td class="small">{% if s.blueprint %}<a class="text-decoration-none" href="{% url 'studio:detail' s.blueprint.request.pk %}">{{ s.blueprint.request.reference }} v{{ s.blueprint.version }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="small">{{ s.agent.name|default:"No agent" }}</td>
+            <td class="small text-end">{{ s.run_count }}</td>
+            <td class="small text-end">${{ s.spend|default:0|floatformat:4 }}</td>
+            <td class="small text-nowrap">{{ s.updated_at|date:"j M Y H:i" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="ct-empty"><i class="bi bi-play-circle"></i><p class="mb-0">No sandbox sessions yet.</p>
+            <p class="small mb-0">Start one, or open a blueprint's starter prompt from the Solution Advisor.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+</div>
+{% endblock %}

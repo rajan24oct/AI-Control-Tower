@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load control_tower static %}
+
+{% block title %}{{ session.name }} · AI Sandbox{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <span class="small"><a href="{% url 'studio:sandbox' %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> AI Sandbox</a>
+    {% if session.blueprint %}&middot; <a href="{% url 'studio:detail' session.blueprint.request.pk %}?v={{ session.blueprint.version }}" class="text-decoration-none">Blueprint {{ session.blueprint }}</a>{% endif %}</span>
+  <span class="small text-muted">{{ totals.runs }} run{{ totals.runs|pluralize }} · ${{ totals.cost|default:0|floatformat:4 }} spent</span>
+</div>
+
+<div class="alert alert-light border small d-flex gap-2 mb-3"><i class="bi bi-shield-lock"></i>
+  <div>Every input goes through the <strong>AI Gateway</strong> in the <strong>sandbox environment</strong>: policies, guardrails and budgets apply,
+    and each call is recorded in Executions and costed in AI FinOps.
+    {% if mock %}<br><span class="text-muted">{% for m in mock %}{{ m.model_name }}{% if not forloop.last %}, {% endif %}{% endfor %}: served by the demo (mock) adapter, which returns placeholder text. Point the provider at a live endpoint in the AI Landscape (for OpenAI, the <code>generic_rest</code> adapter with the <code>OPENAI_API_KEY</code> credential) to get real answers.</span>{% endif %}</div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-4 order-xl-2">
+    <form method="post" class="ct-card mb-3" action="{% url 'studio:session' session.pk %}">
+      {% csrf_token %}
+      <div class="ct-card-header"><span><i class="bi bi-sliders me-1"></i> Session settings</span>
+        {% if can_edit %}<button class="btn btn-sm btn-outline-secondary">Save</button>{% endif %}</div>
+      <div class="ct-card-body">
+        {% if form.errors %}<div class="alert alert-danger small py-2">Check the fields marked below.</div>{% endif %}
+        <fieldset {% if not can_edit %}disabled{% endif %}>
+          <div class="row g-3">
+            <div class="col-12">{% include "manage/_field.html" with field=form.name %}</div>
+            <div class="col-12">{% include "manage/_field.html" with field=form.compare_models %}</div>
+            <div class="col-12">{% include "manage/_field.html" with field=form.system_prompt %}</div>
+            <div class="col-6">{% include "manage/_field.html" with field=form.temperature %}</div>
+            <div class="col-6">{% include "manage/_field.html" with field=form.max_tokens %}</div>
+            <div class="col-12">{% include "manage/_field.html" with field=form.agent %}</div>
+            <div class="col-12">{% include "manage/_field.html" with field=form.samples %}</div>
+          </div>
+        </fieldset>
+        {% if not can_edit %}<p class="small text-muted mt-2 mb-0">This session belongs to {{ session.owner.get_full_name }}: you can run it but not change it.</p>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12 col-xl-8 order-xl-1">
+    <form class="ct-card mb-3" method="post" action="{% url 'studio:run' session.pk %}" id="sandbox-composer">
+      {% csrf_token %}
+      <div class="ct-card-header"><span><i class="bi bi-chat-square-text me-1"></i> Try it</span>
+        <span class="small text-muted">{% for m in models %}<span class="badge text-bg-light border me-1">{{ m.model_name }}</span>{% empty %}No models picked{% endfor %}</span></div>
+      <div class="ct-card-body">
+        {% if session.system_prompt %}
+          <details class="small mb-2"><summary class="text-muted">System prompt</summary><div class="ct-run-output mt-1">{{ session.system_prompt|linebreaksbr }}</div></details>
+        {% endif %}
+        <textarea name="input" id="sandbox-input" class="form-control" rows="4" maxlength="8000" placeholder="Type an input, or click a sample below…" required></textarea>
+        {% if session.sample_inputs %}
+          <div class="d-flex flex-wrap gap-1 mt-2" aria-label="Sample inputs">
+            {% for s in session.sample_inputs %}<button type="button" class="btn btn-sm btn-outline-secondary ct-sample" data-sample="{{ s }}" title="{{ s }}">{{ s|truncatechars:60 }}</button>{% endfor %}
+          </div>
+        {% endif %}
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+          <span class="small text-muted"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to run</span>
+          <span class="d-flex gap-2">
+            {% if session.sample_inputs %}<button type="button" class="btn btn-sm btn-outline-secondary" id="sandbox-run-all" {% if not can_sandbox or not models %}disabled{% endif %}><i class="bi bi-collection-play"></i> Run all samples</button>{% endif %}
+            <button class="btn btn-sm btn-primary" id="sandbox-run" {% if not can_sandbox or not models %}disabled{% endif %}><span class="ct-idle"><i class="bi bi-play-fill"></i> Run{% if models|length > 1 %} on {{ models|length }} models{% endif %}</span><span class="ct-busy d-none"><span class="spinner-border spinner-border-sm"></span> Running…</span></button>
+          </span>
+        </div>
+        {% if not can_sandbox %}<p class="small text-danger mt-2 mb-0">Your role does not allow calling models through the gateway.</p>{% endif %}
+        <div class="small text-danger mt-2 d-none" id="sandbox-error" role="alert"></div>
+      </div>
+    </form>
+
+    <div id="sandbox-results">
+      {% for runs in batches %}{% include "studio/_batch.html" %}{% empty %}
+        <div class="ct-card" id="sandbox-empty"><div class="ct-empty"><i class="bi bi-play-circle"></i><p class="mb-0">No runs yet.</p><p class="small mb-0">Results from each model appear here side by side.</p></div></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{% static 'js/studio.js' %}"></script>{% endblock %}

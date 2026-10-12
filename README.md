@@ -7,7 +7,7 @@ estate. It keeps a registry of every provider, model, agent, application and MCP
 every run; and — when you put it in the request path — enforces policy, budgets, routing and tool
 access on live model and tool calls, while holding the upstream credentials so applications never do.
 
-![Dashboard](docs/screenshots/02-dashboard.png)
+![Dashboard](screens/01-dashboard-home.png)
 
 ## Contents
 
@@ -44,6 +44,9 @@ access on live model and tool calls, while holding the upstream credentials so a
 | **AI FinOps** | A drill-down cost explorer (department → team → agent → model → provider, or by individual); GitHub Copilot licence and premium-request spend by team and by individual; budgets by department, team, individual or asset with threshold and forecast alerts, chosen recipients and optional hard stops; cost alert rules for spikes and runaway spend; costed optimization recommendations | `/costs/` |
 | **Use-Case Intake · G1** | AI ideas recorded as use cases (IRGF S0–S1) with provisional D1–D5, decided at Gate G1 by tier with IRGF's five outcomes, then registered as draft applications | `/intake/` |
 | **Compliance & Evidence** | EU AI Act, ISO/IEC 42001 and NIST AI RMF requirements per system, answered from live platform evidence, with scope decisions, attestations and exportable evidence packs (print to PDF, or a ZIP with JSON and the audit trail) | `/compliance/` |
+| **Runtime Guardrails** | Prompt-injection, personal-data, secrets and restricted-topic checks on prompts and completions in the AI and A2A gateways: block, redact or warn by tier, with every hit recorded and masked | admin |
+| **Solution Advisor** | Describe an AI use case and get a blueprint: approach, technology stack, build plan mapped to IRGF stages and gates, team, risks, cost estimate and tier controls, written by ChatGPT or the built-in advisor, and proposed at Gate G1 in one click | `/studio/` |
+| **AI Sandbox** | Try prompts against up to three registered models side by side, through the AI Gateway in the sandbox environment, so policies, guardrails and budgets apply | `/studio/sandbox/` |
 | **IRGF Agent** | A chat icon on every page. Guided questions by topic, or your own: the IRGF framework ([irgframework.org](https://irgframework.org/)) — stages, gates, tiers, modules, the agent chain — and how the Control Tower applies it, answered from the framework reference, this documentation and the rules the platform enforces, with links to the sources and to the right page | every page |
 | **AI Governance** | IRGF risk classification (Tier 1–4, independently countersigned), deployment authorization of agents and applications with their composite authority (Gate G3), change control (Gate G4) and time-boxed exceptions (M17), the Control Plane comparing what runs with what was authorized (M12), drift records with response windows by tier (M13), action limits enforced before each tool call and every action verified after it (links 06–07), risk register and heat map, human approvals, typed control policies, evaluation suites and red-team runs | `/classification/`, `/lifecycle/`, `/control-plane/`, `/risks/`, `/approvals/`, `/policies/`, `/evaluations/` |
 | **Control & Settings** | Tamper-evident audit trail, users, teams, service accounts and API keys | Profile menu |
@@ -187,7 +190,7 @@ Open <http://localhost:8000> and sign in:
 | `ava.mitchell@northwind.example` | `ControlTower!2026` | Organization Administrator (sees everything) |
 | `admin@northwind.example` | `ControlTower!2026` | Superuser: the site administrator, who creates organizations |
 
-![Sign in](docs/screenshots/01-login.png)
+![Sign in](screens/00-login.png)
 
 > `runserver` already serves ASGI through Daphne, so the live monitor's WebSockets work in
 > development without a separate process.
@@ -380,7 +383,7 @@ application needs. Service accounts never sign a gate decision.
 
 ## Product tour
 
-*Screenshots are taken from the seeded demo organization.*
+*Screenshots are taken from the seeded demo organization; all of them are in [`screens/`](screens/).*
 
 ### Dashboard and Control Tower
 
@@ -388,7 +391,7 @@ The **Dashboard** is the executive view for any period — applications, agents,
 latency, policy denials, pending approvals, open risks and provider incidents. The **Control Tower**
 maps the estate end to end and leads with what needs a person.
 
-![Control Tower](docs/screenshots/03-control-tower.png)
+![Control Tower](screens/02-dashboard-control-tower.png)
 
 ### Onboarding
 
@@ -400,20 +403,22 @@ maps the estate end to end and leads with what needs a person.
 
 Each step shows what it still needs, with a button for whatever your role may add.
 
-![Onboarding hub](docs/screenshots/51-onboarding-hub.png)
+![Onboarding hub](screens/03-onboarding-hub.png)
 
 Every registry and governance record has its own create and edit page, and people, teams and service
 accounts are managed from the profile menu. The menu offers only what the signed-in role may
 create. Each save is checked and written to the audit trail, and editing a system authorized at
 Gate G3 goes through change control.
 
-![Onboarding menu](docs/screenshots/52-onboarding-menu.png)
+![Onboarding an agent](screens/07-inventory-agent-create.png)
 
 ### AI Landscape — the registries
 
 Every AI asset, with its owner, environment, criticality, risk and status.
 
-![Applications registry](docs/screenshots/04-applications.png)
+![Agents registry](screens/05-inventory-agents.png)
+
+![Applications registry](screens/08-inventory-applications.png)
 
 An agent's page shows its execution chain, the boundaries it runs within (allowed and restricted
 tools, knowledge sources) and the applications that use it. It also carries the agent's IRGF record:
@@ -421,39 +426,41 @@ its risk tier, deployment authorization, Control Plane findings, the eight-link 
 Agent Card and the kill-switch. An application's page adds its composition: member agents, the
 delegations between them and the authority they reach together.
 
-![Agent detail](docs/screenshots/05-agent-detail.png)
+![Agent detail](screens/06-inventory-agent-detail.png)
 
 Providers show their adapter, region, health and whether the platform can resolve their credential;
 models show pricing, context window, approval and risk.
 
-![Providers registry](docs/screenshots/06-providers.png)
+![Providers registry](screens/10-inventory-providers.png)
 
-![Models registry](docs/screenshots/07-models.png)
+![Models registry](screens/09-inventory-models.png)
 
 ### Observability
 
 Every run reported by an engine or served by a gateway, filterable by status, agent, application,
 provider, environment and period.
 
-![Executions](docs/screenshots/08-executions.png)
+![Executions](screens/11-executions-list.png)
 
 Each execution has a normalized event timeline — prompts, model calls, tool calls, approvals,
 policy violations — with tokens, duration and cost. The **Live Monitor** (`/executions/live/`)
 streams runs in flight over WebSockets.
 
-![Execution detail](docs/screenshots/09-execution-detail.png)
+![Live Monitor](screens/12-executions-live.png)
 
 ### AI Gateway
 
 What the gateway is doing to live traffic: requests, fallbacks, latency, spend, provider circuit
 breakers and routing outcomes — plus a warning for any provider whose credential cannot be resolved.
 
-![AI Gateway overview](docs/screenshots/11-ai-gateway.png)
+![AI Gateway overview](screens/13-ai-gateway-overview.png)
 
 The **Routing Simulator** shows which models the platform would choose right now for a given type
 and environment, in what order, and why the others were excluded.
 
-![Routing simulator](docs/screenshots/12-routing-simulator.png)
+![Routing simulator](screens/15-routing-simulator.png)
+
+![Routing decisions](screens/16-routing-decisions.png)
 
 ### MCP Gateway
 
@@ -461,21 +468,21 @@ Every MCP server in one registry, reached through one governed endpoint. The ove
 what needs a decision: servers out of rotation, tools awaiting review (including tools whose
 definition changed after approval), unapproved servers and missing credentials.
 
-![MCP Gateway overview](docs/screenshots/13-mcp-overview.png)
+![MCP Gateway overview](screens/17-mcp-overview.png)
 
 A server's page holds its connection, governance, health and breaker state, its tools with review
 actions, and the agents granted access.
 
-![MCP server detail](docs/screenshots/14-mcp-server.png)
+![MCP server registry](screens/18-mcp-servers.png)
 
 The **Tool Catalog** lists every tool from every server and what governance decided about it; the
 *Awaiting review* tab is the review queue.
 
-![MCP tool catalog](docs/screenshots/15-mcp-tool-catalog.png)
+![MCP tool catalog](screens/19-mcp-tools.png)
 
 **Tool Calls** is the log of everything brokered — and everything refused, with the reason.
 
-![MCP tool calls](docs/screenshots/16-mcp-tool-calls.png)
+![MCP tool calls](screens/20-mcp-calls.png)
 
 ### A2A Gateway
 
@@ -502,6 +509,16 @@ and every refusal is kept with its reason. Contracts are part of each agent's au
 configuration, so a new one for an agent authorized at Gate G3 goes to Gate G4. The Control Plane
 verifies every hand-off, against the sender's authorization and the applications' delegation graphs.
 
+![A2A Overview](screens/21-a2a-overview.png)
+
+![A2A Agent Registry](screens/22-a2a-agents.png)
+
+![Skill Catalog](screens/23-a2a-skills.png)
+
+![Contracts](screens/24-a2a-contracts.png)
+
+![Communications](screens/25-a2a-tasks.png)
+
 ### AI FinOps
 
 Spend today, this week and this month, a straight-line projection, budget alerts, and spend over
@@ -524,30 +541,53 @@ time and by provider, model and team. From there:
   seats, move seats between plans, put a budget on unwatched spend — each with its evidence, a
   confidence and an effort, to accept, mark done or dismiss.
 
-![Costs](docs/screenshots/17-costs.png)
+![AI FinOps dashboard](screens/26-finops-dashboard.png)
 
-![Budgets](docs/screenshots/18-budgets.png)
+![Cost Explorer](screens/27-finops-explorer.png)
+
+![Developer Tools](screens/28-finops-developer-tools.png)
+
+![Cost Governance](screens/29-finops-governance.png)
+
+![Budgets](screens/30-finops-budgets.png)
+
+![Optimization](screens/31-finops-optimization.png)
 
 ### AI Governance
 
 The risk register with a 5×5 likelihood-by-impact heat map, inherent and residual.
 
-![Risk matrix](docs/screenshots/19-risk-matrix.png)
+![Risk register](screens/42-governance-risks.png)
+
+![Risk matrix](screens/43-governance-risk-matrix.png)
 
 The **Approval Centre** holds actions waiting on a human decision, and the rules that send them there.
 
-![Approval Centre](docs/screenshots/20-approvals.png)
+![Approval Centre](screens/44-governance-approvals.png)
 
 **Policies** are typed controls — model approval, provider, data classification, agent autonomy,
 cost limit, tool access, human approval — that can deny, require approval or warn. Both gateways
 enforce them.
 
-![Policies](docs/screenshots/21-policies.png)
+![Policies](screens/45-governance-policies.png)
 
 The **Evaluation Centre** runs scored suites and red-team cases against models and agents; policies
 can require passing evidence before a model may serve.
 
-![Evaluation Centre](docs/screenshots/22-evaluations.png)
+![Evaluation Centre](screens/46-governance-evaluations.png)
+
+![Evaluation runs](screens/47-governance-evaluation-runs.png)
+
+### Use-Case Intake and Gate G1
+
+**Use-Case Intake** records an AI idea before anything is built (IRGF S0–S1): the need, the non-AI
+alternative, the decision it supports, who it affects, its autonomy and data path, and provisional
+D1–D5 scores that give a tier. Gate G1 is decided by the people that tier calls for, with IRGF's five
+outcomes, and an approved use case is registered as a draft application.
+
+![Use-Case Intake](screens/32-governance-intake.png)
+
+![A use case at Gate G1](screens/33-governance-intake-detail.png)
 
 ### IRGF lifecycle
 
@@ -556,7 +596,7 @@ The platform applies the [Intent-to-Runtime Governance Framework](docs/irgf-alig
 a tier from 1 to 4, which someone outside the delivery line countersigns. The tier then decides which
 policies apply, who signs each gate and how fast drift must be answered.
 
-![Risk classification register](docs/screenshots/30-irgf-register.png)
+![Risk classification register](screens/34-governance-classification.png)
 
 **Deployment Authorizations** (Gate G3) authorize an agent or an application as one configuration,
 at one tier, for one owner. An application is authorized with its composite authority: everything
@@ -564,14 +604,58 @@ its agents can reach between them. Tier 4 takes two signatures from two differen
 **Changes** (Gate G4) then catch every edit to what was authorized and route it by IRGF's change
 table. **Exceptions** (M17) set one policy aside for at most 90 days.
 
-![Deployment authorizations](docs/screenshots/46-systems-register.png)
+![Deployment authorizations](screens/35-governance-authorizations.png)
+
+![Changes at Gate G4](screens/36-governance-changes.png)
+
+![Exceptions (M17)](screens/37-governance-exceptions.png)
 
 The **Control Plane** (IRGF M12) compares what every agent and application actually does with what
 Gate G3 authorized. Each divergence becomes a drift record with a response window set by its category
 and tier (M13). Action limits are enforced before each tool call, and every action is verified after
 it. See [IRGF alignment](docs/irgf-alignment.md#11-phase-3-the-control-plane).
 
-![Control Plane](docs/screenshots/40-control-plane.png)
+![Control Plane](screens/38-governance-control-plane.png)
+
+![Drift register](screens/41-governance-drift.png)
+
+### Compliance & Evidence
+
+Each system's obligations under the **EU AI Act**, **ISO/IEC 42001** and the **NIST AI RMF**, answered
+from what the platform already records, with scope decisions, attestations for what it cannot see, and
+an evidence pack to print or download for an auditor.
+
+![Compliance & Evidence](screens/39-governance-compliance.png)
+
+![A system's requirements and evidence](screens/40-governance-compliance-system.png)
+
+### AI Studio — Solution Advisor and AI Sandbox
+
+The **Solution Advisor** takes an AI use case in plain terms and returns a blueprint: the approach and
+the alternatives considered, a technology stack layer by layer, a build plan mapped to IRGF stages and
+gates, the team, risks, an evaluation plan, a cost estimate, the controls its tier calls for, and
+starter code that calls the AI Gateway. ChatGPT writes it when `OPENAI_API_KEY` is set; otherwise the
+built-in advisor does. One click proposes it at Gate G1.
+
+![Solution Advisor](screens/56-studio-solution-advisor.png)
+
+![Describing a use case](screens/57-studio-describe-use-case.png)
+
+![A solution blueprint](screens/58-studio-blueprint.png)
+
+The **AI Sandbox** tries prompts against up to three registered models side by side, through the AI
+Gateway in the sandbox environment, so policies, guardrails and budgets apply and every call is recorded.
+
+![Sandbox sessions](screens/59-studio-sandbox-sessions.png)
+
+![The AI Sandbox](screens/60-studio-sandbox.png)
+
+### IRGF Agent
+
+A chat icon on every page opens the **IRGF Agent**: guided questions by topic, or your own, about the
+IRGF framework and how the Control Tower applies it.
+
+![IRGF Agent](screens/55-irgf-agent-chat.png)
 
 ### Control & Settings
 
@@ -587,23 +671,30 @@ Integration Handbook:
   superuser creates an organization together with its first administrator, and adds, changes or
   removes anyone in any organization from its page.
 
-![Profile menu](docs/screenshots/24-profile-menu.png)
+![Users](screens/48-access-members.png)
 
-![Users](docs/screenshots/58-users.png)
+![Teams](screens/49-access-teams.png)
 
-![A service account and its keys](docs/screenshots/61-service-account.png)
+![Service accounts](screens/50-access-service-accounts.png)
 
 The **Audit Trail** is append-only; every entry carries a content hash so a change made directly in
 the database is still detectable.
 
-![Audit trail](docs/screenshots/23-audit-trail.png)
+![Audit trail](screens/52-audit-log.png)
+
+The notification centre lists every alert sent to you, and each person chooses what reaches them by
+email or in the bell.
+
+![Notifications](screens/53-notifications.png)
+
+![Notification preferences](screens/54-notification-preferences.png)
 
 ### Integration Handbook
 
 The developer guide at `/docs/integration/`: onboarding, the API reference, both gateways, sample
 code for Python, TypeScript and common agent frameworks, security model and troubleshooting.
 
-![Integration Handbook](docs/screenshots/25-integration-handbook.png)
+![Integration Handbook](screens/04-integration-handbook.png)
 
 ---
 

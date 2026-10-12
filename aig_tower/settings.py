@@ -85,6 +85,7 @@ LOCAL_APPS = [
     "apps.intake",
     "apps.compliance",
     "apps.guardrails",
+    "apps.studio",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -355,6 +356,8 @@ ASSISTANT_AGENT = os.environ.get("ASSISTANT_AGENT", "")
 # the named environment variable, the agent falls back to the documentation automatically.
 ASSISTANT_PROVIDER = os.environ.get("ASSISTANT_PROVIDER", "openai")
 ASSISTANT_OPENAI_MODEL = os.environ.get("ASSISTANT_OPENAI_MODEL", "gpt-4o-mini")
+# The Solution Advisor (AI Studio) uses the same OpenAI settings; blank means ASSISTANT_OPENAI_MODEL.
+STUDIO_OPENAI_MODEL = os.environ.get("STUDIO_OPENAI_MODEL", "")
 ASSISTANT_OPENAI_BASE_URL = os.environ.get("ASSISTANT_OPENAI_BASE_URL", "https://api.openai.com/v1")
 ASSISTANT_OPENAI_KEY_ENV = os.environ.get("ASSISTANT_OPENAI_KEY_ENV", "OPENAI_API_KEY")
 ASSISTANT_OPENAI_TIMEOUT = float(os.environ.get("ASSISTANT_OPENAI_TIMEOUT", "45"))
