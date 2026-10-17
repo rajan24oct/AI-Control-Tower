@@ -27,6 +27,7 @@ access on live model and tool calls, while holding the upstream credentials so a
 - [Project structure](#project-structure)
 - [Security model](#security-model)
 - [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ---
 
@@ -1096,3 +1097,8 @@ aig-tower/
 For the full developer guide — every endpoint, the event vocabulary, identifier resolution, writing
 an adapter and more — open the **Integration Handbook** at `/docs/integration/` in a running
 instance.
+
+## License
+
+AI Control Tower is distributed under the [Apache License, Version 2.0](LICENSE). See
+[NOTICE](NOTICE) for attribution.
