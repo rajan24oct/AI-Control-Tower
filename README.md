@@ -2,7 +2,7 @@
 
 ---
 
-AI Control Tower is a Django platform that gives an organization a single control plane for its AI
+AI Control Tower is a platform that gives an organization a single control plane for its AI
 estate. It keeps a registry of every provider, model, agent, application and MCP server; watches
 every run; and — when you put it in the request path — enforces policy, budgets, routing and tool
 access on live model and tool calls, while holding the upstream credentials so applications never do.
