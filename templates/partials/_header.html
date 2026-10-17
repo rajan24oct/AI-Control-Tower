@@ -1,18 +1,15 @@
-﻿{% load static control_tower %}
+{% load static control_tower %}
 {% comment %}
   Section groupings match the original sidebar; on small screens the whole
   set collapses behind the hamburger.
 {% endcomment %}
 <header class="ct-header">
-  <nav class="navbar navbar-expand-lg ct-navbar">
+  <nav class="navbar navbar-expand-xl ct-navbar">
     <div class="ct-navbar-inner">
       <a class="ct-brand" href="{% url 'dashboard:home' %}">
         {# Empty alt: the wordmark beside it already names the brand. #}
-
-        <span>
-          <span class="ct-brand-name">AI Control Tower</span>
-          <span class="ct-brand-sub">Enterprise AI Mission Control</span>
-        </span>
+        <img src="{% static 'images/logo-mark.svg' %}" alt="" width="26" height="26">
+        <span class="ct-brand-name">AI Control Tower</span>
       </a>
 
       <button class="navbar-toggler ct-toggler" type="button" data-bs-toggle="collapse"
@@ -22,7 +19,7 @@
       </button>
 
       <div class="collapse navbar-collapse" id="primary-nav">
-        <ul class="navbar-nav ct-nav">
+        <ul class="navbar-nav ct-nav ms-xl-auto">
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Dashboard</a>
@@ -49,6 +46,11 @@
             </ul>
           </li>
 
+          {% comment %}
+            Each menu, and each item in the shared ones, shows only while its
+            module is switched on for the organization (apps/organizations/modules.py).
+          {% endcomment %}
+          {% if modules.observability %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'executions' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Observability</a>
@@ -59,55 +61,69 @@
                 <i class="bi bi-broadcast"></i> Live Monitor</a></li>
             </ul>
           </li>
+          {% endif %}
 
+          {% comment %}
+            One menu for the three gateways: models, tools and agents are the
+            same control point at different layers of the request path.
+          {% endcomment %}
+          {% if modules.ai_gateway or modules.mcp_gateway or modules.a2a_gateway %}
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'gateway routing' %}active{% endif %}"
-               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Gateway</a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{% url 'gateway:overview' %}">
-                <i class="bi bi-router"></i> Gateway Overview</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="{% url 'routing:list' %}">
-                <i class="bi bi-signpost-split"></i> Model Routing</a></li>
-              <li><a class="dropdown-item" href="{% url 'routing:simulator' %}">
-                <i class="bi bi-play-circle"></i> Routing Simulator</a></li>
-              <li><a class="dropdown-item" href="{% url 'routing:decisions' %}">
-                <i class="bi bi-list-check"></i> Routing Decisions</a></li>
+            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'gateway routing mcp_gateway a2a' %}active{% endif %}"
+               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Gateways</a>
+            <ul class="dropdown-menu dropdown-menu-end ct-menu-columns">
+              {% if modules.ai_gateway %}
+              <li class="ct-menu-column">
+                <ul class="list-unstyled m-0">
+                  <li class="dropdown-header">AI Gateway</li>
+                  <li><a class="dropdown-item" href="{% url 'gateway:overview' %}">
+                    <i class="bi bi-router"></i> Gateway Overview</a></li>
+                  <li><a class="dropdown-item" href="{% url 'routing:list' %}">
+                    <i class="bi bi-signpost-split"></i> Model Routing</a></li>
+                  <li><a class="dropdown-item" href="{% url 'routing:simulator' %}">
+                    <i class="bi bi-play-circle"></i> Routing Simulator</a></li>
+                  <li><a class="dropdown-item" href="{% url 'routing:decisions' %}">
+                    <i class="bi bi-list-check"></i> Routing Decisions</a></li>
+                </ul>
+              </li>
+              {% endif %}
+              {% if modules.mcp_gateway %}
+              <li class="ct-menu-column">
+                <ul class="list-unstyled m-0">
+                  <li class="dropdown-header">MCP Gateway</li>
+                  <li><a class="dropdown-item" href="{% url 'mcp_gateway:overview' %}">
+                    <i class="bi bi-hdd-rack"></i> MCP Overview</a></li>
+                  <li><a class="dropdown-item" href="{% url 'mcp_gateway:servers' %}">
+                    <i class="bi bi-hdd-stack"></i> Server Registry</a></li>
+                  <li><a class="dropdown-item" href="{% url 'mcp_gateway:tools' %}">
+                    <i class="bi bi-tools"></i> Tool Catalog</a></li>
+                  <li><a class="dropdown-item" href="{% url 'mcp_gateway:calls' %}">
+                    <i class="bi bi-list-columns-reverse"></i> Tool Calls</a></li>
+                </ul>
+              </li>
+              {% endif %}
+              {% if modules.a2a_gateway %}
+              <li class="ct-menu-column">
+                <ul class="list-unstyled m-0">
+                  <li class="dropdown-header">A2A Gateway</li>
+                  <li><a class="dropdown-item" href="{% url 'a2a:overview' %}">
+                    <i class="bi bi-diagram-2"></i> A2A Overview</a></li>
+                  <li><a class="dropdown-item" href="{% url 'a2a:agents' %}">
+                    <i class="bi bi-person-vcard"></i> Agent Registry</a></li>
+                  <li><a class="dropdown-item" href="{% url 'a2a:skills' %}">
+                    <i class="bi bi-list-stars"></i> Skill Catalog</a></li>
+                  <li><a class="dropdown-item" href="{% url 'a2a:contracts' %}">
+                    <i class="bi bi-file-earmark-lock"></i> Contracts</a></li>
+                  <li><a class="dropdown-item" href="{% url 'a2a:tasks' %}">
+                    <i class="bi bi-chat-left-dots"></i> Communications</a></li>
+                </ul>
+              </li>
+              {% endif %}
             </ul>
           </li>
+          {% endif %}
 
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'mcp_gateway' %}active{% endif %}"
-               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">MCP Gateway</a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{% url 'mcp_gateway:overview' %}">
-                <i class="bi bi-hdd-rack"></i> MCP Overview</a></li>
-              <li><a class="dropdown-item" href="{% url 'mcp_gateway:servers' %}">
-                <i class="bi bi-hdd-stack"></i> Server Registry</a></li>
-              <li><a class="dropdown-item" href="{% url 'mcp_gateway:tools' %}">
-                <i class="bi bi-tools"></i> Tool Catalog</a></li>
-              <li><a class="dropdown-item" href="{% url 'mcp_gateway:calls' %}">
-                <i class="bi bi-list-columns-reverse"></i> Tool Calls</a></li>
-            </ul>
-          </li>
-
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'a2a' %}active{% endif %}"
-               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">A2A Gateway</a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{% url 'a2a:overview' %}">
-                <i class="bi bi-diagram-2"></i> A2A Overview</a></li>
-              <li><a class="dropdown-item" href="{% url 'a2a:agents' %}">
-                <i class="bi bi-person-vcard"></i> Agent Registry</a></li>
-              <li><a class="dropdown-item" href="{% url 'a2a:skills' %}">
-                <i class="bi bi-list-stars"></i> Skill Catalog</a></li>
-              <li><a class="dropdown-item" href="{% url 'a2a:contracts' %}">
-                <i class="bi bi-file-earmark-lock"></i> Contracts</a></li>
-              <li><a class="dropdown-item" href="{% url 'a2a:tasks' %}">
-                <i class="bi bi-chat-left-dots"></i> Communications</a></li>
-            </ul>
-          </li>
-
+          {% if modules.finops %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'costs' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI FinOps</a>
@@ -127,48 +143,74 @@
                 <i class="bi bi-lightbulb"></i> Optimization</a></li>
             </ul>
           </li>
+          {% endif %}
 
+          {% if modules.intake or modules.classification or modules.lifecycle or modules.controlplane or modules.compliance or modules.risks or modules.approvals or modules.policies or modules.evaluations %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name in 'risks approvals policies evaluations classification lifecycle controlplane intake compliance' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Governance</a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{% url 'intake:list' %}">
-                <i class="bi bi-lightbulb"></i> Use-Case Intake <span class="text-muted small">· G1</span></a></li>
-              <li><a class="dropdown-item" href="{% url 'classification:register' %}">
-                <i class="bi bi-bar-chart-steps"></i> Risk Classification <span class="text-muted small">· S2</span></a></li>
-              <li><a class="dropdown-item" href="{% url 'lifecycle:authorizations' %}">
-                <i class="bi bi-patch-check"></i> Deployment Authorizations <span class="text-muted small">· G3</span></a></li>
-              <li><a class="dropdown-item" href="{% url 'lifecycle:changes' %}">
-                <i class="bi bi-arrow-left-right"></i> Changes <span class="text-muted small">· G4</span></a></li>
-              <li><a class="dropdown-item" href="{% url 'lifecycle:exceptions' %}">
-                <i class="bi bi-hourglass-split"></i> Exceptions <span class="text-muted small">· M17</span></a></li>
-              <li><a class="dropdown-item" href="{% url 'controlplane:overview' %}">
-                <i class="bi bi-activity"></i> Control Plane <span class="text-muted small">· M12</span></a></li>
-              <li><a class="dropdown-item" href="{% url 'compliance:overview' %}">
-                <i class="bi bi-shield-check"></i> Compliance &amp; Evidence</a></li>
-              <li><a class="dropdown-item" href="{% url 'controlplane:drift' %}">
-                <i class="bi bi-radar"></i> Drift <span class="text-muted small">· M13</span></a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="{% url 'risks:list' %}">
-                <i class="bi bi-clipboard-data"></i> Risks</a></li>
-              <li><a class="dropdown-item" href="{% url 'risks:matrix' %}">
-                <i class="bi bi-grid-3x3"></i> Risk Matrix</a></li>
-              <li><a class="dropdown-item" href="{% url 'approvals:centre' %}">
-                <i class="bi bi-person-check"></i> Approvals</a></li>
-              <li><a class="dropdown-item" href="{% url 'policies:list' %}">
-                <i class="bi bi-file-earmark-ruled"></i> Policies</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="{% url 'evaluations:home' %}">
-                <i class="bi bi-clipboard-check"></i> Evaluation Centre</a></li>
-              <li><a class="dropdown-item" href="{% url 'evaluations:runs' %}">
-                <i class="bi bi-list-check"></i> Evaluation Runs</a></li>
+            <ul class="dropdown-menu dropdown-menu-end">
+              {% if modules.intake %}
+                <li><a class="dropdown-item" href="{% url 'intake:list' %}">
+                  <i class="bi bi-lightbulb"></i> Use-Case Intake <span class="text-muted small">· G1</span></a></li>
+              {% endif %}
+              {% if modules.classification %}
+                <li><a class="dropdown-item" href="{% url 'classification:register' %}">
+                  <i class="bi bi-bar-chart-steps"></i> Risk Classification <span class="text-muted small">· S2</span></a></li>
+              {% endif %}
+              {% if modules.lifecycle %}
+                <li><a class="dropdown-item" href="{% url 'lifecycle:authorizations' %}">
+                  <i class="bi bi-patch-check"></i> Deployment Authorizations <span class="text-muted small">· G3</span></a></li>
+                <li><a class="dropdown-item" href="{% url 'lifecycle:changes' %}">
+                  <i class="bi bi-arrow-left-right"></i> Changes <span class="text-muted small">· G4</span></a></li>
+                <li><a class="dropdown-item" href="{% url 'lifecycle:exceptions' %}">
+                  <i class="bi bi-hourglass-split"></i> Exceptions <span class="text-muted small">· M17</span></a></li>
+              {% endif %}
+              {% if modules.controlplane %}
+                <li><a class="dropdown-item" href="{% url 'controlplane:overview' %}">
+                  <i class="bi bi-activity"></i> Control Plane <span class="text-muted small">· M12</span></a></li>
+              {% endif %}
+              {% if modules.compliance %}
+                <li><a class="dropdown-item" href="{% url 'compliance:overview' %}">
+                  <i class="bi bi-shield-check"></i> Compliance &amp; Evidence</a></li>
+              {% endif %}
+              {% if modules.controlplane %}
+                <li><a class="dropdown-item" href="{% url 'controlplane:drift' %}">
+                  <i class="bi bi-radar"></i> Drift <span class="text-muted small">· M13</span></a></li>
+              {% endif %}
+              {% if modules.risks or modules.approvals or modules.policies %}
+                {% if modules.intake or modules.classification or modules.lifecycle or modules.controlplane or modules.compliance %}<li><hr class="dropdown-divider"></li>{% endif %}
+              {% endif %}
+              {% if modules.risks %}
+                <li><a class="dropdown-item" href="{% url 'risks:list' %}">
+                  <i class="bi bi-clipboard-data"></i> Risks</a></li>
+                <li><a class="dropdown-item" href="{% url 'risks:matrix' %}">
+                  <i class="bi bi-grid-3x3"></i> Risk Matrix</a></li>
+              {% endif %}
+              {% if modules.approvals %}
+                <li><a class="dropdown-item" href="{% url 'approvals:centre' %}">
+                  <i class="bi bi-person-check"></i> Approvals</a></li>
+              {% endif %}
+              {% if modules.policies %}
+                <li><a class="dropdown-item" href="{% url 'policies:list' %}">
+                  <i class="bi bi-file-earmark-ruled"></i> Policies</a></li>
+              {% endif %}
+              {% if modules.evaluations %}
+                {% if modules.intake or modules.classification or modules.lifecycle or modules.controlplane or modules.compliance or modules.risks or modules.approvals or modules.policies %}<li><hr class="dropdown-divider"></li>{% endif %}
+                <li><a class="dropdown-item" href="{% url 'evaluations:home' %}">
+                  <i class="bi bi-clipboard-check"></i> Evaluation Centre</a></li>
+                <li><a class="dropdown-item" href="{% url 'evaluations:runs' %}">
+                  <i class="bi bi-list-check"></i> Evaluation Runs</a></li>
+              {% endif %}
             </ul>
           </li>
+          {% endif %}
 
+          {% if modules.studio %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'studio' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">AI Studio</a>
-            <ul class="dropdown-menu">
+            <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="{% url 'studio:list' %}">
                 <i class="bi bi-stars"></i> Solution Advisor</a></li>
               <li><a class="dropdown-item" href="{% url 'studio:create' %}">
@@ -178,10 +220,12 @@
                 <i class="bi bi-play-circle"></i> AI Sandbox</a></li>
             </ul>
           </li>
+          {% endif %}
+          {% if modules.onboarding %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'onboarding' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Onboarding</a>
-            <ul class="dropdown-menu">
+            <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="{% url 'onboarding:hub' %}">
                 <i class="bi bi-flag"></i> Onboarding Hub</a></li>
               {% if "application.manage" in org_perms or "agent.manage" in org_perms or "model.manage" in org_perms or "provider.manage" in org_perms %}
@@ -204,42 +248,45 @@
                     <i class="bi bi-hdd-network"></i> New platform provider</a></li>
                 {% endif %}
               {% endif %}
-              {% if "provider.manage" in org_perms or "mcp.manage" in org_perms or "a2a.manage" in org_perms %}
+              {% if "provider.manage" in org_perms and modules.ai_gateway or "mcp.manage" in org_perms and modules.mcp_gateway or "a2a.manage" in org_perms and modules.a2a_gateway %}
                 <li><hr class="dropdown-divider"></li>
                 <li class="dropdown-header">Gateways</li>
-                {% if "provider.manage" in org_perms %}
+                {% if "provider.manage" in org_perms and modules.ai_gateway %}
                   <li><a class="dropdown-item" href="{% url 'routing:create' %}">
                     <i class="bi bi-signpost-split"></i> New routing policy</a></li>
                 {% endif %}
-                {% if "mcp.manage" in org_perms %}
+                {% if "mcp.manage" in org_perms and modules.mcp_gateway %}
                   <li><a class="dropdown-item" href="{% url 'mcp_gateway:server_create' %}">
                     <i class="bi bi-hdd-stack"></i> Register MCP server</a></li>
                 {% endif %}
-                {% if "a2a.manage" in org_perms %}
+                {% if "a2a.manage" in org_perms and modules.a2a_gateway %}
                   <li><a class="dropdown-item" href="{% url 'a2a:card_create' %}">
                     <i class="bi bi-diagram-2"></i> Publish an A2A agent</a></li>
                 {% endif %}
               {% endif %}
-              {% if "policy.manage" in org_perms or "risk.manage" in org_perms or "cost.manage" in org_perms %}
+              {% if "policy.manage" in org_perms and modules.policies or "policy.manage" in org_perms and modules.approvals or "risk.manage" in org_perms and modules.risks or "cost.manage" in org_perms and modules.finops %}
                 <li><hr class="dropdown-divider"></li>
                 <li class="dropdown-header">Governance and FinOps</li>
-                {% if "policy.manage" in org_perms %}
+                {% if "policy.manage" in org_perms and modules.policies %}
                   <li><a class="dropdown-item" href="{% url 'policies:create' %}">
                     <i class="bi bi-file-earmark-ruled"></i> New control policy</a></li>
+                {% endif %}
+                {% if "policy.manage" in org_perms and modules.approvals %}
                   <li><a class="dropdown-item" href="{% url 'approvals:rule_create' %}">
                     <i class="bi bi-person-check"></i> New approval rule</a></li>
                 {% endif %}
-                {% if "risk.manage" in org_perms %}
+                {% if "risk.manage" in org_perms and modules.risks %}
                   <li><a class="dropdown-item" href="{% url 'risks:create' %}">
                     <i class="bi bi-clipboard-data"></i> New risk</a></li>
                 {% endif %}
-                {% if "cost.manage" in org_perms %}
+                {% if "cost.manage" in org_perms and modules.finops %}
                   <li><a class="dropdown-item" href="{% url 'costs:budget_create' %}">
                     <i class="bi bi-wallet2"></i> New budget</a></li>
                 {% endif %}
               {% endif %}
             </ul>
           </li>
+          {% endif %}
 
         </ul>
 
@@ -302,11 +349,6 @@
                   <li><a class="dropdown-item" href="{% url 'access:organizations' %}">
                     <i class="bi bi-building"></i> Organizations</a></li>
                 {% endif %}
-                {% if user.is_staff %}
-                  {# Organizations themselves, and anything else only staff should touch. #}
-                  <li><a class="dropdown-item" href="{% url 'admin:index' %}">
-                    <i class="bi bi-gear"></i> Django admin</a></li>
-                {% endif %}
                 {% comment %}
                   Opens in its own tab: the handbook carries its own design and
                   replacing the app with it would strand anyone mid-task.
@@ -335,8 +377,15 @@
 
   <div class="ct-pagebar">
     <div class="ct-pagebar-inner">
-      <h1>{{ page_title|default:"AI Control Tower" }}</h1>
-      {% if page_subtitle %}<p>{{ page_subtitle }}</p>{% endif %}
+      <div class="ct-pagebar-text">
+        <h1>{{ page_title|default:"AI Control Tower" }}</h1>
+        {% if page_subtitle %}<p>{{ page_subtitle }}</p>{% endif %}
+      </div>
+      {% if module_help %}
+        <button type="button" class="btn btn-sm ct-help-toggle" data-help-toggle aria-controls="ct-help">
+          <i class="bi bi-question-circle"></i> Help
+        </button>
+      {% endif %}
     </div>
   </div>
 </header>

@@ -19,6 +19,8 @@ from apps.agents.models import AIAgent
 from apps.api.models import ServiceAccount
 from apps.core.forms import OrganizationModelForm, SectionedFormMixin, StyledFormMixin
 from apps.organizations.models import Organization, OrganizationMembership, Team
+from apps.organizations.modules import GROUPS as MODULE_GROUPS
+from apps.organizations.modules import MODULES, module_states, set_module_states
 
 User = get_user_model()
 PROFILE_FIELDS = ("first_name", "last_name", "job_title")
@@ -121,7 +123,37 @@ class OrganizationForm(StyledFormMixin, SectionedFormMixin, forms.ModelForm):
         if not self.creating:
             self.fields["slug"].disabled = True
             self.fields["slug"].help_text = "Fixed once the organization exists: scripts and commands refer to it."
+        self._add_module_switches()
         self.apply_styles()
+
+    def _add_module_switches(self):
+        """One switch per module, grouped as the menus group them."""
+        states = module_states(self.instance)
+        module_sections = []
+        for group in MODULE_GROUPS:
+            names = []
+            for module in MODULES:
+                if module.group != group:
+                    continue
+                name = f"module_{module.key}"
+                self.fields[name] = forms.BooleanField(
+                    label=module.label, required=False, initial=states[module.key], help_text=module.description,
+                )
+                names.append(name)
+            module_sections.append((
+                f"Modules: {group}",
+                "Switched-off modules leave the menus and their pages for this organization. "
+                "Their data is kept, and the API keeps serving." if not module_sections else "",
+                names,
+            ))
+        self.sections = (*type(self).sections, *module_sections)
+        self.compact_fields = (*type(self).compact_fields, *(f"module_{m.key}" for m in MODULES))
+
+    def _post_clean(self):
+        super()._post_clean()
+        set_module_states(self.instance, {
+            module.key: self.cleaned_data.get(f"module_{module.key}", False) for module in MODULES
+        })
 
     @property
     def creating(self) -> bool:

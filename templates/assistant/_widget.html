@@ -1,4 +1,4 @@
-{% load static assistant_tags %}
+{% load static assistant_tags control_tower %}
 {% agent_name as name %}{% framework_url as framework %}{% guided_questions as guided %}
 {% comment %}
   The IRGF Agent: a chat icon at the bottom right of every page, opening a chat
@@ -68,4 +68,4 @@
     </div>
   </template>
 </div>
-<script src="{% static 'js/assistant.js' %}" defer></script>
+<script src="{% static_v 'js/assistant.js' %}" defer></script>

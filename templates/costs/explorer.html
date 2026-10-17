@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static control_tower %}
 
 {% block title %}Cost Explorer{% endblock %}
 
@@ -144,5 +144,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'js/finops.js' %}"></script>
+<script src="{% static_v 'js/finops.js' %}"></script>
 {% endblock %}

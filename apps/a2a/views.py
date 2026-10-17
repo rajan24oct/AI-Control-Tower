@@ -8,9 +8,11 @@ from datetime import timedelta
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Avg, Count, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from django.views.generic import DetailView, ListView, TemplateView, View
 
 from apps.a2a.models import (
@@ -27,6 +29,7 @@ from apps.a2a.models import (
     TaskState,
 )
 from apps.a2a.registry import A2ARegistryService, published_card
+from apps.a2a.skill_docs import skill_markdown, skills_archive
 from apps.accounts.roles import Perm
 from apps.agents.models import AIAgent
 from apps.core.constants import HealthStatus, LifecycleStatus, RiskLevel
@@ -299,6 +302,70 @@ class SkillListView(OrganizationScopedMixin, ListView):
             }
         )
         return context
+
+
+class SkillDetailView(ScopedDetailMixin, DetailView):
+    """One skill: what it does, what governance decided, who may call it, and its SKILL.md."""
+
+    model = A2ASkill
+    template_name = "a2a/skill_detail.html"
+    context_object_name = "skill"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("card", "card__team", "card__owner", "reviewed_by")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        skill = self.object
+        since = timezone.now() - timedelta(days=30)
+        tasks = A2ATask.objects.for_organization(self.request.organization).filter(skill=skill)
+        recent = tasks.filter(created_at__gte=since)
+        contracts = [
+            contract
+            for contract in skill.card.contracts.select_related("sender").order_by("sender__name")
+            if contract.permits(skill.skill_id)
+        ]
+        address = address_url(self.request, skill.card)
+        context.update(
+            {
+                "page_title": skill.label,
+                "page_subtitle": f"A2A skill · {skill.qualified_name}",
+                "address": address,
+                "contracts": contracts,
+                "recent_tasks": tasks.select_related("sender").order_by("-created_at")[:10],
+                "traffic": {
+                    "total": recent.count(),
+                    "delivered": recent.filter(status=DeliveryStatus.DELIVERED).count(),
+                    "refused": recent.filter(status=DeliveryStatus.BLOCKED).count(),
+                },
+                "skill_md": skill_markdown(skill, address),
+                "can_approve": _can(self.request, Perm.A2A_APPROVE),
+            }
+        )
+        return context
+
+
+class SkillDownloadView(SkillListView):
+    """The catalog as SKILL.md files: one skill, or every skill the filters match as a zip."""
+
+    paginate_by = None
+
+    def get(self, request, *args, **kwargs):
+        if kwargs.get("pk"):
+            skill = get_object_or_404(self.get_base_queryset(), pk=kwargs["pk"])
+            response = HttpResponse(
+                skill_markdown(skill, address_url(request, skill.card)),
+                content_type="text/markdown; charset=utf-8",
+            )
+            name = slugify(skill.skill_id) or skill.pk.hex[:8]
+            response["Content-Disposition"] = f'attachment; filename="{skill.card.slug}-{name}-SKILL.md"'
+            return response
+
+        skills = self.apply_sort(self.get_queryset())
+        archive = skills_archive(skills, lambda card: address_url(request, card))
+        response = HttpResponse(archive, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="a2a-skills-{timezone.now():%Y%m%d}.zip"'
+        return response
 
 
 class ContractListView(OrganizationScopedMixin, ListView):

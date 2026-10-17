@@ -101,6 +101,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.audit.middleware.AuditContextMiddleware",
     "apps.organizations.middleware.ActiveOrganizationMiddleware",
+    "apps.organizations.middleware.ModuleGateMiddleware",
 ]
 
 ROOT_URLCONF = "aig_tower.urls"
@@ -116,6 +117,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.organizations.context_processors.organization_context",
+                "apps.core.context_processors.module_help",
             ],
         },
     },

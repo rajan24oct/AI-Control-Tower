@@ -333,6 +333,47 @@
     }
   }
 
+  // -- In-page help --------------------------------------------------------
+
+  /* The panel slides over the page when Help is clicked, and closes on a
+     click outside it, on Esc, or from its own close button. */
+  function bindHelp() {
+    var root = document.documentElement;
+
+    function setOpen(open) {
+      root.classList.toggle("ct-help-open", open);
+      $("[data-help-toggle]").attr("aria-expanded", open ? "true" : "false");
+      if (open) $("#ct-help").trigger("focus");
+    }
+
+    $(document).on("click", "[data-help-toggle]", function (event) {
+      event.stopPropagation();
+      setOpen(!root.classList.contains("ct-help-open"));
+    });
+
+    $(document).on("click", function (event) {
+      if (!root.classList.contains("ct-help-open")) return;
+      if ($(event.target).closest("#ct-help").length) return;
+      setOpen(false);
+    });
+
+    $(document).on("keydown", function (event) {
+      if (event.key === "Escape" && root.classList.contains("ct-help-open")) setOpen(false);
+    });
+
+    $(document).on("click", "[data-copy]", function () {
+      var $button = $(this);
+      var text = $button.siblings("pre").text();
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text).then(function () {
+        $button.find("i").attr("class", "bi bi-clipboard-check");
+        setTimeout(function () { $button.find("i").attr("class", "bi bi-clipboard"); }, 1500);
+      });
+    });
+
+    setOpen(false);
+  }
+
   $(function () {
     trackHeaderHeight();
     bindFilters();
@@ -341,5 +382,6 @@
     bindUnreadCounters();
     bindConditionalFields();
     bindConfigTemplates();
+    bindHelp();
   });
 })(jQuery);

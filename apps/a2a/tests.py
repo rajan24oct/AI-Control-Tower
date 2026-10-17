@@ -812,6 +812,22 @@ class PageTests(A2AEstate):
         ]:
             self.assertContains(self.client.get(url), text, msg_prefix=url)
 
+    def test_a_skill_shows_its_details_and_downloads_as_skill_md(self):
+        self.send(skill="claim-status")
+        skill = self.card.skills.get(skill_id="claim-status")
+        self.client.force_login(self.viewer)
+
+        page = self.client.get(reverse("a2a:skill_detail", args=[skill.pk]))
+        self.assertContains(page, skill.qualified_name)
+        self.assertContains(page, "Who may call it")
+        self.assertContains(page, reverse("a2a:skill_download", args=[skill.pk]))
+        self.assertEqual(len(page.context["recent_tasks"]), 1)
+        self.assertContains(self.client.get(reverse("a2a:skills")), reverse("a2a:skill_detail", args=[skill.pk]))
+
+        download = self.client.get(reverse("a2a:skill_download", args=[skill.pk]))
+        self.assertIn("attachment;", download["Content-Disposition"])
+        self.assertTrue(download.content.decode().startswith('---\nname: "claim-status"'))
+
     def test_content_is_hidden_without_prompt_view(self):
         task = self.send(message=text_message("A very particular sentence.")).task
         self.client.force_login(self.viewer)

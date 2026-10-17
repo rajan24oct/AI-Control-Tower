@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}{{ module.label }}{% endblock %}
+
+{% block content %}
+<div class="ct-card">
+  <div class="ct-card-body">
+    <div class="ct-empty py-5">
+      <i class="bi bi-toggle-off"></i>
+      <p class="fw-semibold mb-1">{{ module.label }} is not enabled for {{ active_organization.name }}.</p>
+      <p class="small text-muted mb-3">{{ module.description }} Its data is kept, and nothing is lost while it is off.</p>
+      {% if user.is_superuser %}
+        <a class="btn btn-sm btn-primary" href="{% url 'access:organization_edit' active_organization.pk %}">
+          <i class="bi bi-toggles"></i> Manage modules</a>
+      {% else %}
+        <p class="small text-muted mb-0">A site administrator can switch it on.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

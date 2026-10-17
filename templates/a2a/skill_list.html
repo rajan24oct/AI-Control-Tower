@@ -7,7 +7,15 @@
 <div class="ct-card" id="results" data-ajax-region>
   <div class="ct-card-header">
     <span>Skills</span>
-    <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge text-bg-secondary">{{ page_obj.paginator.count }} of {{ total_count }}</span>
+      {% if page_obj.paginator.count %}
+        <a href="{% url 'a2a:skills_download' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-outline-secondary"
+           title="Every skill these filters match, as a zip of SKILL.md files">
+          <i class="bi bi-download"></i> Download SKILL.md files
+        </a>
+      {% endif %}
+    </span>
   </div>
 
   <div class="ct-card-body border-bottom">
@@ -66,7 +74,10 @@
         {% for skill in skills %}
           <tr>
             <td>
-              <code class="small">{{ skill.qualified_name }}</code>
+              <a href="{% url 'a2a:skill_detail' skill.pk %}" class="fw-semibold text-decoration-none">{{ skill.label }}</a>
+              <div><code class="small">{{ skill.qualified_name }}</code>
+              <a href="{% url 'a2a:skill_download' skill.pk %}" class="small text-decoration-none ms-1"
+                 title="Download SKILL.md"><i class="bi bi-filetype-md"></i></a></div>
               <div class="small text-muted" style="max-width:34rem">{{ skill.description|truncatechars:160 }}</div>
             </td>
             <td class="small">

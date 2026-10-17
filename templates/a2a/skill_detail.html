@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% load control_tower humanize a2a_tags %}
+
+{% block title %}{{ skill.label }}{% endblock %}
+
+{% block content %}
+<div id="skill-detail" data-ajax-region>
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <a href="{% url 'a2a:skills' %}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Skill Catalog</a>
+    <div class="d-flex gap-2 flex-wrap align-items-center mt-1">
+      <code class="small">{{ skill.qualified_name }}</code>
+      <span class="badge badge-soft text-bg-{{ skill.status|skill_status_style }}">{{ skill.get_status_display }}</span>
+      <span class="badge badge-soft text-bg-{{ skill.risk_level|risk_style }}">{{ skill.get_risk_level_display }} risk</span>
+      {% if skill.changed_since_review %}<span class="badge badge-soft text-bg-danger">Changed since review</span>{% endif %}
+      {% if skill.card.is_external %}<span class="badge badge-soft text-bg-light text-dark">External agent</span>{% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-sm btn-primary" href="{% url 'a2a:skill_download' skill.pk %}">
+      <i class="bi bi-download"></i> Download SKILL.md
+    </a>
+    {% if can_approve and skill.status != "removed" %}
+      {% if skill.status != "enabled" %}
+        <form method="post" action="{% url 'a2a:skill_review' skill.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#skill-detail">
+          {% csrf_token %}
+          <input type="hidden" name="decision" value="enable">
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-check2-circle"></i> Enable</button>
+        </form>
+      {% endif %}
+      {% if skill.status != "disabled" %}
+        <form method="post" action="{% url 'a2a:skill_review' skill.pk %}" class="m-0" data-ajax-action data-ajax-refresh="#skill-detail">
+          {% csrf_token %}
+          <input type="hidden" name="decision" value="disable">
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-slash-circle"></i> Disable</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<p class="small text-muted">{{ skill.description|default:"The agent does not describe this skill." }}</p>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-6">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">Skill</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv mb-0">
+          <dt>Skill id</dt><dd><code>{{ skill.skill_id }}</code></dd>
+          <dt>Agent</dt>
+          <dd><a href="{% url 'a2a:card_detail' skill.card.pk %}" class="text-decoration-none">{{ skill.card.name }}</a>
+            {% if skill.card.agent_id %}
+              <span class="text-muted small">&middot;
+                <a href="{% url 'inventory:agent_detail' skill.card.agent_id %}" class="text-decoration-none text-muted">registry entry</a></span>
+            {% endif %}
+          </dd>
+          <dt>Address</dt><dd><code class="small text-break">{{ address }}</code></dd>
+          {% if skill.tags %}
+            <dt>Tags</dt>
+            <dd>{% for tag in skill.tags %}<span class="badge badge-soft text-bg-light text-dark me-1">{{ tag }}</span>{% endfor %}</dd>
+          {% endif %}
+          <dt>Accepts</dt><dd>{{ skill.input_modes|join:", "|default:"The agent's defaults" }}</dd>
+          <dt>Returns</dt><dd>{{ skill.output_modes|join:", "|default:"The agent's defaults" }}</dd>
+          <dt>First seen</dt><dd>{{ skill.first_seen_at|date:"d M Y" }}</dd>
+          <dt>Last seen</dt><dd>{{ skill.last_seen_at|naturaltime }}</dd>
+          <dt>Definition hash</dt><dd><code class="small text-break">{{ skill.definition_hash|default:"—" }}</code></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="ct-card h-100">
+      <div class="ct-card-header">Governance</div>
+      <div class="ct-card-body">
+        <dl class="ct-kv mb-0">
+          <dt>Status</dt>
+          <dd>
+            {% if skill.status == "enabled" %}The gateway delivers calls to this skill, within the contracts that grant it.
+            {% elif skill.status == "pending_review" %}Calls are refused until governance enables it.
+            {% elif skill.status == "disabled" %}Reviewed and disabled: calls are refused.
+            {% else %}The agent's card no longer lists this skill.{% endif %}
+          </dd>
+          <dt>Risk</dt><dd>{{ skill.get_risk_level_display }}</dd>
+          <dt>Reviewed by</dt>
+          <dd>{% if skill.reviewed_by %}{{ skill.reviewed_by.get_full_name|default:skill.reviewed_by.email }}{% if skill.reviewed_at %}, {{ skill.reviewed_at|date:"d M Y" }}{% endif %}{% else %}Not reviewed yet{% endif %}</dd>
+          {% if skill.review_note %}<dt>Review note</dt><dd>{{ skill.review_note }}</dd>{% endif %}
+          <dt>Agent cleared for</dt><dd>{{ skill.card.data_classification|title }} data</dd>
+          <dt>Last 30 days</dt>
+          <dd>{{ traffic.total }} call{{ traffic.total|pluralize }} &middot; {{ traffic.delivered }} delivered &middot;
+            <span class="{% if traffic.refused %}text-danger{% endif %}">{{ traffic.refused }} refused</span></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if skill.examples %}
+  <div class="ct-card mb-3">
+    <div class="ct-card-header">Examples</div>
+    <div class="ct-card-body">
+      <ul class="small mb-0">{% for example in skill.examples %}<li>{{ example }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+{% endif %}
+
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span>Who may call it</span>
+    <span class="small text-muted">Contracts with {{ skill.card.name }} that cover this skill</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table mb-0">
+      <thead><tr><th>Sender</th><th>Skills</th><th>Ceiling</th><th class="text-end">Rate</th><th>Expires</th></tr></thead>
+      <tbody>
+        {% for contract in contracts %}
+          <tr>
+            <td class="small"><a href="{% url 'inventory:agent_detail' contract.sender_id %}" class="text-decoration-none">{{ contract.sender.name }}</a></td>
+            <td class="small">{% if contract.allowed_skills %}{{ contract.allowed_skills|join:", " }}{% else %}<span class="text-muted">Every enabled skill</span>{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ contract.ceiling|classification_style }}">{{ contract.ceiling|title }}</span></td>
+            <td class="small text-end">{% if contract.max_messages_per_hour %}{{ contract.max_messages_per_hour }}/h{% else %}—{% endif %}</td>
+            <td class="small {% if contract.is_expired %}text-danger{% endif %}">{% if contract.expires_at %}{{ contract.expires_at|date:"d M Y" }}{% if contract.is_expired %} (expired){% endif %}{% else %}—{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">
+            <div class="ct-empty py-4"><i class="bi bi-file-earmark-lock"></i>
+              <p class="mb-0">{% if skill.card.access_mode == "open" %}No contract names this skill. The agent is open, so any approved agent may call it.{% else %}No contract covers this skill, so no agent may call it yet.{% endif %}</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ct-card mb-3">
+  <div class="ct-card-header">
+    <span>Recent calls</span>
+    <a href="{% url 'a2a:tasks' %}?q={{ skill.skill_id|urlencode }}" class="small text-decoration-none">All communications</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table ct-table mb-0">
+      <thead><tr><th>When</th><th>Sender</th><th>Delivery</th><th>State</th><th>Reason</th></tr></thead>
+      <tbody>
+        {% for task in recent_tasks %}
+          <tr>
+            <td class="small text-nowrap"><a href="{% url 'a2a:task_detail' task.pk %}" class="text-decoration-none">{{ task.created_at|naturaltime }}</a></td>
+            <td class="small">{% if task.sender_id %}<a href="{% url 'inventory:agent_detail' task.sender_id %}" class="text-decoration-none">{{ task.sender.name }}</a>{% else %}—{% endif %}</td>
+            <td><span class="badge badge-soft text-bg-{{ task.status|delivery_style }}">{{ task.get_status_display }}</span></td>
+            <td><span class="badge badge-soft text-bg-{{ task.state|task_state_style }}">{{ task.get_state_display }}</span></td>
+            <td class="small text-muted">{{ task.reason|truncatechars:120|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">
+            <div class="ct-empty py-4"><i class="bi bi-chat-left-dots"></i><p class="mb-0">No agent has called this skill yet.</p></div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ct-card">
+  <div class="ct-card-header">
+    <span>SKILL.md</span>
+    <a href="{% url 'a2a:skill_download' skill.pk %}" class="small text-decoration-none"><i class="bi bi-download"></i> Download</a>
+  </div>
+  <div class="ct-card-body">
+    <pre class="ct-skill-md mb-0"><code>{{ skill_md }}</code></pre>
+  </div>
+</div>
+</div>
+{% endblock %}

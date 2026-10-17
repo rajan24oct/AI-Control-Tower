@@ -30,7 +30,7 @@
           <dd>{% if policy.environments %}{{ policy.environments|join:", " }}{% else %}All{% endif %}</dd>
           <dt>Agents</dt>
           <dd>
-            {% for agent in policy.agents.all %}{{ agent.name }}{% if not forloop.last %}, {% endif %}
+            {% for agent in policy.agents.all %}<a href="{% url 'inventory:agent_detail' agent.pk %}" class="text-decoration-none">{{ agent.name }}</a>{% if not forloop.last %}, {% endif %}
             {% empty %}All agents{% endfor %}
           </dd>
           <dt>Approved models only</dt><dd>{{ policy.require_approved_models|yesno:"Yes,No" }}</dd>
@@ -64,10 +64,10 @@
           <tbody>
             {% for decision in decisions %}
               <tr>
-                <td class="small text-nowrap">{{ decision.created_at|naturaltime }}</td>
-                <td class="small">{{ decision.selected_model.model_name|default:"no route" }}</td>
+                <td class="small text-nowrap">{% if decision.execution_id %}<a href="{% url 'executions:detail' decision.execution_id %}" class="text-decoration-none" title="Open the run this decision served">{{ decision.created_at|naturaltime }}</a>{% else %}{{ decision.created_at|naturaltime }}{% endif %}</td>
+                <td class="small">{% if decision.selected_model_id %}<a href="{% url 'inventory:model_detail' decision.selected_model_id %}" class="text-decoration-none">{{ decision.selected_model.model_name }}</a>{% else %}no route{% endif %}</td>
                 <td class="small">
-                  {{ decision.served_model.model_name|default:"—" }}
+                  {% if decision.served_model_id %}<a href="{% url 'inventory:model_detail' decision.served_model_id %}" class="text-decoration-none">{{ decision.served_model.model_name }}</a>{% else %}—{% endif %}
                   {% if decision.used_fallback %}
                     <span class="badge badge-soft text-bg-warning">fallback {{ decision.attempt }}</span>
                   {% endif %}

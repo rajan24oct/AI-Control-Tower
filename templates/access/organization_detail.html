@@ -47,6 +47,26 @@
         </dl>
       </div>
     </div>
+
+    <div class="ct-card mt-3">
+      <div class="ct-card-header">
+        <span>Modules</span>
+        <a href="{% url 'access:organization_edit' org.pk %}" class="small text-decoration-none"><i class="bi bi-toggles"></i> Change</a>
+      </div>
+      <div class="ct-card-body">
+        {% for group, items in module_groups %}
+          <div class="small fw-semibold text-muted text-uppercase mb-1 {% if not forloop.first %}mt-3{% endif %}" style="font-size:.66rem;letter-spacing:.08em">{{ group }}</div>
+          <ul class="list-unstyled small mb-0">
+            {% for module, enabled in items %}
+              <li class="d-flex justify-content-between py-1 {% if not forloop.first %}border-top{% endif %}">
+                <span>{{ module.label }}</span>
+                {% if enabled %}<span class="badge badge-soft text-bg-success">On</span>{% else %}<span class="badge badge-soft text-bg-secondary">Off</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endfor %}
+      </div>
+    </div>
   </div>
 
   <div class="col-12 col-lg-8">

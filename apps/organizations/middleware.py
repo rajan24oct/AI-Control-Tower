@@ -37,3 +37,37 @@ class ActiveOrganizationMiddleware:
         if organization:
             request.session[SESSION_KEY] = str(organization.pk)
         return organization
+
+
+class ModuleGateMiddleware:
+    """Answer a switched-off module's pages with a short "not enabled" page.
+
+    Runs after the active organization is known. The module's data and its API
+    are left alone: switching a module off tidies the product, it does not cut
+    agents off from a gateway they already call.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        from django.shortcuts import render
+
+        from apps.organizations.modules import is_enabled, module_for_app
+
+        organization = getattr(request, "organization", None)
+        match = getattr(request, "resolver_match", None)
+        if organization is None or match is None:
+            return None
+        module = module_for_app(match.app_name)
+        if module is None or is_enabled(organization, module.key):
+            return None
+        return render(
+            request,
+            "organizations/module_disabled.html",
+            {"module": module, "page_title": module.label, "page_subtitle": "Not enabled for this organization"},
+            status=404,
+        )

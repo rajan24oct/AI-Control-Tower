@@ -79,9 +79,9 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   border-top: 4px solid var(--ct-brand);
   border-bottom: 1px solid var(--ct-rule);
   /* Bootstrap's expanded navbar takes a link's side padding from this
-     variable, over any plain .nav-link rule. Eight sections and the account
-     controls share one row at 1440px. */
-  --bs-navbar-nav-link-padding-x: .4rem;
+     variable, over any plain .nav-link rule. The logo, eight sections and the
+     account controls share one row from 1200px. */
+  --bs-navbar-nav-link-padding-x: .45rem;
 }
 
 .ct-navbar-inner {
@@ -95,14 +95,22 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   gap: .75rem;
 }
 
+/* One lean row once the menu is expanded: nothing wraps under the logo. */
+@media (min-width: 1200px) {
+  .ct-navbar-inner { flex-wrap: nowrap; gap: 1rem; }
+  .ct-navbar .navbar-collapse { min-width: 0; }
+  .ct-nav .nav-link { white-space: nowrap; }
+}
+
 .ct-brand {
   display: flex;
   align-items: center;
-  gap: .65rem;
-  padding: .8rem 0;
+  gap: .5rem;
+  padding: .5rem 0;
   text-decoration: none;
   flex: 0 0 auto;
 }
+.ct-brand img { display: block; border-radius: 6px; }
 
 .ct-brand:hover { text-decoration: none; }
 .ct-brand i { font-size: 1.3rem; color: var(--ct-accent); }
@@ -113,14 +121,7 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   font-weight: 600;
   font-size: .95rem;
   line-height: 1.15;
-}
-.ct-brand-sub {
-  display: block;
-  color: rgba(0, 0, 0, .6);
-  font-size: .58rem;
-  letter-spacing: .13em;
-  text-transform: uppercase;
-  margin-top: .1rem;
+  white-space: nowrap;
 }
 
 .ct-toggler {
@@ -139,7 +140,7 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   color: rgba(0, 0, 0, .78);
   font-size: .8rem;
   font-weight: 500;
-  padding: 1.1rem .4rem;
+  padding: .85rem .45rem;
   border-bottom: 2px solid transparent;
   transition: color .12s ease, border-color .12s ease;
 }
@@ -177,8 +178,8 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   display: flex;
   align-items: center;
   gap: .45rem;
-  margin-left: auto;
-  padding: .5rem 0;
+  margin-left: .75rem;
+  padding: .4rem 0;
 }
 
 /* Solid rather than translucent: a select's closed value inherits the option
@@ -187,7 +188,25 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
   background-color: var(--ct-surface);
   border-color: rgba(0, 0, 0, .2);
   color: var(--ct-ink);
-  max-width: 170px;
+  max-width: 150px;
+}
+
+/* A menu that holds several sections: a separator before each later one,
+   stacked in the collapsed menu and side by side when it floats. */
+.ct-menu-column + .ct-menu-column {
+  border-top: 1px solid var(--ct-rule-strong);
+  margin-top: .3rem;
+  padding-top: .3rem;
+}
+@media (min-width: 1200px) {
+  .ct-header .ct-menu-columns.show { display: flex; }
+  .ct-menu-column { min-width: 13.5rem; }
+  .ct-menu-column + .ct-menu-column {
+    border-top: none;
+    border-left: 1px solid var(--ct-rule-strong);
+    margin: 0;
+    padding-top: 0;
+  }
 }
 .ct-org-select:focus {
   border-color: var(--ct-on-brand);
@@ -246,7 +265,7 @@ code, .font-monospace { font-size: .85em; color: var(--ct-midnight); }
 .ct-pagebar-inner {
   max-width: 1600px;
   margin: 0 auto;
-  padding: 1rem 1.75rem;
+  padding: .7rem 1.75rem;
 }
 
 .ct-pagebar h1 { font-size: 1.3rem; letter-spacing: -.01em; margin: 0; }
@@ -1515,13 +1534,144 @@ mark.ct-pii {
 .ct-quick-add a:hover { border-color: var(--ct-brand-700); background: var(--ct-brand-100); }
 .ct-quick-add a span { font-size: .72rem; font-weight: 400; color: var(--ct-muted); }
 
+/* -- In-page help --------------------------------------------------------- */
+
+.ct-pagebar-inner { display: flex; align-items: center; gap: 1rem; }
+.ct-pagebar-text { min-width: 0; flex: 1 1 auto; }
+
+.ct-help-toggle {
+  flex: 0 0 auto;
+  border: 1px solid var(--ct-rule-strong);
+  background: var(--ct-surface);
+  color: var(--ct-body);
+  font-size: .78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+}
+.ct-help-toggle:hover { background: var(--ct-brand-100); color: var(--ct-brand-900); }
+
+.ct-help {
+  background: var(--ct-surface);
+  border-left: 1px solid var(--ct-rule);
+  /* Bottom room for the floating assistant button. */
+  padding: 1.75rem 1.25rem 5rem;
+  font-size: .8rem;
+  color: var(--ct-body);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ct-help-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+.ct-help-kicker {
+  font-size: .66rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ct-brand-700);
+}
+.ct-help-title { font-family: var(--ct-serif); font-size: 1.05rem; margin: .15rem 0 0; }
+.ct-help-close { color: var(--ct-muted); padding: .2rem .4rem; margin-top: -.15rem; }
+.ct-help-close:hover { color: var(--ct-ink); background: var(--ct-page); }
+
+.ct-help-summary { margin: .6rem 0 0; line-height: 1.5; }
+
+.ct-help-section { margin-top: 1.1rem; }
+.ct-help-section h3 {
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ct-muted);
+  margin: 0 0 .45rem;
+}
+
+.ct-help-practices { list-style: none; padding: 0; margin: 0; }
+.ct-help-practices li { display: flex; gap: .45rem; line-height: 1.45; padding: .28rem 0; }
+.ct-help-practices li + li { border-top: 1px dashed var(--ct-rule); }
+.ct-help-practices i { color: var(--ct-brand-700); flex: 0 0 auto; margin-top: .05rem; }
+
+.ct-help-example {
+  border: 1px solid var(--ct-rule);
+  border-radius: var(--ct-radius);
+  padding: .45rem .6rem;
+  margin-bottom: .45rem;
+  background: var(--ct-page);
+}
+.ct-help-example summary { cursor: pointer; font-weight: 600; color: var(--ct-ink); }
+.ct-help-example p { margin: .4rem 0 0; line-height: 1.45; }
+
+.ct-help-code { position: relative; margin-top: .45rem; }
+.ct-help-code pre {
+  margin: 0;
+  padding: .6rem .65rem;
+  background: var(--ct-surface);
+  border: 1px solid var(--ct-rule);
+  border-radius: var(--ct-radius);
+  font-size: .7rem;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-x: auto;
+}
+.ct-help-code code { color: var(--ct-midnight); font-size: inherit; }
+.ct-help-copy {
+  position: absolute;
+  top: .3rem;
+  right: .3rem;
+  border: 1px solid var(--ct-rule);
+  background: var(--ct-surface);
+  color: var(--ct-muted);
+  border-radius: var(--ct-radius);
+  font-size: .72rem;
+  padding: .1rem .35rem;
+}
+.ct-help-copy:hover { color: var(--ct-ink); }
+
+.ct-help-related { list-style: none; padding: 0; margin: 0; }
+.ct-help-related a { display: inline-flex; align-items: center; padding: .15rem 0; text-decoration: none; }
+.ct-help-foot { margin: 1.2rem 0 0; font-size: .74rem; }
+.ct-help-foot a { text-decoration: none; }
+
+/* A fixed slide-over at every width: hidden until Help is clicked, and gone
+   again on a click outside it, Esc or its close button. */
+.ct-help {
+  position: fixed;
+  top: var(--ct-header-h, 0px);
+  right: 0;
+  bottom: 0;
+  width: min(380px, 100vw);
+  z-index: 1025;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, .14);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform .2s ease, visibility .2s;
+}
+.ct-help-open .ct-help { transform: none; visibility: visible; }
+.ct-help:focus { outline: none; }
+
+/* A skill's SKILL.md, shown as the file reads. */
+.ct-skill-md {
+  max-height: 28rem;
+  overflow: auto;
+  padding: .75rem .85rem;
+  background: var(--ct-page);
+  border: 1px solid var(--ct-rule);
+  border-radius: var(--ct-radius);
+  font-size: .74rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 /* -- Mobile --------------------------------------------------------------- */
 
 @media (max-width: 991.98px) {
   .ct-navbar-inner { padding: 0 1rem; gap: .5rem; }
-  .ct-pagebar-inner { padding: .85rem 1rem; }
+  .ct-pagebar-inner { padding: .7rem 1rem; }
   .ct-content { padding: 1rem; }
+}
 
+/* The menu collapses behind the hamburger below 1200px (navbar-expand-xl). */
+@media (max-width: 1199.98px) {
   /* Collapsed nav becomes a stacked panel; dropdowns open inline rather than
      floating, so the whole menu is reachable with one thumb. */
   .navbar-collapse {
@@ -1560,7 +1710,6 @@ mark.ct-pii {
 }
 
 @media (max-width: 575.98px) {
-  .ct-brand-sub { display: none; }
   .ct-pagebar h1 { font-size: 1.1rem; }
 }
 

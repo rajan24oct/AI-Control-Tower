@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from apps.accounts.roles import Role, role_permissions
+from apps.organizations.modules import module_states
 
 
 def organization_context(request):
@@ -12,7 +13,7 @@ def organization_context(request):
     if not user or not user.is_authenticated:
         return {
             "active_organization": None, "available_organizations": [], "active_role": None,
-            "org_perms": frozenset(),
+            "org_perms": frozenset(), "modules": module_states(None),
         }
 
     role = user.role_in(organization) if organization else None
@@ -30,4 +31,6 @@ def organization_context(request):
         # What the user may do here, so pages show only the buttons that work:
         # {% if "agent.manage" in org_perms %}. Views still check every action.
         "org_perms": permissions,
+        # Which modules the organization has switched on: {% if modules.ai_gateway %}.
+        "modules": module_states(organization),
     }

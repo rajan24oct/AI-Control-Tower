@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load control_tower %}
 
 {% block title %}AI Agents{% endblock %}
@@ -86,8 +86,8 @@
               <div class="small text-muted">{{ agent.agent_id }}</div>
             </td>
             <td class="small">{{ agent.get_framework_display }}</td>
-            <td class="small">{{ agent.primary_model.model_name|default:"—" }}</td>
-            <td class="small">{{ agent.provider.name|default:"—" }}</td>
+            <td class="small">{% if agent.primary_model_id %}<a href="{% url 'inventory:model_detail' agent.primary_model_id %}" class="text-decoration-none">{{ agent.primary_model.model_name }}</a>{% else %}—{% endif %}</td>
+            <td class="small">{% if agent.provider_id %}<a href="{% url 'inventory:provider_detail' agent.provider_id %}" class="text-decoration-none">{{ agent.provider.name }}</a>{% else %}—{% endif %}</td>
             <td><span class="badge badge-soft text-bg-{{ agent.environment|environment_style }}">{{ agent.get_environment_display }}</span></td>
             <td><span class="badge badge-soft text-bg-{{ agent.risk_level|risk_style }}">{{ agent.get_risk_level_display }}</span></td>
             <td>

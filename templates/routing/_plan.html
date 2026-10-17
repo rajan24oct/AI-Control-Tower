@@ -25,9 +25,9 @@
                       <span class="badge badge-soft text-bg-success">1</span>
                     {% else %}{{ forloop.counter }}{% endif %}
                   </td>
-                  <td class="small fw-semibold">{{ candidate.model.model_name }}</td>
+                  <td class="small fw-semibold"><a href="{% url 'inventory:model_detail' candidate.model.pk %}" class="text-decoration-none">{{ candidate.model.model_name }}</a></td>
                   <td class="small">
-                    {{ candidate.model.provider.name }}
+                    <a href="{% url 'inventory:provider_detail' candidate.model.provider_id %}" class="text-decoration-none">{{ candidate.model.provider.name }}</a>
                     <span class="badge badge-soft text-bg-{{ candidate.model.provider.health_status|health_style }}">
                       {{ candidate.model.provider.get_health_status_display }}
                     </span>
@@ -66,7 +66,7 @@
             {% for exclusion in plan.exclusions %}
               <tr>
                 <td class="small">
-                  <div class="fw-semibold">{{ exclusion.model.model_name }}</div>
+                  <div class="fw-semibold"><a href="{% url 'inventory:model_detail' exclusion.model.pk %}" class="text-decoration-none">{{ exclusion.model.model_name }}</a></div>
                   <div class="ct-attention-detail">{{ exclusion.reason }}</div>
                 </td>
               </tr>

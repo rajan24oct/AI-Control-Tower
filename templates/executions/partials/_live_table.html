@@ -88,8 +88,8 @@
                 {{ execution.external_id }}
               </a>
             </td>
-            <td class="small">{{ execution.agent.name|default:"—" }}</td>
-            <td class="small">{{ execution.model.model_name|default:"—" }}</td>
+            <td class="small">{% if execution.agent %}<a href="{% url 'inventory:agent_detail' execution.agent_id %}" class="text-decoration-none">{{ execution.agent.name }}</a>{% elif execution.caller_label %}<span class="text-muted fst-italic">{{ execution.caller_label }}</span>{% else %}—{% endif %}</td>
+            <td class="small">{% if execution.model_id %}<a href="{% url 'inventory:model_detail' execution.model_id %}" class="text-decoration-none">{{ execution.model.model_name }}</a>{% else %}—{% endif %}</td>
             <td class="small text-end text-nowrap">{{ execution.duration_display }}</td>
             <td class="small text-end">{{ execution.total_tokens|intcomma }}</td>
             <td class="small text-end">${{ execution.cost|floatformat:4 }}</td>

@@ -375,3 +375,22 @@ def sort_th(context, label, key, css="", first="asc"):
         '<i class="bi {}" aria-hidden="true"></i></a></th>',
         css, state, " is-active" if active else "", params.urlencode(), label, icon,
     )
+
+
+@register.simple_tag
+def static_v(path: str) -> str:
+    """A static URL stamped with the file's modification time.
+
+    Browsers cache stylesheets and scripts heuristically, so without the stamp
+    a changed file can keep rendering the old one until a hard reload.
+    """
+    import os
+
+    from django.contrib.staticfiles import finders
+    from django.templatetags.static import static
+
+    url = static(path)
+    found = finders.find(path)
+    if not found:
+        return url
+    return f"{url}?v={int(os.path.getmtime(found))}"

@@ -926,6 +926,9 @@ class GatewayService:
                 # reconciling the cost dashboard against a provider invoice.
                 "usage_estimated": estimated_usage,
                 "attempts": [a.as_entry(i) for i, a in enumerate(response.attempts, start=1)],
+                # Who called, for runs no agent made (the AI Sandbox, evaluations).
+                "source": request.metadata.get("source")
+                or ("evaluation" if request.metadata.get("evaluation_run") else ""),
             },
         )
 

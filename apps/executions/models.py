@@ -259,6 +259,20 @@ class Execution(OrganizationOwnedModel):
     def label(self) -> str:
         return self.external_id[:8] if len(self.external_id) > 8 else self.external_id
 
+    @property
+    def caller_label(self) -> str:
+        """Who made a call no registered agent made: the AI Sandbox or a model evaluation."""
+        if self.agent_id:
+            return ""
+        source = (self.metadata or {}).get("source", "")
+        if source == "sandbox" or self.environment == Environment.SANDBOX:
+            return "AI Sandbox"
+        if source == "evaluation":
+            return "Model evaluation"
+        if self.source_adapter == "gateway":
+            return "Gateway, no agent"
+        return ""
+
 
 class ExecutionEvent(BaseModel):
     """One normalized point on an execution timeline (section 4).

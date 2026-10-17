@@ -37,13 +37,13 @@
         <tbody>
           {% for decision in decisions %}
             <tr>
-              <td class="small text-nowrap">{{ decision.created_at|naturaltime }}</td>
-              <td class="small">{{ decision.agent.name|default:"—" }}</td>
-              <td class="small">{{ decision.get_strategy_display }}</td>
-              <td class="small">{{ decision.selected_model.model_name|default:"—" }}</td>
+              <td class="small text-nowrap">{% if decision.execution_id %}<a href="{% url 'executions:detail' decision.execution_id %}" class="text-decoration-none" title="Open the run this decision served">{{ decision.created_at|naturaltime }}</a>{% else %}{{ decision.created_at|naturaltime }}{% endif %}</td>
+              <td class="small">{% if decision.agent_id %}<a href="{% url 'inventory:agent_detail' decision.agent_id %}" class="text-decoration-none">{{ decision.agent.name }}</a>{% else %}—{% endif %}</td>
+              <td class="small">{{ decision.get_strategy_display }}{% if decision.policy_id %}<div><a href="{% url 'routing:detail' decision.policy_id %}" class="text-decoration-none text-muted">{{ decision.policy.name }}</a></div>{% endif %}</td>
+              <td class="small">{% if decision.selected_model_id %}<a href="{% url 'inventory:model_detail' decision.selected_model_id %}" class="text-decoration-none">{{ decision.selected_model.model_name }}</a>{% else %}—{% endif %}</td>
               <td class="small text-muted">{{ decision.fallback_names|join:" → "|default:"—" }}</td>
               <td class="small">
-                {{ decision.served_model.model_name|default:"—" }}
+                {% if decision.served_model_id %}<a href="{% url 'inventory:model_detail' decision.served_model_id %}" class="text-decoration-none">{{ decision.served_model.model_name }}</a>{% else %}—{% endif %}
                 {% if decision.used_fallback %}
                   <span class="badge badge-soft text-bg-warning">attempt {{ decision.attempt }}</span>
                 {% endif %}

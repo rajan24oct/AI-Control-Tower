@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static humanize %}
+{% load static humanize control_tower %}
 
 {% block title %}Developer Tools{% endblock %}
 
@@ -167,5 +167,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'js/finops.js' %}"></script>
+<script src="{% static_v 'js/finops.js' %}"></script>
 {% endblock %}

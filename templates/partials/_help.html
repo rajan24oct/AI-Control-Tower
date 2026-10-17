@@ -1,0 +1,63 @@
+{% comment %}
+  The page's help: what the module is for, how to run it well, and worked
+  examples. A fixed slide-over on the right, opened from the Help button.
+  Content comes from apps/core/help.py via the module_help context processor.
+{% endcomment %}
+<aside class="ct-help" id="ct-help" aria-labelledby="ct-help-title" tabindex="-1">
+  <div class="ct-help-head">
+    <div>
+      <div class="ct-help-kicker"><i class="bi bi-question-circle"></i> Help</div>
+      <h2 class="ct-help-title" id="ct-help-title">{{ module_help.title }}</h2>
+    </div>
+    <button type="button" class="btn btn-sm ct-help-close" data-help-toggle aria-controls="ct-help"
+            aria-label="Hide help"><i class="bi bi-x-lg"></i></button>
+  </div>
+
+  <p class="ct-help-summary">{{ module_help.summary }}</p>
+
+  {% if module_help.practices %}
+    <section class="ct-help-section">
+      <h3>Best practices</h3>
+      <ul class="ct-help-practices">
+        {% for practice in module_help.practices %}
+          <li><i class="bi bi-check2-circle"></i><span>{{ practice }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if module_help.examples %}
+    <section class="ct-help-section">
+      <h3>Examples</h3>
+      {% for example in module_help.examples %}
+        <details class="ct-help-example" {% if forloop.first %}open{% endif %}>
+          <summary>{{ example.title }}</summary>
+          {% if example.text %}<p>{{ example.text }}</p>{% endif %}
+          {% if example.code %}
+            <div class="ct-help-code">
+              <button type="button" class="ct-help-copy" data-copy aria-label="Copy example">
+                <i class="bi bi-clipboard"></i></button>
+              <pre><code>{{ example.code }}</code></pre>
+            </div>
+          {% endif %}
+        </details>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if module_help.related %}
+    <section class="ct-help-section">
+      <h3>Related</h3>
+      <ul class="ct-help-related">
+        {% for link in module_help.related %}
+          <li><a href="{{ link.url }}"><i class="bi bi-arrow-right-short"></i>{{ link.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <p class="ct-help-foot">
+    <a href="{% url 'dashboard:integration_handbook' %}" target="_blank" rel="noopener">
+      Integration Handbook <i class="bi bi-box-arrow-up-right"></i></a>
+  </p>
+</aside>

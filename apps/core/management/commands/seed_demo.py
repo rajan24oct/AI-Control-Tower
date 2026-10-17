@@ -308,6 +308,11 @@ class Command(BaseCommand):
         # backdates its traffic, so verification waits and runs at the end.
         with deferred():
             telemetry = self._executions(organization, options["executions"])
+            # Model routing: policies per class of work, and the decisions the
+            # router made for each agent, with the gateway runs they served.
+            from apps.routing.demo import seed_routing
+
+            routing = seed_routing(organization, agents, providers)
             governance = self._governance(
                 organization, users, teams, applications, agents, models, providers
             )
@@ -341,6 +346,10 @@ class Command(BaseCommand):
         )
         if telemetry:
             self._say(f"  {telemetry.executions} executions, {telemetry.events} execution events")
+        self._say(
+            f"  {routing['policies']} routing policies, {routing['decisions']} routing decisions "
+            f"({routing['fallbacks']} served by a fallback, {routing['exhausted']} with no route)"
+        )
         self._say(
             f"  {governance['risks']} risks, {governance['approvals']} approval requests, "
             f"{governance['rules']} approval rules"

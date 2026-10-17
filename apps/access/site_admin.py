@@ -39,6 +39,8 @@ from apps.api.models import ServiceAccount
 from apps.audit.models import AuditAction
 from apps.core.manage import ManagedFormView
 from apps.organizations.models import Organization, TeamMembership
+from apps.organizations.modules import GROUPS as MODULE_GROUPS
+from apps.organizations.modules import MODULES, module_states
 
 DENIED = "Organizations are created and staffed by site administrators (superusers)."
 
@@ -83,6 +85,7 @@ class OrganizationDetailView(SiteAdminMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         org = self.object
+        states = module_states(org)
         memberships = list(
             org.memberships.select_related("user").order_by("user__first_name", "user__last_name", "user__email")
         )
@@ -107,6 +110,10 @@ class OrganizationDetailView(SiteAdminMixin, DetailView):
                 "Service accounts": ServiceAccount.objects.filter(organization=org).count(),
             },
             "is_active_here": org == self.request.organization,
+            "module_groups": [
+                (group, [(module, states[module.key]) for module in MODULES if module.group == group])
+                for group in MODULE_GROUPS
+            ],
         })
         return context
 

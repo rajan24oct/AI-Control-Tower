@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load control_tower humanize %}
 
 {% block title %}Executions{% endblock %}
@@ -144,10 +144,10 @@
                 <div class="small text-danger text-truncate" style="max-width:220px">{{ execution.error_message }}</div>
               {% endif %}
             </td>
-            <td class="small">{{ execution.agent.name|default:"—" }}</td>
-            <td class="small">{{ execution.application.name|default:"—" }}</td>
-            <td class="small">{{ execution.model.model_name|default:"—" }}</td>
-            <td class="small">{{ execution.provider.name|default:"—" }}</td>
+            <td class="small">{% if execution.agent %}<a href="{% url 'inventory:agent_detail' execution.agent_id %}" class="text-decoration-none">{{ execution.agent.name }}</a>{% elif execution.caller_label %}<span class="text-muted fst-italic">{{ execution.caller_label }}</span>{% else %}—{% endif %}</td>
+            <td class="small">{% if execution.application_id %}<a href="{% url 'inventory:application_detail' execution.application_id %}" class="text-decoration-none">{{ execution.application.name }}</a>{% else %}—{% endif %}</td>
+            <td class="small">{% if execution.model_id %}<a href="{% url 'inventory:model_detail' execution.model_id %}" class="text-decoration-none">{{ execution.model.model_name }}</a>{% else %}—{% endif %}</td>
+            <td class="small">{% if execution.provider_id %}<a href="{% url 'inventory:provider_detail' execution.provider_id %}" class="text-decoration-none">{{ execution.provider.name }}</a>{% else %}—{% endif %}</td>
             <td class="small text-nowrap" title="{{ execution.started_at }}">{{ execution.started_at|naturaltime }}</td>
             <td class="small text-end text-nowrap">{{ execution.duration_display }}</td>
             <td class="small text-end">{{ execution.total_tokens|intcomma }}</td>
